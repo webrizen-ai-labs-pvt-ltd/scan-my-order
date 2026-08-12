@@ -1,0 +1,11 @@
+packages:
+  - "apps/backend"
+  - "apps/web/*"
+  - "apps/native/*"
+  - "packages/*"
+
+allowBuilds:
+  "@prisma/client": true
+  "@prisma/engines": true
+  "esbuild": true
+  "prisma": true

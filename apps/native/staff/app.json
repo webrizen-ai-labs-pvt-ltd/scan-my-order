@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Scan My Order - Staff POS",
+    "slug": "staff",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "scanmyorderstaff",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#020617"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
