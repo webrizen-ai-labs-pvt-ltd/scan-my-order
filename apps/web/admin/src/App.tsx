@@ -1,6 +1,33 @@
 import { useState } from "react";
 import { UserRole } from "@repo/types";
 import {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  Badge,
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  Input,
+} from "@repo/ui";
+import {
   LayoutDashboard,
   QrCode,
   Users,
@@ -11,10 +38,46 @@ import {
   ShieldCheck,
   Building2,
   FileSpreadsheet,
+  Plus,
 } from "lucide-react";
+
+interface MenuItem {
+  id: string;
+  name: string;
+  category: string;
+  price: number;
+  isAvailable: boolean;
+}
+
+const initialMenuItems: MenuItem[] = [
+  { id: "m1", name: "Truffle Ribeye Steak", category: "Mains", price: 38.5, isAvailable: true },
+  { id: "m2", name: "Artisanal Burrata Bowl", category: "Starters", price: 16.0, isAvailable: true },
+  { id: "m3", name: "Smoked Woodside Burger", category: "Mains", price: 21.0, isAvailable: true },
+  { id: "m4", name: "Matcha Lava Cake", category: "Desserts", price: 12.5, isAvailable: true },
+  { id: "m5", name: "Cold Brew Tonic", category: "Beverages", price: 6.5, isAvailable: false },
+];
 
 export function App() {
   const [activeTab, setActiveTab] = useState<string>("overview");
+  const [menuItems, setMenuItems] = useState<MenuItem[]>(initialMenuItems);
+  const [isAddOpen, setIsAddOpen] = useState<boolean>(false);
+  const [newItemName, setNewItemName] = useState<string>("");
+  const [newItemCategory, setNewItemCategory] = useState<string>("Mains");
+  const [newItemPrice, setNewItemPrice] = useState<string>("18.00");
+
+  const handleAddItem = () => {
+    if (!newItemName.trim()) return;
+    const item: MenuItem = {
+      id: `m${Date.now()}`,
+      name: newItemName,
+      category: newItemCategory,
+      price: parseFloat(newItemPrice) || 15.0,
+      isAvailable: true,
+    };
+    setMenuItems((prev) => [item, ...prev]);
+    setNewItemName("");
+    setIsAddOpen(false);
+  };
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100 antialiased font-sans">
@@ -118,56 +181,215 @@ export function App() {
               Scan My Order - Admin Web Hub
             </h2>
             <p className="text-sm text-slate-300 mt-1">
-              Store configuration, employee access controls, and cross-platform POS analytics.
+              Powered by shared <span className="text-blue-400 font-semibold font-mono">@repo/ui</span> shadcn components.
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700 text-xs font-mono text-emerald-400">
-              ● Server: Port 3000
-            </span>
+            <Badge variant="success">● Server: Port 3000</Badge>
           </div>
         </div>
 
-        {/* Metric Cards */}
+        {/* Metric Cards using @repo/ui Card */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="p-5 rounded-xl bg-slate-900/70 border border-slate-800">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase text-slate-400">Monthly Revenue</span>
-              <DollarSign className="w-4 h-4 text-emerald-400" />
-            </div>
-            <p className="text-2xl font-bold text-white mt-2">$84,320.00</p>
-            <p className="text-xs text-emerald-400 mt-1 flex items-center gap-1 font-medium">
-              <TrendingUp className="w-3.5 h-3.5" /> +14.2% vs last month
-            </p>
-          </div>
+          <Card className="bg-slate-900/70 border-slate-800">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardDescription className="uppercase font-bold text-[11px] tracking-wider text-slate-400">
+                  Monthly Revenue
+                </CardDescription>
+                <DollarSign className="w-4 h-4 text-emerald-400" />
+              </div>
+              <CardTitle className="text-2xl text-white font-bold">$84,320.00</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-emerald-400 flex items-center gap-1 font-medium">
+                <TrendingUp className="w-3.5 h-3.5" /> +14.2% vs last month
+              </p>
+            </CardContent>
+          </Card>
 
-          <div className="p-5 rounded-xl bg-slate-900/70 border border-slate-800">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase text-slate-400">Active Outlets</span>
-              <Building2 className="w-4 h-4 text-blue-400" />
-            </div>
-            <p className="text-2xl font-bold text-white mt-2">3 Branches</p>
-            <p className="text-xs text-slate-400 mt-1">Downtown, Midtown & Wharf</p>
-          </div>
+          <Card className="bg-slate-900/70 border-slate-800">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardDescription className="uppercase font-bold text-[11px] tracking-wider text-slate-400">
+                  Active Outlets
+                </CardDescription>
+                <Building2 className="w-4 h-4 text-blue-400" />
+              </div>
+              <CardTitle className="text-2xl text-white font-bold">3 Branches</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-slate-400">Downtown, Midtown & Wharf</p>
+            </CardContent>
+          </Card>
 
-          <div className="p-5 rounded-xl bg-slate-900/70 border border-slate-800">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase text-slate-400">Total Staff</span>
-              <Users className="w-4 h-4 text-indigo-400" />
-            </div>
-            <p className="text-2xl font-bold text-white mt-2">24 Employees</p>
-            <p className="text-xs text-slate-400 mt-1">Roles: Owner, Waiter, Kitchen</p>
-          </div>
+          <Card className="bg-slate-900/70 border-slate-800">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardDescription className="uppercase font-bold text-[11px] tracking-wider text-slate-400">
+                  Total Staff
+                </CardDescription>
+                <Users className="w-4 h-4 text-indigo-400" />
+              </div>
+              <CardTitle className="text-2xl text-white font-bold">24 Employees</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-slate-400">Roles: Owner, Waiter, Kitchen</p>
+            </CardContent>
+          </Card>
 
-          <div className="p-5 rounded-xl bg-slate-900/70 border border-slate-800">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold uppercase text-slate-400">QR Menu Scans</span>
-              <QrCode className="w-4 h-4 text-amber-400" />
-            </div>
-            <p className="text-2xl font-bold text-white mt-2">1,482 Scans</p>
-            <p className="text-xs text-amber-400 mt-1">Avg 94.2% order conversion</p>
-          </div>
+          <Card className="bg-slate-900/70 border-slate-800">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardDescription className="uppercase font-bold text-[11px] tracking-wider text-slate-400">
+                  QR Menu Scans
+                </CardDescription>
+                <QrCode className="w-4 h-4 text-amber-400" />
+              </div>
+              <CardTitle className="text-2xl text-white font-bold">1,482 Scans</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xs text-amber-400">Avg 94.2% order conversion</p>
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Tab Content Area */}
+        <Tabs defaultValue="menu" className="w-full">
+          <div className="flex items-center justify-between">
+            <TabsList className="bg-slate-900 border border-slate-800">
+              <TabsTrigger value="menu">Menu Items Catalog</TabsTrigger>
+              <TabsTrigger value="activity">Recent Activity</TabsTrigger>
+            </TabsList>
+
+            {/* Dialog Component for Adding Menu Item */}
+            <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-500 text-white font-semibold">
+                  <Plus className="w-4 h-4 mr-1.5" /> Add Menu Item
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="bg-slate-900 border-slate-800 text-white">
+                <DialogHeader>
+                  <DialogTitle>Add New Menu Item</DialogTitle>
+                  <DialogDescription className="text-slate-400">
+                    Create a dish to instantly publish to Guest QR Menus (Port 3002).
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
+                      Dish Name
+                    </label>
+                    <Input
+                      placeholder="e.g., Truffle Gnocchi"
+                      value={newItemName}
+                      onChange={(e) => setNewItemName(e.target.value)}
+                      className="bg-slate-950 border-slate-800 text-white"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
+                        Category
+                      </label>
+                      <Input
+                        placeholder="Mains, Starters..."
+                        value={newItemCategory}
+                        onChange={(e) => setNewItemCategory(e.target.value)}
+                        className="bg-slate-950 border-slate-800 text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300 mb-1.5 block">
+                        Price ($)
+                      </label>
+                      <Input
+                        type="number"
+                        placeholder="18.00"
+                        value={newItemPrice}
+                        onChange={(e) => setNewItemPrice(e.target.value)}
+                        className="bg-slate-950 border-slate-800 text-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsAddOpen(false)} className="border-slate-700">
+                    Cancel
+                  </Button>
+                  <Button onClick={handleAddItem} className="bg-blue-600 hover:bg-blue-500 text-white">
+                    Publish Dish
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <TabsContent value="menu" className="mt-4">
+            <Card className="bg-slate-900/60 border-slate-800">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base text-white">Live Catalog Table</CardTitle>
+                <CardDescription className="text-slate-400">
+                  Manage dishes, real-time availability, and category pricing.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-0">
+                <Table>
+                  <TableHeader className="bg-slate-950/60">
+                    <TableRow className="border-slate-800">
+                      <TableHead className="text-slate-400 font-semibold">Item Name</TableHead>
+                      <TableHead className="text-slate-400 font-semibold">Category</TableHead>
+                      <TableHead className="text-slate-400 font-semibold">Price</TableHead>
+                      <TableHead className="text-slate-400 font-semibold">Availability</TableHead>
+                      <TableHead className="text-right text-slate-400 font-semibold pr-6">Action</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {menuItems.map((item) => (
+                      <TableRow key={item.id} className="border-slate-800/80 hover:bg-slate-800/40">
+                        <TableCell className="font-medium text-white">{item.name}</TableCell>
+                        <TableCell className="text-slate-300">{item.category}</TableCell>
+                        <TableCell className="font-mono text-emerald-400 font-semibold">
+                          ${item.price.toFixed(2)}
+                        </TableCell>
+                        <TableCell>
+                          {item.isAvailable ? (
+                            <Badge variant="success">Available</Badge>
+                          ) : (
+                            <Badge variant="destructive">Sold Out</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right pr-6">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setMenuItems((prev) =>
+                                prev.map((m) =>
+                                  m.id === item.id ? { ...m, isAvailable: !m.isAvailable } : m
+                                )
+                              );
+                            }}
+                            className="text-xs text-slate-400 hover:text-white"
+                          >
+                            Toggle Status
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="activity" className="mt-4">
+            <Card className="bg-slate-900/60 border-slate-800 p-6 text-center text-slate-400">
+              <p className="text-sm">Real-time audit log stream connected to WebSocket backend.</p>
+            </Card>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

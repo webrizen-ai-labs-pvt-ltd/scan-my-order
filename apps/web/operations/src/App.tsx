@@ -1,6 +1,19 @@
 import { useState } from "react";
-import { OrderStatus, PaymentStatus } from "@repo/types";
-import { RefreshCw } from "lucide-react";
+import { OrderStatus } from "@repo/types";
+import {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  Badge,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@repo/ui";
+import { RefreshCw, Clock, Bell } from "lucide-react";
 
 interface TableStatus {
   id: string;
@@ -50,71 +63,67 @@ const initialTables: TableStatus[] = [
     seats: 6,
     isOccupied: true,
     activeOrder: {
-      id: "ORD-904",
+      id: "ORD-903",
       itemsCount: 7,
-      total: 185.0,
-      status: OrderStatus.PENDING,
-      elapsedMinutes: 2,
+      total: 184.0,
+      status: OrderStatus.COMPLETED,
+      elapsedMinutes: 34,
     },
   },
   { id: "t5", tableNumber: "T-05", seats: 4, isOccupied: false },
   {
     id: "t6",
     tableNumber: "T-06",
-    seats: 8,
+    seats: 4,
     isOccupied: true,
     activeOrder: {
-      id: "ORD-906",
-      itemsCount: 4,
-      total: 94.0,
+      id: "ORD-904",
+      itemsCount: 2,
+      total: 32.0,
       status: OrderStatus.PREPARING,
-      elapsedMinutes: 14,
+      elapsedMinutes: 4,
+    },
+  },
+  { id: "t7", tableNumber: "T-07", seats: 8, isOccupied: false },
+  {
+    id: "t8",
+    tableNumber: "T-08",
+    seats: 2,
+    isOccupied: true,
+    activeOrder: {
+      id: "ORD-905",
+      itemsCount: 4,
+      total: 67.5,
+      status: OrderStatus.PENDING,
+      elapsedMinutes: 1,
     },
   },
 ];
 
 export function App() {
-  const [tables] = useState<TableStatus[]>(initialTables);
-  const [filter, setFilter] = useState<"all" | "occupied" | "vacant">("all");
+  const [tables, setTables] = useState<TableStatus[]>(initialTables);
+  const [selectedTable, setSelectedTable] = useState<TableStatus | null>(null);
 
-  const filteredTables = tables.filter((t) => {
-    if (filter === "occupied") return t.isOccupied;
-    if (filter === "vacant") return !t.isOccupied;
-    return true;
-  });
-
-  const getStatusBadge = (status?: OrderStatus) => {
-    if (!status) return null;
+  const getStatusBadge = (status: OrderStatus) => {
     switch (status) {
       case OrderStatus.PENDING:
-        return (
-          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/40">
-            Pending
-          </span>
-        );
+        return <Badge variant="warning">New Order</Badge>;
       case OrderStatus.PREPARING:
-        return (
-          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-blue-500/20 text-blue-400 border border-blue-500/40 animate-pulse">
-            Cooking
-          </span>
-        );
+        return <Badge variant="info">Preparing</Badge>;
       case OrderStatus.READY:
-        return (
-          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
-            Ready
-          </span>
-        );
+        return <Badge variant="success">Ready to Serve</Badge>;
+      case OrderStatus.COMPLETED:
+        return <Badge variant="secondary">Dining / Served</Badge>;
       default:
-        return (
-          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-800 text-slate-400">
-            Completed
-          </span>
-        );
+        return <Badge variant="outline">{status}</Badge>;
     }
   };
 
+  const occupiedCount = tables.filter((t) => t.isOccupied).length;
+  const readyCount = tables.filter((t) => t.activeOrder?.status === OrderStatus.READY).length;
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans flex flex-col">
       {/* Top Header */}
       <header className="h-16 border-b border-slate-800/80 px-6 flex items-center justify-between bg-slate-900/40 backdrop-blur sticky top-0 z-20">
         <div className="flex items-center gap-3">
@@ -130,109 +139,191 @@ export function App() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-lg border border-slate-800">
-            {(["all", "occupied", "vacant"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setFilter(mode)}
-                className={`px-3 py-1 rounded text-xs font-semibold capitalize transition-all ${
-                  filter === mode
-                    ? "bg-emerald-600 text-white shadow"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {mode}
-              </button>
-            ))}
-          </div>
-
-          <button className="p-2 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-700/50">
-            <RefreshCw className="w-4 h-4" />
-          </button>
+          <Badge variant="outline" className="text-slate-300 border-slate-700">
+            {occupiedCount} / {tables.length} Tables Occupied
+          </Badge>
+          {readyCount > 0 && (
+            <Badge variant="success" className="animate-pulse flex items-center gap-1">
+              <Bell className="w-3 h-3" /> {readyCount} Orders Ready
+            </Badge>
+          )}
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setTables([...initialTables])}
+            className="border-slate-700 text-xs"
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1" /> Refresh
+          </Button>
         </div>
       </header>
 
       {/* Main Floor Grid */}
-      <main className="p-6 max-w-7xl mx-auto space-y-6">
-        {/* KPI Strip */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-400 font-medium">Occupancy Rate</p>
-              <p className="text-2xl font-bold text-white mt-1">66.7%</p>
-            </div>
-            <span className="text-xs font-mono text-emerald-400">4 / 6 Tables Busy</span>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-400 font-medium">Active Kitchen Queue</p>
-              <p className="text-2xl font-bold text-white mt-1">3 Orders</p>
-            </div>
-            <span className="text-xs font-mono text-blue-400">Avg. 11 min prep</span>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-slate-400 font-medium">Floor Open Tabs</p>
-              <p className="text-2xl font-bold text-white mt-1">$439.50</p>
-            </div>
-            <span className="text-xs font-mono text-emerald-400">Payment: {PaymentStatus.UNPAID}</span>
-          </div>
+      <main className="flex-1 p-6 max-w-7xl mx-auto w-full space-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {tables.map((table) => {
+            return (
+              <Card
+                key={table.id}
+                onClick={() => setSelectedTable(table)}
+                className={`cursor-pointer transition-all hover:scale-[1.02] ${
+                  table.isOccupied
+                    ? table.activeOrder?.status === OrderStatus.READY
+                      ? "border-emerald-500/60 bg-emerald-950/20 shadow-lg shadow-emerald-500/10"
+                      : "border-slate-700 bg-slate-900/80"
+                    : "border-slate-800/80 bg-slate-900/30 hover:border-slate-700"
+                }`}
+              >
+                <CardHeader className="p-4 pb-2">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-base text-white font-bold">
+                      {table.tableNumber}
+                    </CardTitle>
+                    <span className="text-[11px] text-slate-400 font-medium">
+                      {table.seats} Seats
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-4 pt-0">
+                  {table.isOccupied && table.activeOrder ? (
+                    <div className="space-y-2 mt-2">
+                      <div className="flex items-center justify-between">
+                        {getStatusBadge(table.activeOrder.status)}
+                        <span className="text-xs text-slate-400 font-mono flex items-center gap-1">
+                          <Clock className="w-3 h-3" /> {table.activeOrder.elapsedMinutes}m
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center text-xs pt-1 border-t border-slate-800/80 text-slate-300">
+                        <span>{table.activeOrder.itemsCount} items</span>
+                        <span className="font-mono font-bold text-emerald-400">
+                          ${table.activeOrder.total.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="py-4 text-center">
+                      <Badge variant="outline" className="text-slate-500 border-slate-800">
+                        Vacant
+                      </Badge>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
-        {/* Interactive Floor Map */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTables.map((table) => (
-            <div
-              key={table.id}
-              className={`p-5 rounded-2xl border transition-all ${
-                table.isOccupied
-                  ? "bg-slate-900/90 border-slate-700 shadow-lg"
-                  : "bg-slate-900/30 border-slate-800/60 opacity-60 border-dashed"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-lg font-extrabold text-white font-mono">
-                    {table.tableNumber}
-                  </span>
-                  <p className="text-xs text-slate-400">{table.seats} Seats Capacity</p>
-                </div>
-                {table.isOccupied ? (
-                  getStatusBadge(table.activeOrder?.status)
+        {/* Table Details Modal */}
+        <Dialog open={!!selectedTable} onOpenChange={(open) => !open && setSelectedTable(null)}>
+          <DialogContent className="bg-slate-900 border-slate-800 text-white">
+            <DialogHeader>
+              <div className="flex items-center justify-between pr-6">
+                <DialogTitle className="text-lg text-white font-bold">
+                  {selectedTable?.tableNumber} Details
+                </DialogTitle>
+                {selectedTable?.isOccupied && selectedTable.activeOrder ? (
+                  getStatusBadge(selectedTable.activeOrder.status)
                 ) : (
-                  <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-800 text-slate-400">
-                    Vacant
-                  </span>
+                  <Badge variant="outline">Vacant</Badge>
                 )}
               </div>
+              <DialogDescription className="text-slate-400">
+                Capacity: {selectedTable?.seats} guests
+              </DialogDescription>
+            </DialogHeader>
 
-              {table.isOccupied && table.activeOrder ? (
-                <div className="mt-4 pt-3 border-t border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs text-slate-300">
-                    <span>Active Order #{table.activeOrder.id}</span>
-                    <span className="font-mono text-slate-400">
-                      {table.activeOrder.elapsedMinutes}m ago
+            {selectedTable?.isOccupied && selectedTable.activeOrder ? (
+              <div className="space-y-4 py-2">
+                <Card className="bg-slate-950 border-slate-800 p-4">
+                  <div className="flex justify-between text-xs text-slate-400 pb-2 border-b border-slate-800">
+                    <span>Order: {selectedTable.activeOrder.id}</span>
+                    <span>Elapsed: {selectedTable.activeOrder.elapsedMinutes} mins</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2">
+                    <span className="text-sm font-bold text-white">Total Bill</span>
+                    <span className="text-lg font-mono font-bold text-emerald-400">
+                      ${selectedTable.activeOrder.total.toFixed(2)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-slate-400 font-mono">
-                      {table.activeOrder.itemsCount} items
-                    </span>
-                    <span className="text-base font-bold text-emerald-400 font-mono">
-                      ${table.activeOrder.total.toFixed(2)}
-                    </span>
-                  </div>
+                </Card>
+
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                    onClick={() => {
+                      if (selectedTable) {
+                        setTables((prev) =>
+                          prev.map((t) =>
+                            t.id === selectedTable.id
+                              ? {
+                                  ...t,
+                                  activeOrder: t.activeOrder
+                                    ? { ...t.activeOrder, status: OrderStatus.COMPLETED }
+                                    : undefined,
+                                }
+                              : t
+                          )
+                        );
+                        setSelectedTable(null);
+                      }
+                    }}
+                  >
+                    Mark as Served
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="border-slate-700"
+                    onClick={() => {
+                      if (selectedTable) {
+                        setTables((prev) =>
+                          prev.map((t) =>
+                            t.id === selectedTable.id
+                              ? { ...t, isOccupied: false, activeOrder: undefined }
+                              : t
+                          )
+                        );
+                        setSelectedTable(null);
+                      }
+                    }}
+                  >
+                    Close Table
+                  </Button>
                 </div>
-              ) : (
-                <div className="mt-4 pt-3 border-t border-slate-800/60 text-center py-4">
-                  <p className="text-xs text-slate-500">Ready for QR Guest Seating</p>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+              </div>
+            ) : (
+              <div className="py-4 text-center space-y-3">
+                <p className="text-sm text-slate-400">This table is currently vacant.</p>
+                <Button
+                  className="bg-blue-600 hover:bg-blue-500 text-white"
+                  onClick={() => {
+                    if (selectedTable) {
+                      setTables((prev) =>
+                        prev.map((t) =>
+                          t.id === selectedTable.id
+                            ? {
+                                ...t,
+                                isOccupied: true,
+                                activeOrder: {
+                                  id: `ORD-${Math.floor(100 + Math.random() * 900)}`,
+                                  itemsCount: 1,
+                                  total: 25.0,
+                                  status: OrderStatus.PENDING,
+                                  elapsedMinutes: 0,
+                                },
+                              }
+                            : t
+                        )
+                      );
+                      setSelectedTable(null);
+                    }
+                  }}
+                >
+                  Seat Guests
+                </Button>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </main>
     </div>
   );

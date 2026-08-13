@@ -31,6 +31,7 @@ scan-my-order/
     ├── assets/          # Shared Branding Assets (Favicon, Logo, OG Banner)
     ├── db/              # Prisma schema & singleton client
     ├── types/           # Shared TypeScript interfaces & Zod schemas
+    ├── ui/              # Shared shadcn/ui Component Library (Radix + Tailwind)
     ├── eslint-config/   # Shared ESLint rules
     └── typescript-config/# Shared TS configuration presets
 ```
@@ -55,6 +56,25 @@ import logoWhiteUrl from "@repo/assets/logo-white.png";
 
 ---
 
+## 🧩 Shared Component Library (`@repo/ui`)
+
+All web frontends consume a centralized, accessible **shadcn/ui** component library powered by Radix UI primitives and Tailwind CSS:
+
+```tsx
+import { 
+  Button, 
+  Card, CardHeader, CardTitle, CardContent, 
+  Badge, 
+  Dialog, DialogTrigger, DialogContent, 
+  Sheet, SheetTrigger, SheetContent, 
+  Tabs, TabsList, TabsTrigger, TabsContent,
+  Table, TableHeader, TableRow, TableHead, TableBody, TableCell,
+  Input, Select, Switch, Separator 
+} from "@repo/ui";
+```
+
+---
+
 ## ⚡ Application Ports & Stack
 
 | Application | Path | Port | Technology |
@@ -64,8 +84,8 @@ import logoWhiteUrl from "@repo/assets/logo-white.png";
 | **Operations POS** | `apps/web/operations` | **3001** | Vite, React 18, Tailwind CSS, `shadcn/ui` |
 | **Customer QR Menu**| `apps/web/menu` | **3002** | Vite, React 18, Tailwind CSS, Mobile-First |
 | **Marketing Site** | `apps/web/marketing` | **3003** | Vite, React 18, Tailwind CSS |
-| **Kitchen KDS** | `apps/native/kitchen`| **8081** | Expo 52, React Native, NativeWind v4 |
-| **Staff Handheld** | `apps/native/staff` | **8082** | Expo 52, React Native, NativeWind v4 |
+| **Kitchen KDS** | `apps/native/kitchen`| **8081** | Expo 54, React Native, NativeWind v4 |
+| **Staff Handheld** | `apps/native/staff` | **8082** | Expo 54, React Native, NativeWind v4 |
 
 ---
 

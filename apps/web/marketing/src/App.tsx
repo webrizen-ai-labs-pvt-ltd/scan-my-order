@@ -1,4 +1,13 @@
 import {
+  Button,
+  Card,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+  CardContent,
+  Badge,
+} from "@repo/ui";
+import {
   Sparkles,
   QrCode,
   Smartphone,
@@ -6,8 +15,8 @@ import {
   LayoutDashboard,
   ShieldCheck,
   ChevronRight,
-  CheckCircle2,
   ExternalLink,
+  ArrowRight,
 } from "lucide-react";
 
 export function App() {
@@ -18,6 +27,7 @@ export function App() {
       description: "Complete restaurant configuration, staff permissions, and revenue analytics.",
       icon: LayoutDashboard,
       color: "from-blue-500 to-indigo-600",
+      url: "http://localhost:3000",
     },
     {
       title: "Operations & Floor POS",
@@ -25,6 +35,7 @@ export function App() {
       description: "Live floor management, table occupancy map, and order cashiering.",
       icon: ShieldCheck,
       color: "from-emerald-500 to-teal-600",
+      url: "http://localhost:3001",
     },
     {
       title: "QR Customer Menu",
@@ -32,6 +43,7 @@ export function App() {
       description: "Mobile-first instant ordering with visual dietary filters & direct kitchen sync.",
       icon: QrCode,
       color: "from-amber-500 to-orange-600",
+      url: "http://localhost:3002",
     },
     {
       title: "Kitchen Display (KDS)",
@@ -39,6 +51,7 @@ export function App() {
       description: "Expo tablet app with item checklists, ticket timers, and station routing.",
       icon: Tablet,
       color: "from-red-500 to-pink-600",
+      url: "http://localhost:8081",
     },
     {
       title: "Staff Handheld POS",
@@ -46,6 +59,7 @@ export function App() {
       description: "Waiter companion mobile app for tableside orders and payment processing.",
       icon: Smartphone,
       color: "from-violet-500 to-purple-600",
+      url: "http://localhost:8082",
     },
   ];
 
@@ -64,93 +78,116 @@ export function App() {
               <span className="font-extrabold text-base text-white tracking-tight">
                 Scan My Order
               </span>
-              <span className="ml-2 text-xs font-mono px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20">
+              <Badge variant="info" className="ml-2">
                 Marketing (Port 3003)
-              </span>
+              </Badge>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <a
-              href="http://localhost:3000"
-              target="_blank"
-              rel="noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 text-slate-300 text-xs font-semibold hover:text-white border border-slate-700 transition-all"
-            >
-              Admin (3000) <ExternalLink className="w-3 h-3" />
+            <a href="http://localhost:3000" target="_blank" rel="noreferrer">
+              <Button size="sm" variant="outline" className="border-slate-700 text-xs">
+                Admin (3000) <ExternalLink className="w-3 h-3 ml-1" />
+              </Button>
             </a>
-            <a
-              href="http://localhost:3002"
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shadow-lg shadow-blue-600/30 transition-all"
-            >
-              Demo QR Menu (3002) <ChevronRight className="w-3.5 h-3.5" />
+            <a href="http://localhost:3002" target="_blank" rel="noreferrer">
+              <Button size="sm" className="bg-blue-600 hover:bg-blue-500 text-white text-xs">
+                Launch Guest Menu <ArrowRight className="w-3 h-3 ml-1" />
+              </Button>
             </a>
           </div>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section className="px-6 pt-20 pb-16 max-w-5xl mx-auto text-center space-y-6">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/30 text-xs font-semibold">
-          <Sparkles className="w-3.5 h-3.5" /> The Modern Multi-App Restaurant Operating System
+      {/* Hero Header */}
+      <header className="relative pt-20 pb-16 px-6 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900/20 via-slate-950 to-slate-950 -z-10" />
+
+        <div className="max-w-4xl mx-auto text-center space-y-6">
+          <Badge variant="outline" className="px-3 py-1 text-blue-400 border-blue-500/30 bg-blue-500/10">
+            <Sparkles className="w-3.5 h-3.5 mr-1.5" /> Next-Gen Restaurant Architecture
+          </Badge>
+
+          <h1 className="text-4xl sm:text-6xl font-black text-white tracking-tight leading-[1.1]">
+            One Monorepo. <br />
+            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
+              Seven Synchronized Frontends.
+            </span>
+          </h1>
+
+          <p className="text-slate-300 text-base sm:text-lg max-w-2xl mx-auto leading-relaxed">
+            Scan My Order orchestrates your entire restaurant lifecycle—from contactless guest QR ordering
+            to real-time kitchen displays and multi-outlet management.
+          </p>
+
+          <div className="flex flex-wrap items-center justify-center gap-4 pt-4">
+            <a href="http://localhost:3000">
+              <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-lg shadow-blue-500/25">
+                Launch Admin Hub
+              </Button>
+            </a>
+            <a href="http://localhost:3002">
+              <Button size="lg" variant="outline" className="border-slate-700 hover:bg-slate-800 text-white">
+                Experience QR Menu
+              </Button>
+            </a>
+          </div>
         </div>
+      </header>
 
-        <h1 className="text-4xl sm:text-6xl font-black text-white tracking-tight leading-tight">
-          One Monorepo. <br />
-          <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent">
-            Every Touchpoint in Dining.
-          </span>
-        </h1>
-
-        <p className="text-base sm:text-lg text-slate-300 max-w-2xl mx-auto leading-relaxed">
-          From guest QR smartphone scans to kitchen tablet tickets and owner financial analytics—all orchestrated in real-time with Turborepo, Prisma, and NativeWind v4.
-        </p>
-      </section>
-
-      {/* App Grid Showcase */}
-      <section className="px-6 py-12 max-w-7xl mx-auto">
+      {/* Services Grid */}
+      <section className="py-12 px-6 max-w-7xl mx-auto">
         <div className="text-center mb-10">
-          <h2 className="text-2xl font-bold text-white">Full Application Ecosystem</h2>
-          <p className="text-xs text-slate-400 mt-1">Concurrently running across assigned ports</p>
+          <h2 className="text-2xl font-bold text-white">Micro-Frontend Service Directory</h2>
+          <p className="text-sm text-slate-400 mt-1">
+            Independently deployable apps running concurrently on dedicated localhost ports.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {apps.map((item, idx) => {
-            const Icon = item.icon;
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {apps.map((app) => {
+            const Icon = app.icon;
             return (
-              <div
-                key={idx}
-                className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-slate-700 transition-all flex flex-col justify-between space-y-4"
+              <Card
+                key={app.port}
+                className="bg-slate-900/60 border-slate-800/80 hover:border-slate-700 transition-all hover:scale-[1.01]"
               >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
                     <div
-                      className={`w-12 h-12 rounded-xl bg-gradient-to-br ${item.color} flex items-center justify-center text-white shadow-lg`}
+                      className={`w-12 h-12 rounded-xl bg-gradient-to-br ${app.color} flex items-center justify-center text-white shadow-lg`}
                     >
                       <Icon className="w-6 h-6" />
                     </div>
-                    <span className="px-2.5 py-1 rounded-lg bg-slate-800 text-xs font-mono font-bold text-slate-300 border border-slate-700">
-                      Port {item.port}
-                    </span>
+                    <Badge variant="info">Port {app.port}</Badge>
                   </div>
-                  <h3 className="text-lg font-bold text-white">{item.title}</h3>
-                  <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                    {item.description}
-                  </p>
-                </div>
-
-                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                  <span className="flex items-center gap-1 text-emerald-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Ready for dev
-                  </span>
-                </div>
-              </div>
+                  <CardTitle className="text-lg text-white font-bold mt-4">
+                    {app.title}
+                  </CardTitle>
+                  <CardDescription className="text-slate-400 text-xs leading-relaxed">
+                    {app.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <a
+                    href={app.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center text-xs font-semibold text-blue-400 hover:text-blue-300 gap-1"
+                  >
+                    Open Application <ChevronRight className="w-3 h-3" />
+                  </a>
+                </CardContent>
+              </Card>
             );
           })}
         </div>
       </section>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-800/80 py-8 px-6 text-center text-xs text-slate-500">
+        <p>© 2026 Scan My Order Monorepo • Built with Turborepo, pnpm & @repo/ui</p>
+      </footer>
     </div>
   );
 }
