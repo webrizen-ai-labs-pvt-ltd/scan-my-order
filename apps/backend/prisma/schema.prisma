@@ -1,0 +1,103 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OWNER
+  MANAGER
+  WAITER
+  KITCHEN
+  CUSTOMER
+}
+
+enum Status {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+model User {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  password           String?
+  name               String
+  avatar             String?
+  role               Role      @default(CUSTOMER)
+  status             Status    @default(ACTIVE)
+  
+  // Employer / Employee hierarchy
+  ownerId            String?
+  owner              User?     @relation("OwnerEmployees", fields: [ownerId], references: [id], onDelete: SetNull)
+  employees          User[]    @relation("OwnerEmployees")
+  
+  // Store relation
+  storeId            String?
+  store              UserStoreRel? @relation(fields: [storeId], references: [id])
+  
+  // Auth providers
+  googleId           String?   @unique
+  resetToken         String?
+  resetTokenExpires  DateTime?
+  
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  deletedAt          DateTime?
+
+  passkeys           Passkey[]
+  ownedStores        Store[]   @relation("OwnerStores")
+}
+
+model UserStoreRel {
+  id        String   @id @default(uuid())
+  storeId   String
+  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  users     User[]
+}
+
+model Passkey {
+  id           String   @id @default(uuid())
+  credentialId String   @unique
+  publicKey    Bytes
+  counter      BigInt   @default(0)
+  transports   String?
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+}
+
+model Store {
+  id             String    @id @default(uuid())
+  name           String
+  description    String?
+  ownerId        String
+  owner          User      @relation("OwnerStores", fields: [ownerId], references: [id], onDelete: Cascade)
+  colorScheme    String?
+  fontStyle      String?
+  brandingLogo   String?
+  operatingHours String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  menuItems      MenuItem[]
+  userStoreRels  UserStoreRel[]
+}
+
+model MenuItem {
+  id          String   @id @default(uuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  price       Float
+  image       String?
+  category    String?
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

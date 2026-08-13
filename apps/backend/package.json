@@ -1,29 +1,30 @@
 {
   "name": "backend",
-  "version": "0.0.0",
-  "private": true,
-  "main": "dist/index.js",
+  "version": "1.0.0",
+  "description": "Next-Generation Multi-Platform Restaurant POS, QR Dining, and Kitchen Management Ecosystem",
+  "license": "ISC",
+  "author": "Webrizen AI Labs Pvt Ltd",
+  "type": "commonjs",
+  "main": "server.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "lint": "echo 'No lint specified for backend'"
+    "dev": "node server.js",
+    "build": "prisma generate && echo 'Backend build complete'",
+    "lint": "echo 'No lint configured for backend'",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
-    "@repo/db": "workspace:*",
-    "@repo/types": "workspace:*",
+    "@prisma/client": "^6.3.1",
+    "@simplewebauthn/server": "^13.1.0",
+    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2",
-    "helmet": "^8.0.0",
-    "zod": "^3.24.2"
+    "express": "^5.0.1",
+    "google-auth-library": "^9.15.1",
+    "jsonwebtoken": "^9.0.2",
+    "nodemailer": "^6.10.0"
   },
   "devDependencies": {
-    "@repo/typescript-config": "workspace:*",
-    "@types/cors": "^2.8.17",
-    "@types/express": "^5.0.0",
-    "@types/node": "^22.13.9",
-    "tsx": "^4.19.3",
-    "typescript": "^5.8.2"
+    "prisma": "^6.3.1"
   }
 }

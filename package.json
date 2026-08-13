@@ -1,29 +1,20 @@
 {
-  "name": "scan-my-order-monorepo",
+  "name": "scan-my-order",
   "private": true,
-  "packageManager": "pnpm@11.9.0",
+  "version": "1.0.0",
+  "description": "Scan My Order - Monorepo Architecture",
+  "packageManager": "npm@11.7.0",
+  "workspaces": [
+    "apps/backend",
+    "apps/frontend/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "turbo dev",
-    "dev:web": "turbo dev --filter=backend --filter=admin --filter=operations --filter=menu --filter=marketing",
-    "dev:native": "turbo dev --filter=kitchen --filter=staff",
-    "dev:admin": "pnpm --filter admin dev",
-    "dev:ops": "pnpm --filter operations dev",
-    "dev:menu": "pnpm --filter menu dev",
-    "dev:marketing": "pnpm --filter marketing dev",
-    "dev:kitchen": "pnpm --filter kitchen dev",
-    "dev:staff": "pnpm --filter staff dev",
     "build": "turbo build",
-    "lint": "turbo lint",
-    "db:generate": "turbo db:generate",
-    "db:push": "turbo db:push",
-    "clean": "turbo clean"
+    "dev": "turbo dev",
+    "lint": "turbo lint"
   },
   "devDependencies": {
-    "prettier": "^3.5.3",
-    "turbo": "^2.4.4",
-    "typescript": "^5.8.2"
-  },
-  "engines": {
-    "node": ">=20.0.0"
+    "turbo": "^2.4.4"
   }
 }
