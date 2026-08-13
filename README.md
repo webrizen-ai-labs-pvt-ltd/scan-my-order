@@ -1,5 +1,9 @@
 <div align="center">
-  <img src="packages/assets/logo.png" alt="Scan My Order Logo" width="120" style="filter: invert(100%)" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="packages/assets/logo-white.png">
+    <source media="(prefers-color-scheme: light)" srcset="packages/assets/logo.png">
+    <img alt="Scan My Order Logo" src="packages/assets/logo-white.png" width="130">
+  </picture>
   <h1>Scan My Order</h1>
   <p><strong>Next-Generation Multi-Platform Restaurant POS, QR Dining, and Kitchen Management Ecosystem</strong></p>
 </div>
@@ -41,12 +45,13 @@ The `packages/assets` package serves as the single source of truth for branding 
 | Asset | File | Description & Usage |
 | :--- | :--- | :--- |
 | **Favicon** | [`favicon.svg`](packages/assets/favicon.svg) | Applied as default `<link rel="icon">` across all web apps (`admin`, `operations`, `menu`, `marketing`) and native Expo web build. |
-| **Logo** | [`logo.png`](packages/assets/logo.png) | High-resolution brand logo used in application navigation headers, splash screens, and app icons. |
+| **Dark Logo (Light Mode)** | [`logo.png`](packages/assets/logo.png) | High-resolution black silhouette logo for light backgrounds and theme auto-switching. |
+| **White Logo (Dark Mode)** | [`logo-white.png`](packages/assets/logo-white.png) | Pure white inverted logo with alpha transparency for dark UI headers, dark mode GitHub README, and mobile apps. |
 | **OG Image** | [`og-image.png`](packages/assets/og-image.png) | Open Graph social sharing preview banner configured in `<meta property="og:image">`. |
 
 ```typescript
 // Example: Importing shared assets in TypeScript / React
-import logoUrl from "@repo/assets/logo.png";
+import logoWhiteUrl from "@repo/assets/logo-white.png";
 ```
 
 ---

@@ -119,7 +119,7 @@ export function App() {
       <header className="h-16 border-b border-slate-800/80 px-6 flex items-center justify-between bg-slate-900/40 backdrop-blur sticky top-0 z-20">
         <div className="flex items-center gap-3">
           <img
-            src="/logo.png"
+            src="/logo-white.png"
             alt="Scan My Order Logo"
             className="h-10 w-10 rounded-xl object-contain shadow-lg shadow-emerald-500/20"
           />

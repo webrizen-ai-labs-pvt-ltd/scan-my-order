@@ -6,12 +6,14 @@
   "exports": {
     "./favicon.svg": "./favicon.svg",
     "./logo.png": "./logo.png",
+    "./logo-white.png": "./logo-white.png",
     "./og-image.png": "./og-image.png",
     "./*": "./*"
   },
   "files": [
     "favicon.svg",
     "logo.png",
+    "logo-white.png",
     "og-image.png"
   ]
 }

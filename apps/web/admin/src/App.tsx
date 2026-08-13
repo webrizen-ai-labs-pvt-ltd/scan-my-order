@@ -23,7 +23,7 @@ export function App() {
         <div>
           <div className="p-6 flex items-center gap-3 border-b border-slate-800/60">
             <img
-              src="/logo.png"
+              src="/logo-white.png"
               alt="Scan My Order Logo"
               className="h-10 w-10 rounded-xl object-contain shadow-lg shadow-blue-500/20"
             />

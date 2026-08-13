@@ -56,7 +56,7 @@ export function App() {
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img
-              src="/logo.png"
+              src="/logo-white.png"
               alt="Scan My Order Logo"
               className="w-10 h-10 rounded-xl object-contain shadow-lg shadow-blue-500/20"
             />
