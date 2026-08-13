@@ -1,0 +1,17 @@
+{
+  "name": "@repo/assets",
+  "version": "0.0.0",
+  "private": true,
+  "license": "MIT",
+  "exports": {
+    "./favicon.svg": "./favicon.svg",
+    "./logo.png": "./logo.png",
+    "./og-image.png": "./og-image.png",
+    "./*": "./*"
+  },
+  "files": [
+    "favicon.svg",
+    "logo.png",
+    "og-image.png"
+  ]
+}

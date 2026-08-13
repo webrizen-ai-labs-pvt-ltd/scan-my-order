@@ -6,8 +6,10 @@
     "orientation": "portrait",
     "scheme": "scanmyorderstaff",
     "userInterfaceStyle": "dark",
+    "icon": "./assets/logo.png",
     "newArchEnabled": true,
     "splash": {
+      "image": "./assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#020617"
     },
@@ -16,7 +18,8 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static"
+      "output": "static",
+      "favicon": "./assets/favicon.svg"
     },
     "plugins": [
       "expo-router"

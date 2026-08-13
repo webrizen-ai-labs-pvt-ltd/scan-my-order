@@ -139,9 +139,11 @@ export function App() {
       <header className="bg-slate-900/80 border-b border-slate-800 px-5 py-4 sticky top-0 z-20 backdrop-blur">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-red-500 flex items-center justify-center text-xl shadow-lg">
-              🍽️
-            </div>
+            <img
+              src="/logo.png"
+              alt="The Grand Woodside"
+              className="w-10 h-10 rounded-xl object-contain shadow-lg shadow-amber-500/20"
+            />
             <div>
               <h1 className="font-bold text-base text-white leading-tight">
                 The Grand Woodside

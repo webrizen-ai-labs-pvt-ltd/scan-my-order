@@ -63,6 +63,9 @@ importers:
 
   apps/native/kitchen:
     dependencies:
+      '@repo/assets':
+        specifier: workspace:*
+        version: link:../../../packages/assets
       '@repo/types':
         specifier: workspace:*
         version: link:../../../packages/types
@@ -130,6 +133,9 @@ importers:
 
   apps/native/staff:
     dependencies:
+      '@repo/assets':
+        specifier: workspace:*
+        version: link:../../../packages/assets
       '@repo/types':
         specifier: workspace:*
         version: link:../../../packages/types
@@ -197,6 +203,9 @@ importers:
 
   apps/web/admin:
     dependencies:
+      '@repo/assets':
+        specifier: workspace:*
+        version: link:../../../packages/assets
       '@repo/types':
         specifier: workspace:*
         version: link:../../../packages/types
@@ -249,6 +258,9 @@ importers:
 
   apps/web/marketing:
     dependencies:
+      '@repo/assets':
+        specifier: workspace:*
+        version: link:../../../packages/assets
       '@repo/types':
         specifier: workspace:*
         version: link:../../../packages/types
@@ -301,6 +313,9 @@ importers:
 
   apps/web/menu:
     dependencies:
+      '@repo/assets':
+        specifier: workspace:*
+        version: link:../../../packages/assets
       '@repo/types':
         specifier: workspace:*
         version: link:../../../packages/types
@@ -353,6 +368,9 @@ importers:
 
   apps/web/operations:
     dependencies:
+      '@repo/assets':
+        specifier: workspace:*
+        version: link:../../../packages/assets
       '@repo/types':
         specifier: workspace:*
         version: link:../../../packages/types
@@ -402,6 +420,8 @@ importers:
       vite:
         specifier: ^6.2.0
         version: 6.4.3(@types/node@22.20.1)(jiti@2.7.0)(lightningcss@1.27.0)(terser@5.49.2)(tsx@4.23.12)
+
+  packages/assets: {}
 
   packages/db:
     dependencies:

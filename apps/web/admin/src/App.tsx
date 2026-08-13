@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { UserRole } from "@repo/types";
 import {
-  UtensilsCrossed,
   LayoutDashboard,
   QrCode,
   Users,
@@ -23,9 +22,11 @@ export function App() {
       <aside className="w-64 border-r border-slate-800/80 bg-slate-900/60 backdrop-blur-xl flex flex-col justify-between hidden md:flex">
         <div>
           <div className="p-6 flex items-center gap-3 border-b border-slate-800/60">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-              <UtensilsCrossed className="w-5 h-5 text-white" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Scan My Order Logo"
+              className="h-10 w-10 rounded-xl object-contain shadow-lg shadow-blue-500/20"
+            />
             <div>
               <h1 className="font-bold text-base tracking-tight text-white leading-tight">
                 Scan My Order

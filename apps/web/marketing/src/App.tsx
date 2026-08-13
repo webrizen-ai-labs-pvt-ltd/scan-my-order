@@ -1,5 +1,4 @@
 import {
-  UtensilsCrossed,
   Sparkles,
   QrCode,
   Smartphone,
@@ -56,9 +55,11 @@ export function App() {
       <nav className="border-b border-slate-800/80 bg-slate-900/40 backdrop-blur sticky top-0 z-30 px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white shadow-lg shadow-blue-500/20">
-              <UtensilsCrossed className="w-5 h-5" />
-            </div>
+            <img
+              src="/logo.png"
+              alt="Scan My Order Logo"
+              className="w-10 h-10 rounded-xl object-contain shadow-lg shadow-blue-500/20"
+            />
             <div>
               <span className="font-extrabold text-base text-white tracking-tight">
                 Scan My Order

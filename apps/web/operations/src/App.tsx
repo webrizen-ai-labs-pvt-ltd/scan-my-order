@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { OrderStatus, PaymentStatus } from "@repo/types";
-import { Activity, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 
 interface TableStatus {
   id: string;
@@ -118,9 +118,11 @@ export function App() {
       {/* Top Header */}
       <header className="h-16 border-b border-slate-800/80 px-6 flex items-center justify-between bg-slate-900/40 backdrop-blur sticky top-0 z-20">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
-            <Activity className="w-5 h-5" />
-          </div>
+          <img
+            src="/logo.png"
+            alt="Scan My Order Logo"
+            className="h-10 w-10 rounded-xl object-contain shadow-lg shadow-emerald-500/20"
+          />
           <div>
             <h1 className="font-bold text-base text-white">Operations & Live Floor</h1>
             <p className="text-xs text-emerald-400 font-mono">Port 3001 • Real-time Floor Map</p>

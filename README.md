@@ -1,6 +1,12 @@
-# Scan My Order
+<div align="center">
+  <img src="packages/assets/logo.png" alt="Scan My Order Logo" width="120" />
+  <h1>Scan My Order</h1>
+  <p><strong>Next-Generation Multi-Platform Restaurant POS, QR Dining, and Kitchen Management Ecosystem</strong></p>
+</div>
 
-> A high-performance, multi-platform restaurant Point of Sale (POS), QR dining, and kitchen management ecosystem built with Turborepo and pnpm workspaces.
+<p align="center">
+  <img src="packages/assets/og-image.png" alt="Scan My Order Platform Overview" width="100%" />
+</p>
 
 ---
 
@@ -19,10 +25,28 @@ scan-my-order/
 │       ├── kitchen/     # Kitchen Display System (KDS) Tablet
 │       └── staff/       # Waiter Handheld POS Companion
 └── packages/
+    ├── assets/          # Shared Branding Assets (Favicon, Logo, OG Banner)
     ├── db/              # Prisma schema & singleton client
     ├── types/           # Shared TypeScript interfaces & Zod schemas
     ├── eslint-config/   # Shared ESLint rules
     └── typescript-config/# Shared TS configuration presets
+```
+
+---
+
+## 🎨 Shared Brand Assets (`@repo/assets`)
+
+The `packages/assets` package serves as the single source of truth for branding media across all web and mobile apps:
+
+| Asset | File | Description & Usage |
+| :--- | :--- | :--- |
+| **Favicon** | [`favicon.svg`](packages/assets/favicon.svg) | Applied as default `<link rel="icon">` across all web apps (`admin`, `operations`, `menu`, `marketing`) and native Expo web build. |
+| **Logo** | [`logo.png`](packages/assets/logo.png) | High-resolution brand logo used in application navigation headers, splash screens, and app icons. |
+| **OG Image** | [`og-image.png`](packages/assets/og-image.png) | Open Graph social sharing preview banner configured in `<meta property="og:image">`. |
+
+```typescript
+// Example: Importing shared assets in TypeScript / React
+import logoUrl from "@repo/assets/logo.png";
 ```
 
 ---

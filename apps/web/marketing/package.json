@@ -10,6 +10,7 @@
     "lint": "echo 'No lint specified for marketing'"
   },
   "dependencies": {
+    "@repo/assets": "workspace:*",
     "@repo/types": "workspace:*",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",
