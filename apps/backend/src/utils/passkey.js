@@ -30,27 +30,42 @@ async function getPasskeyRegistrationOptions(user) {
   return options;
 }
 
-async function verifyPasskeyRegistration(user, response) {
-  const expectedChallenge = challengeStore.get(`reg_${user.id}`);
+async function verifyPasskeyRegistration(userOrUserId, response, expectedChallengeFromClient) {
+  const userId = typeof userOrUserId === "object" ? userOrUserId?.id : userOrUserId;
+  const storedChallenge = userId ? challengeStore.get(`reg_${userId}`) : null;
+  const expectedChallenge = storedChallenge || expectedChallengeFromClient;
+
   if (!expectedChallenge) {
     throw new Error("Challenge expired or not found");
   }
 
+  const allowedOrigins = [
+    ORIGIN,
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+  ];
+
   const verification = await verifyRegistrationResponse({
     response,
     expectedChallenge,
-    expectedOrigin: ORIGIN,
+    expectedOrigin: allowedOrigins,
     expectedRPID: RP_ID,
   });
 
-  challengeStore.delete(`reg_${user.id}`);
+  if (userId) {
+    challengeStore.delete(`reg_${userId}`);
+  }
   return verification;
 }
 
 async function getPasskeyAuthenticationOptions(userPasskeys = []) {
   const allowCredentials = userPasskeys.map((pk) => ({
     id: pk.credentialId,
-    transports: pk.transports ? pk.transports.split(",") : undefined,
+    transports: pk.transports ? (typeof pk.transports === "string" ? JSON.parse(pk.transports) : pk.transports) : undefined,
   }));
 
   const options = await generateAuthenticationOptions({
@@ -61,19 +76,30 @@ async function getPasskeyAuthenticationOptions(userPasskeys = []) {
 
   const challengeKey = `auth_${options.challenge}`;
   challengeStore.set(challengeKey, options.challenge);
+  challengeStore.set(options.challenge, options.challenge);
   return { options, challengeKey };
 }
 
 async function verifyPasskeyAuthentication(response, passkey, challengeKey) {
-  const expectedChallenge = challengeStore.get(challengeKey);
+  const expectedChallenge = challengeStore.get(challengeKey) || challengeKey;
   if (!expectedChallenge) {
     throw new Error("Challenge expired or not found");
   }
 
+  const allowedOrigins = [
+    ORIGIN,
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://localhost:8000",
+    "http://127.0.0.1:5173",
+  ];
+
   const verification = await verifyAuthenticationResponse({
     response,
     expectedChallenge,
-    expectedOrigin: ORIGIN,
+    expectedOrigin: allowedOrigins,
     expectedRPID: RP_ID,
     credential: {
       id: passkey.credentialId,

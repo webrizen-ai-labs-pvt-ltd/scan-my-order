@@ -7,8 +7,9 @@
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
-    "dev": "node server.js",
-    "build": "prisma generate && echo 'Backend build complete'",
+    "dev": "node --watch server.js",
+    "start": "node server.js",
+    "build": "echo 'Backend build complete'",
     "lint": "echo 'No lint configured for backend'",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

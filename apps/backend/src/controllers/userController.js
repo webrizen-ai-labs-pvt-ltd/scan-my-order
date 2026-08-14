@@ -19,6 +19,14 @@ async function getProfile(req, res) {
         googleId: true,
         createdAt: true,
         updatedAt: true,
+        passkeys: {
+          select: {
+            id: true,
+            credentialId: true,
+            transports: true,
+            createdAt: true,
+          },
+        },
       },
     });
 
@@ -51,6 +59,14 @@ async function updateProfile(req, res) {
         role: true,
         avatar: true,
         updatedAt: true,
+        passkeys: {
+          select: {
+            id: true,
+            credentialId: true,
+            transports: true,
+            createdAt: true,
+          },
+        },
       },
     });
 

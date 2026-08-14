@@ -145,7 +145,7 @@ async function createUser(req, res) {
 async function updateUser(req, res) {
   try {
     const { id } = req.params;
-    const { name, email, avatar, ownerId } = req.body;
+    const { name, email, avatar, ownerId, role, status } = req.body;
 
     const existingUser = await prisma.user.findFirst({ where: { id, deletedAt: null } });
     if (!existingUser) {
@@ -159,6 +159,8 @@ async function updateUser(req, res) {
         ...(email && { email }),
         ...(avatar !== undefined && { avatar }),
         ...(ownerId !== undefined && { ownerId }),
+        ...(role && { role }),
+        ...(status && { status }),
       },
       select: {
         id: true,
@@ -258,6 +260,78 @@ async function changeUserStatus(req, res) {
   }
 }
 
+async function listStores(req, res) {
+  try {
+    const stores = await prisma.store.findMany({
+      include: {
+        owner: { select: { id: true, name: true, email: true, role: true } },
+        _count: { select: { menuItems: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    return successResponse(res, "Stores retrieved successfully", stores);
+  } catch (err) {
+    console.error("Admin listStores error:", err);
+    return errorResponse(res, "Failed to retrieve stores", 500);
+  }
+}
+
+async function onboardStore(req, res) {
+  try {
+    const { name, description, ownerId, newOwner, colorScheme, fontStyle, brandingLogo, operatingHours } = req.body;
+
+    if (!name) {
+      return errorResponse(res, "Store name is required", 400);
+    }
+
+    let finalOwnerId = ownerId;
+
+    if (newOwner && newOwner.email && newOwner.password && newOwner.name) {
+      const existingUser = await prisma.user.findUnique({ where: { email: newOwner.email } });
+      if (existingUser) {
+        return errorResponse(res, "User with this email already exists", 409);
+      }
+
+      const hashedPassword = await bcrypt.hash(newOwner.password, 10);
+      const createdOwner = await prisma.user.create({
+        data: {
+          email: newOwner.email,
+          password: hashedPassword,
+          name: newOwner.name,
+          role: "OWNER",
+          status: "ACTIVE",
+        },
+      });
+      finalOwnerId = createdOwner.id;
+    }
+
+    if (!finalOwnerId) {
+      return errorResponse(res, "Store owner ID or new owner credentials are required", 400);
+    }
+
+    const store = await prisma.store.create({
+      data: {
+        name,
+        description,
+        ownerId: finalOwnerId,
+        colorScheme,
+        fontStyle,
+        brandingLogo,
+        operatingHours,
+      },
+      include: {
+        owner: { select: { id: true, name: true, email: true, role: true } },
+      },
+    });
+
+    return successResponse(res, "Store onboarded successfully", store, 201);
+  } catch (err) {
+    console.error("Admin onboardStore error:", err);
+    return errorResponse(res, "Failed to onboard store", 500);
+  }
+}
+
 module.exports = {
   listUsers,
   getUserById,
@@ -266,4 +340,6 @@ module.exports = {
   deleteUser,
   changeUserRole,
   changeUserStatus,
+  listStores,
+  onboardStore,
 };

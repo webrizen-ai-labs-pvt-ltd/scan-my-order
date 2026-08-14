@@ -13,5 +13,14 @@
 
 ---
 
+## 📔 Developer Journal
+
+### August 15, 2026
+Successfully migrated the database to Supabase PostgreSQL, integrated WebAuthn biometric passkey registration & authentication, implemented a 6-digit email OTP password reset flow with email-safe HTML templates, and established a child-page architecture for admin User Management and Store Onboarding with fixed network ports (`0.0.0.0`).
+
+> **Up Next**: Start working on full store management, menu creation, and digital menu item management within the admin frontend.
+
+---
+
 ## 📄 License
 MIT © Webrizen AI Labs Pvt Ltd

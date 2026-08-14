@@ -15,4 +15,7 @@ router.delete("/users/:id", adminController.deleteUser);
 router.patch("/users/:id/role", adminController.changeUserRole);
 router.patch("/users/:id/status", adminController.changeUserStatus);
 
+router.get("/stores", adminController.listStores);
+router.post("/onboard-store", adminController.onboardStore);
+
 module.exports = router;

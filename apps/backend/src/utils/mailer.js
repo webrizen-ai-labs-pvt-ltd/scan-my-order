@@ -1,11 +1,22 @@
 const nodemailer = require("nodemailer");
 const path = require("path");
+const fs = require("fs");
 
-const LOGO_PATH = path.join(__dirname, "../../../packages/assets/logo.png");
+const possibleLogoPaths = [
+  path.resolve(__dirname, "../../../../packages/assets/logo-white.png"),
+  path.resolve(process.cwd(), "../../packages/assets/logo-white.png"),
+  path.resolve(process.cwd(), "../packages/assets/logo-white.png"),
+  path.resolve(process.cwd(), "packages/assets/logo-white.png"),
+  path.resolve(__dirname, "../../../../packages/assets/logo.png"),
+  path.resolve(process.cwd(), "../../packages/assets/logo.png"),
+];
+
+const LOGO_PATH = possibleLogoPaths.find((p) => fs.existsSync(p)) || null;
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.mailtrap.io",
-  port: parseInt(process.env.SMTP_PORT || "2525", 10),
+  host: process.env.SMTP_HOST || "smtp.hostinger.com",
+  port: parseInt(process.env.SMTP_PORT || "465", 10),
+  secure: process.env.SMTP_PORT === "465",
   auth: {
     user: process.env.SMTP_USER || "",
     pass: process.env.SMTP_PASS || "",
@@ -13,85 +24,163 @@ const transporter = nodemailer.createTransport({
 });
 
 function getEmailWrapper(contentHtml) {
+  const logoSrc = LOGO_PATH ? 'cid:scanmyorderlogo' : 'https://raw.githubusercontent.com/webrizen/assets/main/logo.png';
   return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background-color: #09090b; color: #f4f4f5; border-radius: 12px;">
-      <div style="text-align: center; padding-bottom: 24px; border-bottom: 1px solid #27272a;">
-        <img src="cid:scanmyorderlogo" alt="Scan My Order Logo" width="140" style="max-width: 140px; height: auto; display: inline-block;" />
-      </div>
-      <div style="padding: 24px 0;">
-        ${contentHtml}
-      </div>
-      <div style="text-align: center; padding-top: 24px; border-top: 1px solid #27272a; color: #71717a; font-size: 12px; line-height: 1.5;">
-        <p style="margin: 0;">Scan My Order — Multi-Platform Restaurant POS & QR Dining Ecosystem</p>
-        <p style="margin: 4px 0 0 0;">© ${new Date().getFullYear()} Webrizen AI Labs Pvt Ltd. All rights reserved.</p>
-      </div>
-    </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Scan My Order</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #09090b; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+  <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #09090b; padding: 40px 16px;">
+    <tr>
+      <td align="center">
+        <!-- Main Container Card -->
+        <table border="0" cellpadding="0" cellspacing="0" width="100%" style="max-width: 560px; background-color: #18181b; border: 1px solid #27272a; border-radius: 16px; overflow: hidden;">
+          
+          <!-- Top Yellow Accent Bar -->
+          <tr>
+            <td height="4" style="background-color: #eab308; line-height: 4px; font-size: 1px;">&nbsp;</td>
+          </tr>
+
+          <!-- Header -->
+          <tr>
+            <td style="padding: 24px 32px; border-bottom: 1px solid #27272a;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td width="44" valign="middle" style="padding-right: 12px;">
+                    <img src="${logoSrc}" alt="Scan My Order" width="38" height="38" style="display: block; width: 38px; height: 38px; border-radius: 8px;" />
+                  </td>
+                  <td valign="middle">
+                    <div style="font-size: 17px; font-weight: 700; color: #ffffff; line-height: 1.2; letter-spacing: -0.3px;">Scan My Order</div>
+                    <div style="font-size: 11px; font-weight: 500; color: #a1a1aa; line-height: 1.3; margin-top: 2px;">Multi-Platform Restaurant POS & QR Dining</div>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Content Body -->
+          <tr>
+            <td style="padding: 32px;">
+              ${contentHtml}
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 32px; background-color: #121215; border-top: 1px solid #27272a;">
+              <table border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td style="color: #71717a; font-size: 12px; line-height: 1.6;">
+                    <p style="margin: 0 0 6px 0;">This email was sent automatically by the <strong>Scan My Order</strong> platform.</p>
+                    <p style="margin: 0;">© ${new Date().getFullYear()} <strong>Webrizen AI Labs Pvt Ltd.</strong> All Rights Reserved.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
   `;
 }
 
-async function sendPasswordResetEmail(email, resetToken) {
-  const resetUrl = `${process.env.ORIGIN || "http://localhost:5173"}/reset-password?token=${resetToken}`;
-
+async function sendPasswordResetEmail(email, resetOtp) {
   const bodyHtml = `
-    <h2 style="color: #ffffff; font-size: 20px; font-weight: 600; margin-top: 0;">Reset Your Password</h2>
-    <p style="color: #a1a1aa; line-height: 1.6; font-size: 14px;">You requested a password reset for your <strong>Scan My Order</strong> account.</p>
-    <p style="color: #a1a1aa; line-height: 1.6; font-size: 14px;">Click the button below to set up a new password. This link is valid for 1 hour:</p>
-    <div style="text-align: center; margin: 28px 0;">
-      <a href="${resetUrl}" target="_blank" style="padding: 12px 28px; background-color: #ffffff; color: #09090b; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px; display: inline-block;">Reset Password</a>
-    </div>
-    <p style="color: #71717a; font-size: 13px; line-height: 1.5;">If you did not request this password reset, you can safely ignore this email.</p>
+    <h2 style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.3px;">Password Reset Verification Code</h2>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+      Use the 6-digit verification OTP code below to reset the password for your <strong>Scan My Order</strong> account (<span style="color: #eab308; font-weight: 600;">${email}</span>):
+    </p>
+
+    <!-- 6-digit OTP Code Badge -->
+    <table border="0" cellpadding="0" cellspacing="0" style="margin: 0 0 24px 0;">
+      <tr>
+        <td align="center" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 12px; padding: 18px 36px;">
+          <span style="font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 32px; font-weight: 800; color: #eab308; letter-spacing: 10px; display: inline-block;">
+            ${resetOtp}
+          </span>
+        </td>
+      </tr>
+    </table>
+
+    <p style="color: #a1a1aa; font-size: 13px; line-height: 1.5; margin: 0 0 20px 0;">
+      This OTP code is valid for <strong>15 minutes</strong> across all Scan My Order applications.
+    </p>
+
+    <p style="color: #71717a; font-size: 12px; line-height: 1.5; margin: 0; padding-top: 16px; border-top: 1px dashed #27272a;">
+      If you did not request a password reset code, please ignore this email — your account remains secure.
+    </p>
   `;
 
+  const attachments = LOGO_PATH
+    ? [
+        {
+          filename: "logo-white.png",
+          path: LOGO_PATH,
+          cid: "scanmyorderlogo",
+        },
+      ]
+    : [];
+
   const mailOptions = {
-    from: process.env.EMAIL_FROM || '"Scan My Order" <noreply@scanmyorder.com>',
+    from: process.env.EMAIL_FROM || '"Scan My Order" <hello@webrizen.com>',
     to: email,
-    subject: "Password Reset Request - Scan My Order",
+    subject: `Your Password Reset OTP: ${resetOtp} - Scan My Order`,
     html: getEmailWrapper(bodyHtml),
-    attachments: [
-      {
-        filename: "logo.png",
-        path: LOGO_PATH,
-        cid: "scanmyorderlogo",
-      },
-    ],
+    attachments,
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    return true;
+    const info = await transporter.sendMail(mailOptions);
+    return info;
   } catch (err) {
     console.error("Failed to send password reset email:", err);
-    return false;
+    throw err;
   }
 }
 
 async function sendWelcomeEmail(email, name) {
   const bodyHtml = `
-    <h2 style="color: #ffffff; font-size: 20px; font-weight: 600; margin-top: 0;">Welcome to Scan My Order, ${name}!</h2>
-    <p style="color: #a1a1aa; line-height: 1.6; font-size: 14px;">Thank you for registering with Scan My Order.</p>
-    <p style="color: #a1a1aa; line-height: 1.6; font-size: 14px;">Your account is ready to manage your dining, POS, and kitchen operations seamlessy.</p>
+    <h2 style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.3px;">Welcome to Scan My Order, ${name}!</h2>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 14px 0;">
+      Thank you for registering with <strong>Scan My Order</strong>.
+    </p>
+    <p style="color: #a1a1aa; font-size: 14px; line-height: 1.6; margin: 0;">
+      Your account is ready to manage your dining, POS, and kitchen operations seamlessly.
+    </p>
   `;
 
+  const attachments = LOGO_PATH
+    ? [
+        {
+          filename: "logo-white.png",
+          path: LOGO_PATH,
+          cid: "scanmyorderlogo",
+        },
+      ]
+    : [];
+
   const mailOptions = {
-    from: process.env.EMAIL_FROM || '"Scan My Order" <noreply@scanmyorder.com>',
+    from: process.env.EMAIL_FROM || '"Scan My Order" <hello@webrizen.com>',
     to: email,
     subject: "Welcome to Scan My Order",
     html: getEmailWrapper(bodyHtml),
-    attachments: [
-      {
-        filename: "logo.png",
-        path: LOGO_PATH,
-        cid: "scanmyorderlogo",
-      },
-    ],
+    attachments,
   };
 
   try {
-    await transporter.sendMail(mailOptions);
-    return true;
+    const info = await transporter.sendMail(mailOptions);
+    return info;
   } catch (err) {
     console.error("Failed to send welcome email:", err);
-    return false;
+    throw err;
   }
 }
 
