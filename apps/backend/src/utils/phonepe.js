@@ -1,8 +1,8 @@
 const crypto = require("crypto");
 
 const PHONEPE_HOST = process.env.PHONEPE_HOST || "https://api-preprod.phonepe.com/apis/pg-sandbox";
-const MERCHANT_ID = process.env.PHONEPE_MERCHANT_ID || "PGTESTPAYUAT";
-const SALT_KEY = process.env.PHONEPE_SALT_KEY || "099eb0cd-02cf-4e2a-8aca-3e6c6aff0399";
+const MERCHANT_ID = process.env.PHONEPE_MERCHANT_ID || "PGTESTPAYUAT86";
+const SALT_KEY = process.env.PHONEPE_SALT_KEY || "96434309-7796-489d-8924-ab56988a6076";
 const SALT_INDEX = process.env.PHONEPE_SALT_INDEX || "1";
 
 /**
@@ -10,13 +10,14 @@ const SALT_INDEX = process.env.PHONEPE_SALT_INDEX || "1";
  */
 function createPhonePePayPayload({ merchantTransactionId, merchantUserId, amountInRupees, redirectUrl, callbackUrl }) {
   const amountInPaise = Math.round(amountInRupees * 100);
+  const sanitizedUserId = String(merchantUserId || "USER_1").replace(/[^a-zA-Z0-9_]/g, "_").slice(0, 36);
 
   const payloadObj = {
     merchantId: MERCHANT_ID,
     merchantTransactionId,
-    merchantUserId,
+    merchantUserId: sanitizedUserId,
     amount: amountInPaise,
-    redirectUrl: redirectUrl || "http://localhost:5173/dashboard/subscriptions",
+    redirectUrl: redirectUrl || "http://localhost:5176/dashboard/subscriptions",
     redirectMode: "REDIRECT",
     callbackUrl: callbackUrl || "http://localhost:8000/api/subscriptions/phonepe-callback",
     paymentInstrument: {
@@ -59,7 +60,7 @@ async function initiatePhonePePaymentRequest({ merchantTransactionId, merchantUs
     });
 
     const resJson = await response.json().catch(() => ({}));
-    console.log("PhonePe API Pay Response:", JSON.stringify(resJson));
+    console.log("PhonePe Real Sandbox API Pay Response:", JSON.stringify(resJson, null, 2));
 
     const redirectUrlFromPhonePe = resJson?.data?.instrumentResponse?.redirectInfo?.url;
 
@@ -69,17 +70,14 @@ async function initiatePhonePePaymentRequest({ merchantTransactionId, merchantUs
         checkoutUrl: redirectUrlFromPhonePe,
         raw: resJson,
       };
+    } else {
+      console.error("PhonePe API response error:", resJson);
+      throw new Error(resJson?.message || "PhonePe API failed to generate payment URL.");
     }
   } catch (err) {
     console.error("PhonePe API call error:", err);
+    throw err;
   }
-
-  // Fallback to dev sandbox checkout URL if API endpoint is in test mode
-  const fallbackUrl = `http://localhost:5173/dashboard/subscriptions?phonepeTxnId=${merchantTransactionId}&amount=${amountInRupees}&status=SUCCESS`;
-  return {
-    success: true,
-    checkoutUrl: fallbackUrl,
-  };
 }
 
 /**
@@ -98,10 +96,35 @@ function createPhonePeStatusCheck({ merchantTransactionId }) {
   };
 }
 
+/**
+ * Call PhonePe Server-to-Server GET Status API
+ */
+async function checkPhonePeStatusApi({ merchantTransactionId }) {
+  const statusCheck = createPhonePeStatusCheck({ merchantTransactionId });
+  try {
+    const response = await fetch(statusCheck.url, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-VERIFY": statusCheck.xVerifyHeader,
+        "X-MERCHANT-ID": statusCheck.merchantId,
+      },
+    });
+
+    const resJson = await response.json().catch(() => ({}));
+    console.log("PhonePe Status Check API Response:", JSON.stringify(resJson, null, 2));
+    return resJson;
+  } catch (err) {
+    console.error("PhonePe Status Check API error:", err);
+    return null;
+  }
+}
+
 module.exports = {
   MERCHANT_ID,
   PHONEPE_HOST,
   createPhonePePayPayload,
   initiatePhonePePaymentRequest,
   createPhonePeStatusCheck,
+  checkPhonePeStatusApi,
 };

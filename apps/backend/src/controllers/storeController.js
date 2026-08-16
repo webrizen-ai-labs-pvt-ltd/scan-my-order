@@ -52,6 +52,36 @@ async function listStores(req, res) {
   }
 }
 
+async function getMyStore(req, res) {
+  try {
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    let store = null;
+    if (role === "OWNER") {
+      store = await prisma.store.findFirst({
+        where: { ownerId: userId },
+        include: {
+          _count: { select: { menuItems: true } },
+          subscriptions: { where: { status: "ACTIVE" }, include: { plan: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
+    } else {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { store: { include: { store: true } } },
+      });
+      store = user?.store?.store || null;
+    }
+
+    return successResponse(res, "My store retrieved successfully", store);
+  } catch (err) {
+    console.error("getMyStore error:", err);
+    return errorResponse(res, "Failed to retrieve store", 500);
+  }
+}
+
 async function getStore(req, res) {
   try {
     const { id } = req.params;
@@ -71,6 +101,39 @@ async function getStore(req, res) {
   } catch (err) {
     console.error("getStore error:", err);
     return errorResponse(res, "Failed to retrieve store details", 500);
+  }
+}
+
+async function updateStore(req, res) {
+  try {
+    const { id } = req.params;
+    const { name, description, colorScheme, fontStyle, brandingLogo, operatingHours } = req.body;
+
+    const existingStore = await prisma.store.findUnique({ where: { id } });
+    if (!existingStore) {
+      return errorResponse(res, "Store not found", 404);
+    }
+
+    if (req.user.role === "OWNER" && existingStore.ownerId !== req.user.id) {
+      return errorResponse(res, "Unauthorized to update this store", 403);
+    }
+
+    const updatedStore = await prisma.store.update({
+      where: { id },
+      data: {
+        ...(name ? { name } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(colorScheme !== undefined ? { colorScheme } : {}),
+        ...(fontStyle !== undefined ? { fontStyle } : {}),
+        ...(brandingLogo !== undefined ? { brandingLogo } : {}),
+        ...(operatingHours !== undefined ? { operatingHours } : {}),
+      },
+    });
+
+    return successResponse(res, "Store updated successfully", updatedStore);
+  } catch (err) {
+    console.error("updateStore error:", err);
+    return errorResponse(res, "Failed to update store", 500);
   }
 }
 
@@ -114,6 +177,8 @@ async function addMenuItem(req, res) {
 module.exports = {
   createStore,
   listStores,
+  getMyStore,
   getStore,
+  updateStore,
   addMenuItem,
 };

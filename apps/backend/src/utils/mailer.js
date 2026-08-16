@@ -188,10 +188,10 @@ async function sendSubscriptionPaymentEmail({ toEmail, ownerName, storeName, pla
   const bodyHtml = `
     <h2 style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.3px;">Subscription Payment Invoice - PhonePe Checkout</h2>
     <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
-      Hello <strong>${ownerName}</strong>,
+      Hello <strong>${ownerName || "Store Owner"}</strong>,
     </p>
     <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
-      An administrator has generated a subscription payment invoice for your restaurant establishment <strong>${storeName}</strong>.
+      An invoice has been generated for your store establishment <strong>${storeName || "Store"}</strong>.
     </p>
 
     <!-- Subscription Invoice Summary Card -->
@@ -226,11 +226,6 @@ async function sendSubscriptionPaymentEmail({ toEmail, ownerName, storeName, pla
         </td>
       </tr>
     </table>
-
-    <p style="color: #71717a; font-size: 12px; line-height: 1.5; margin: 0; padding-top: 16px; border-top: 1px dashed #27272a;">
-      Or copy & paste this link in your browser: <br/>
-      <a href="${checkoutUrl}" style="color: #eab308; word-break: break-all;">${checkoutUrl}</a>
-    </p>
   `;
 
   const attachments = LOGO_PATH
@@ -260,9 +255,141 @@ async function sendSubscriptionPaymentEmail({ toEmail, ownerName, storeName, pla
   }
 }
 
+async function sendSubscriptionSuccessEmail({ toEmail, ownerName, storeName, planName, amount, interval, txnId }) {
+  const bodyHtml = `
+    <h2 style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.3px;">Subscription Payment Verified & Activated!</h2>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+      Hello <strong>${ownerName || "Store Owner"}</strong>,
+    </p>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+      Your PhonePe payment for restaurant establishment <strong>${storeName || "Store"}</strong> has been successfully verified! Your subscription tier is now active.
+    </p>
+
+    <!-- Activation Success Badge Card -->
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #14532d; border: 1px solid #16a34a; border-radius: 12px; margin: 0 0 24px 0;">
+      <tr>
+        <td style="padding: 20px;">
+          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td style="color: #86efac; font-size: 12px; font-weight: 600; text-transform: uppercase;">Subscription Plan</td>
+              <td align="right" style="color: #ffffff; font-size: 15px; font-weight: 700;">${planName} (${interval || "MONTHLY"})</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; color: #86efac; font-size: 12px; font-weight: 600; text-transform: uppercase;">Transaction Reference</td>
+              <td align="right" style="padding-top: 12px; color: #ffffff; font-size: 13px; font-family: monospace;">${txnId || "N/A"}</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; color: #86efac; font-size: 12px; font-weight: 600; text-transform: uppercase;">Amount Paid</td>
+              <td align="right" style="padding-top: 12px; color: #ffffff; font-size: 18px; font-weight: 800;">₹${amount}</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; color: #86efac; font-size: 12px; font-weight: 600; text-transform: uppercase;">Status</td>
+              <td align="right" style="padding-top: 12px; color: #4ade80; font-size: 14px; font-weight: 700;">ACTIVE</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <p style="color: #a1a1aa; font-size: 13px; line-height: 1.5; margin: 0;">
+      All menu, POS, and kitchen features associated with the <strong>${planName}</strong> plan are unlocked and active for your store.
+    </p>
+  `;
+
+  const attachments = LOGO_PATH
+    ? [
+        {
+          filename: "logo-white.png",
+          path: LOGO_PATH,
+          cid: "scanmyorderlogo",
+        },
+      ]
+    : [];
+
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || '"Scan My Order" <hello@webrizen.com>',
+    to: toEmail,
+    subject: `Subscription Activated: ${planName} for ${storeName} - Scan My Order`,
+    html: getEmailWrapper(bodyHtml),
+    attachments,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return info;
+  } catch (err) {
+    console.error("Failed to send subscription success email:", err);
+  }
+}
+
+async function sendSubscriptionFailedEmail({ toEmail, ownerName, storeName, planName, amount, reason }) {
+  const bodyHtml = `
+    <h2 style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.3px;">Subscription Payment Verification Failed</h2>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+      Hello <strong>${ownerName || "Store Owner"}</strong>,
+    </p>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+      We were unable to verify the subscription payment for restaurant establishment <strong>${storeName || "Store"}</strong>.
+    </p>
+
+    <!-- Failed Details Card -->
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #7f1d1d; border: 1px solid #dc2626; border-radius: 12px; margin: 0 0 24px 0;">
+      <tr>
+        <td style="padding: 20px;">
+          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td style="color: #fca5a5; font-size: 12px; font-weight: 600; text-transform: uppercase;">Subscription Plan</td>
+              <td align="right" style="color: #ffffff; font-size: 14px; font-weight: 700;">${planName}</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; color: #fca5a5; font-size: 12px; font-weight: 600; text-transform: uppercase;">Amount</td>
+              <td align="right" style="padding-top: 12px; color: #ffffff; font-size: 16px; font-weight: 700;">₹${amount}</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; color: #fca5a5; font-size: 12px; font-weight: 600; text-transform: uppercase;">Reason</td>
+              <td align="right" style="padding-top: 12px; color: #f87171; font-size: 13px; font-weight: 600;">${reason || "Payment cancelled or failed"}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <p style="color: #a1a1aa; font-size: 13px; line-height: 1.5; margin: 0;">
+      Please log in to your operations dashboard to re-initiate payment or try another payment method.
+    </p>
+  `;
+
+  const attachments = LOGO_PATH
+    ? [
+        {
+          filename: "logo-white.png",
+          path: LOGO_PATH,
+          cid: "scanmyorderlogo",
+        },
+      ]
+    : [];
+
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || '"Scan My Order" <hello@webrizen.com>',
+    to: toEmail,
+    subject: `Subscription Payment Failed for ${storeName} - Scan My Order`,
+    html: getEmailWrapper(bodyHtml),
+    attachments,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return info;
+  } catch (err) {
+    console.error("Failed to send subscription failure email:", err);
+  }
+}
+
 module.exports = {
   transporter,
   sendPasswordResetEmail,
   sendWelcomeEmail,
   sendSubscriptionPaymentEmail,
+  sendSubscriptionSuccessEmail,
+  sendSubscriptionFailedEmail,
 };

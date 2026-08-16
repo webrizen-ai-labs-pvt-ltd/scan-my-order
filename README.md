@@ -16,7 +16,7 @@
 ## 📔 Developer Journal
 
 ### August 16, 2026
-Integrated complete Store Subscriptions management, PhonePe Payment Gateway (Sandbox), and automatic Nodemailer billing email dispatches in the Admin Portal using modular child routes (`/dashboard/subscriptions`, `/dashboard/subscriptions/plans/new`, `/dashboard/subscriptions/plans/:id/edit`, `/dashboard/subscriptions/assign`).
+Configured `react-router-dom` in the **Operations Frontend App** (`apps/frontend/operations`) with routes for Store Staff Authentication (`/authentication`), PhonePe Subscription Checkout Return (`/subscriptions`), and Kitchen Display System / POS Hub (`/dashboard`).
 
 > **Up Next**: Expand customer QR ordering flow, kitchen ticket display (KDS), and live table order status tracking.
 

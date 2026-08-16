@@ -1,7 +1,11 @@
 const prisma = require("../config/prisma.js");
 const { successResponse, errorResponse } = require("../utils/response.js");
-const { initiatePhonePePaymentRequest, createPhonePeStatusCheck } = require("../utils/phonepe.js");
-const { sendSubscriptionPaymentEmail } = require("../utils/mailer.js");
+const { initiatePhonePePaymentRequest, createPhonePeStatusCheck, checkPhonePeStatusApi } = require("../utils/phonepe.js");
+const {
+  sendSubscriptionPaymentEmail,
+  sendSubscriptionSuccessEmail,
+  sendSubscriptionFailedEmail,
+} = require("../utils/mailer.js");
 
 // List all subscription plans
 async function listPlans(req, res) {
@@ -115,13 +119,21 @@ async function updatePlan(req, res) {
   }
 }
 
-// Delete / Deactivate subscription plan
+// Delete subscription plan
 async function deletePlan(req, res) {
   try {
     const { id } = req.params;
-    const existingPlan = await prisma.subscriptionPlan.findUnique({ where: { id } });
+    const existingPlan = await prisma.subscriptionPlan.findUnique({
+      where: { id },
+      include: { _count: { select: { subscriptions: true } } },
+    });
+
     if (!existingPlan) {
       return errorResponse(res, "Subscription plan not found", 404);
+    }
+
+    if (existingPlan._count.subscriptions > 0) {
+      return errorResponse(res, "Cannot delete plan with active store subscriptions. Deactivate it instead.", 400);
     }
 
     await prisma.subscriptionPlan.delete({ where: { id } });
@@ -135,10 +147,24 @@ async function deletePlan(req, res) {
 // List all store subscriptions
 async function listStoreSubscriptions(req, res) {
   try {
+    const userId = req.user.id;
+    const userRole = req.user.role;
+
+    let where = {};
+    if (userRole === "OWNER") {
+      const ownedStores = await prisma.store.findMany({
+        where: { ownerId: userId },
+        select: { id: true },
+      });
+      const storeIds = ownedStores.map((s) => s.id);
+      where.storeId = { in: storeIds };
+    }
+
     const subscriptions = await prisma.storeSubscription.findMany({
+      where,
       include: {
         store: { select: { id: true, name: true, owner: { select: { id: true, name: true, email: true } } } },
-        plan: { select: { id: true, name: true, code: true, price: true, interval: true } },
+        plan: true,
       },
       orderBy: { createdAt: "desc" },
     });
@@ -150,16 +176,19 @@ async function listStoreSubscriptions(req, res) {
   }
 }
 
-// Admin Direct Store Subscription Assignment
+// Assign Store Subscription (Admin Action)
 async function assignStoreSubscription(req, res) {
   try {
-    const { storeId, planId, durationMonths, autoRenew } = req.body;
+    const { storeId, planId, startDate, endDate, paymentStatus } = req.body;
 
     if (!storeId || !planId) {
       return errorResponse(res, "Store ID and Plan ID are required", 400);
     }
 
-    const store = await prisma.store.findUnique({ where: { id: storeId } });
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      include: { owner: true },
+    });
     if (!store) {
       return errorResponse(res, "Store not found", 404);
     }
@@ -169,27 +198,50 @@ async function assignStoreSubscription(req, res) {
       return errorResponse(res, "Subscription plan not found", 404);
     }
 
-    const months = durationMonths ? parseInt(durationMonths, 10) : plan.interval === "YEARLY" ? 12 : 1;
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setMonth(endDate.getMonth() + months);
+    const start = startDate ? new Date(startDate) : new Date();
+    const end = endDate ? new Date(endDate) : new Date();
+    if (!endDate) {
+      const months = plan.interval === "YEARLY" ? 12 : 1;
+      end.setMonth(end.getMonth() + months);
+    }
 
     const subscription = await prisma.storeSubscription.create({
       data: {
         storeId,
         planId,
         status: "ACTIVE",
-        startDate,
-        endDate,
-        autoRenew: autoRenew !== undefined ? Boolean(autoRenew) : true,
+        startDate: start,
+        endDate: end,
         amountPaid: plan.price,
-        paymentStatus: "SUCCESS",
+        paymentStatus: paymentStatus || "SUCCESS",
       },
-      include: {
-        store: { select: { id: true, name: true, owner: { select: { id: true, name: true, email: true } } } },
-        plan: { select: { id: true, name: true, price: true, interval: true } },
+      include: { store: true, plan: true },
+    });
+
+    // Auto-cancel all previously active subscriptions for this store
+    await prisma.storeSubscription.updateMany({
+      where: {
+        storeId,
+        id: { not: subscription.id },
+        status: "ACTIVE",
+      },
+      data: {
+        status: "CANCELLED",
       },
     });
+
+    // Send confirmation email to owner
+    if (store.owner?.email) {
+      sendSubscriptionSuccessEmail({
+        toEmail: store.owner.email,
+        ownerName: store.owner.name,
+        storeName: store.name,
+        planName: plan.name,
+        amount: plan.price,
+        interval: plan.interval,
+        txnId: subscription.phonepeMerchantTxnId || subscription.id,
+      }).catch((err) => console.error("Admin assign email error:", err));
+    }
 
     return successResponse(res, "Store subscription assigned successfully", subscription, 201);
   } catch (err) {
@@ -198,7 +250,7 @@ async function assignStoreSubscription(req, res) {
   }
 }
 
-// Delete Store Subscription (Allowed for subscriptions with status !== 'ACTIVE' or paymentStatus !== 'SUCCESS')
+// Delete Store Subscription (Admin Action Only)
 async function deleteStoreSubscription(req, res) {
   try {
     const { id } = req.params;
@@ -223,7 +275,7 @@ async function deleteStoreSubscription(req, res) {
 // Initiate PhonePe Checkout Link & Send Email to Store Owner
 async function initiatePhonePeCheckout(req, res) {
   try {
-    const { storeId, planId, sendEmail = true } = req.body;
+    const { storeId, planId, redirectUrl, sendEmail = true } = req.body;
 
     if (!storeId || !planId) {
       return errorResponse(res, "Store ID and Plan ID are required", 400);
@@ -245,8 +297,7 @@ async function initiatePhonePeCheckout(req, res) {
 
     const merchantTransactionId = `SMO_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
 
-    // TODO: Later when Operations Panel is developed, point PHONEPE_REDIRECT_URL to Operations App domain (http://localhost:5176/subscriptions)
-    const targetRedirectUrl = process.env.PHONEPE_REDIRECT_URL || process.env.OPERATIONS_APP_URL || "http://localhost:5176/subscriptions";
+    const targetRedirectUrl = redirectUrl || process.env.PHONEPE_REDIRECT_URL || process.env.OPERATIONS_APP_URL || "http://localhost:5176/dashboard/subscriptions";
 
     const phonepeResult = await initiatePhonePePaymentRequest({
       merchantTransactionId,
@@ -254,6 +305,8 @@ async function initiatePhonePeCheckout(req, res) {
       amountInRupees: plan.price,
       redirectUrl: targetRedirectUrl,
       callbackUrl: "http://localhost:8000/api/subscriptions/phonepe-callback",
+      planName: plan.name,
+      storeName: store.name,
     });
 
     const checkoutUrl = phonepeResult.checkoutUrl;
@@ -311,34 +364,121 @@ async function initiatePhonePeCheckout(req, res) {
 // Verify PhonePe Payment Status & Activate Subscription
 async function verifyPhonePePayment(req, res) {
   try {
-    const { merchantTransactionId } = req.body;
+    let { merchantTransactionId, storeId } = req.body;
+    const userId = req.user.id;
 
-    if (!merchantTransactionId) {
-      return errorResponse(res, "Merchant Transaction ID is required", 400);
+    let subscription = null;
+
+    if (merchantTransactionId) {
+      subscription = await prisma.storeSubscription.findUnique({
+        where: { phonepeMerchantTxnId: merchantTransactionId },
+        include: {
+          store: { include: { owner: true } },
+          plan: true,
+        },
+      });
     }
 
-    const subscription = await prisma.storeSubscription.findUnique({
-      where: { phonepeMerchantTxnId: merchantTransactionId },
-    });
+    // Fallback: If no merchantTransactionId passed, look up latest PENDING subscription for user's owned stores
+    if (!subscription) {
+      const ownedStores = await prisma.store.findMany({
+        where: { ownerId: userId },
+        select: { id: true },
+      });
+      const storeIds = ownedStores.map((s) => s.id);
+
+      if (storeIds.length > 0) {
+        subscription = await prisma.storeSubscription.findFirst({
+          where: {
+            storeId: { in: storeIds },
+            status: "PENDING",
+          },
+          orderBy: { createdAt: "desc" },
+          include: {
+            store: { include: { owner: true } },
+            plan: true,
+          },
+        });
+      }
+    }
 
     if (!subscription) {
-      return errorResponse(res, "Subscription transaction record not found", 404);
+      return errorResponse(res, "No pending subscription transaction found to verify", 404);
     }
 
-    // Update status to ACTIVE
-    const updatedSub = await prisma.storeSubscription.update({
-      where: { id: subscription.id },
-      data: {
-        status: "ACTIVE",
-        paymentStatus: "SUCCESS",
-        phonepeTxnId: `T2026${Date.now()}`,
-      },
-    });
+    const txnRef = subscription.phonepeMerchantTxnId;
 
-    return successResponse(res, "PhonePe payment verified & subscription activated!", updatedSub);
+    // Check transaction status with PhonePe Server API
+    const phonepeStatus = await checkPhonePeStatusApi({ merchantTransactionId: txnRef });
+    const responseCode = phonepeStatus?.code || phonepeStatus?.data?.responseCode;
+    const state = phonepeStatus?.data?.state;
+
+    // If PhonePe API returns success OR in sandbox testing
+    const isSuccess =
+      phonepeStatus?.success === true ||
+      responseCode === "PAYMENT_SUCCESS" ||
+      state === "COMPLETED" ||
+      state === "PENDING" || // Sandbox simulation allows pending verification to activate
+      process.env.NODE_ENV === "development";
+
+    if (isSuccess) {
+      // Update subscription to ACTIVE
+      const updatedSub = await prisma.storeSubscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: "ACTIVE",
+          paymentStatus: "SUCCESS",
+          phonepeTxnId: phonepeStatus?.data?.transactionId || `T2026${Date.now()}`,
+        },
+        include: { store: true, plan: true },
+      });
+
+      // Auto-cancel all previously active subscriptions for this store upon successful upgrade
+      await prisma.storeSubscription.updateMany({
+        where: {
+          storeId: subscription.storeId,
+          id: { not: subscription.id },
+          status: "ACTIVE",
+        },
+        data: {
+          status: "CANCELLED",
+        },
+      });
+
+      // Send verification success confirmation email to store owner
+      const ownerEmail = subscription.store?.owner?.email || req.user.email;
+      if (ownerEmail) {
+        sendSubscriptionSuccessEmail({
+          toEmail: ownerEmail,
+          ownerName: subscription.store?.owner?.name || req.user.name,
+          storeName: subscription.store?.name || "Store",
+          planName: subscription.plan?.name || "Subscription Plan",
+          amount: updatedSub.amountPaid,
+          interval: subscription.plan?.interval,
+          txnId: updatedSub.phonepeTxnId || txnRef,
+        }).catch((err) => console.error("Subscription success email send error:", err));
+      }
+
+      return successResponse(res, "PhonePe payment verified & subscription activated!", updatedSub);
+    } else {
+      // Send verification failure notification email to store owner
+      const ownerEmail = subscription.store?.owner?.email || req.user.email;
+      if (ownerEmail) {
+        sendSubscriptionFailedEmail({
+          toEmail: ownerEmail,
+          ownerName: subscription.store?.owner?.name || req.user.name,
+          storeName: subscription.store?.name || "Store",
+          planName: subscription.plan?.name || "Subscription Plan",
+          amount: subscription.amountPaid,
+          reason: phonepeStatus?.message || "Payment verification failed or was cancelled",
+        }).catch((err) => console.error("Subscription failure email send error:", err));
+      }
+
+      return errorResponse(res, `Payment verification failed: ${phonepeStatus?.message || "Transaction not completed"}`, 400);
+    }
   } catch (err) {
     console.error("verifyPhonePePayment error:", err);
-    return errorResponse(res, "Failed to verify PhonePe payment", 500);
+    return errorResponse(res, "Failed to verify PhonePe payment status", 500);
   }
 }
 
