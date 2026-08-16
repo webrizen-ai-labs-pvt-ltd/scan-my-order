@@ -13,7 +13,7 @@ import PosTerminalPage from "../pages/dashboard/pos-terminal-page.jsx"
 import LiveOrdersPage from "../pages/dashboard/live-orders-page.jsx"
 import TablesManagementPage from "../pages/dashboard/tables-management-page.jsx"
 import KdsDisplayPage from "../pages/dashboard/kds-display-page.jsx"
-import MenuManagementPage from "../pages/dashboard/menu-management-page.jsx"
+import StoreSetupPage from "../pages/dashboard/store-setup-page.jsx"
 import StaffManagementPage from "../pages/dashboard/staff-management-page.jsx"
 import SubscriptionsPage from "../pages/dashboard/subscriptions-page.jsx"
 import SettingsPage from "../pages/dashboard/settings-page.jsx"
@@ -49,10 +49,13 @@ export default function AppRoutes() {
 
             {/* MANAGER & OWNER */}
             <Route element={<RoleRoute allowedRoles={["OWNER", "MANAGER"]} />}>
-              <Route path="menu" element={<MenuManagementPage />} />
+              <Route path="store-setup" element={<StoreSetupPage />} />
+              <Route path="menu" element={<Navigate to="/dashboard/store-setup?tab=menu" replace />} />
               <Route path="staff" element={<StaffManagementPage />} />
-              <Route path="settings" element={<SettingsPage />} />
             </Route>
+
+            {/* ALL LOGGED IN USERS */}
+            <Route path="settings" element={<SettingsPage />} />
 
             {/* OWNER ONLY */}
             <Route element={<RoleRoute allowedRoles={["OWNER"]} />}>

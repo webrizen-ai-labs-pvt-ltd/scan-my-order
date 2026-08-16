@@ -6,10 +6,10 @@ import {
   Clock,
   Grid,
   ChefHat,
-  BookOpen,
   CreditCard,
   Users,
   Settings,
+  SlidersHorizontal,
 } from "lucide-react"
 import {
   Sidebar,
@@ -23,7 +23,6 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-  Badge,
 } from "@repo/ui"
 import { logoWhite } from "@repo/ui/assets"
 import { useAuth } from "../context/auth-context.jsx"
@@ -69,9 +68,9 @@ export function AppSidebar() {
       roles: ["OWNER", "MANAGER", "KITCHEN"],
     },
     {
-      label: "Digital Menu",
-      path: "/dashboard/menu",
-      icon: BookOpen,
+      label: "Store Setup",
+      path: "/dashboard/store-setup",
+      icon: SlidersHorizontal,
       roles: ["OWNER", "MANAGER"],
     },
     {
@@ -90,7 +89,7 @@ export function AppSidebar() {
       label: "Settings",
       path: "/dashboard/settings",
       icon: Settings,
-      roles: ["OWNER", "MANAGER"],
+      roles: ["OWNER", "MANAGER", "WAITER", "KITCHEN"],
     },
   ]
 

@@ -107,6 +107,23 @@ model Store {
   menuItems      MenuItem[]
   userStoreRels  UserStoreRel[]
   subscriptions  StoreSubscription[]
+  tables         Table[]
+}
+
+model Table {
+  id          String   @id @default(uuid())
+  number      String
+  name        String?
+  capacity    Int      @default(4)
+  section     String?  @default("Main Dining")
+  status      String   @default("AVAILABLE")
+  qrCodeUrl   String?
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([storeId, number])
 }
 
 model MenuItem {

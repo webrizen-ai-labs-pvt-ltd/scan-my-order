@@ -62,7 +62,7 @@ async function getMyStore(req, res) {
       store = await prisma.store.findFirst({
         where: { ownerId: userId },
         include: {
-          _count: { select: { menuItems: true } },
+          _count: { select: { menuItems: true, tables: true } },
           subscriptions: { where: { status: "ACTIVE" }, include: { plan: true } },
         },
         orderBy: { createdAt: "desc" },
@@ -90,6 +90,7 @@ async function getStore(req, res) {
       include: {
         owner: { select: { id: true, name: true, email: true } },
         menuItems: true,
+        tables: true,
       },
     });
 
@@ -137,10 +138,26 @@ async function updateStore(req, res) {
   }
 }
 
+// List all menu items for a store
+async function listMenuItems(req, res) {
+  try {
+    const { id: storeId } = req.params;
+    const menuItems = await prisma.menuItem.findMany({
+      where: { storeId },
+      orderBy: [{ category: "asc" }, { name: "asc" }],
+    });
+    return successResponse(res, "Store menu items retrieved", menuItems);
+  } catch (err) {
+    console.error("listMenuItems error:", err);
+    return errorResponse(res, "Failed to retrieve menu items", 500);
+  }
+}
+
+// Add new menu item to store
 async function addMenuItem(req, res) {
   try {
     const { id: storeId } = req.params;
-    const { name, description, price, image, category, isAvailable } = req.body;
+    const { name, description, price, image, category, isAvailable, dietaryType, spicinessLevel, prepTime, calories, allergens } = req.body;
 
     if (!name || price === undefined) {
       return errorResponse(res, "Menu item name and price are required", 400);
@@ -151,10 +168,6 @@ async function addMenuItem(req, res) {
       return errorResponse(res, "Store not found", 404);
     }
 
-    if (req.user.role === "OWNER" && store.ownerId !== req.user.id) {
-      return errorResponse(res, "Unauthorized to add menu items to this store", 403);
-    }
-
     const menuItem = await prisma.menuItem.create({
       data: {
         storeId,
@@ -162,8 +175,13 @@ async function addMenuItem(req, res) {
         description,
         price: parseFloat(price),
         image,
-        category,
+        category: category || "Main Course",
         isAvailable: isAvailable !== undefined ? Boolean(isAvailable) : true,
+        dietaryType: dietaryType || "VEG",
+        spicinessLevel: spicinessLevel ? parseInt(spicinessLevel, 10) : 0,
+        prepTime: prepTime ? parseInt(prepTime, 10) : 15,
+        calories: calories ? parseInt(calories, 10) : undefined,
+        allergens: allergens || "",
       },
     });
 
@@ -174,11 +192,67 @@ async function addMenuItem(req, res) {
   }
 }
 
+// Update menu item
+async function updateMenuItem(req, res) {
+  try {
+    const { itemId } = req.params;
+    const { name, description, price, image, category, isAvailable, dietaryType, spicinessLevel, prepTime, calories, allergens } = req.body;
+
+    const existingItem = await prisma.menuItem.findUnique({ where: { id: itemId } });
+    if (!existingItem) {
+      return errorResponse(res, "Menu item not found", 404);
+    }
+
+    const updatedItem = await prisma.menuItem.update({
+      where: { id: itemId },
+      data: {
+        ...(name && { name }),
+        ...(description !== undefined && { description }),
+        ...(price !== undefined && { price: parseFloat(price) }),
+        ...(image !== undefined && { image }),
+        ...(category && { category }),
+        ...(isAvailable !== undefined && { isAvailable: Boolean(isAvailable) }),
+        ...(dietaryType && { dietaryType }),
+        ...(spicinessLevel !== undefined && { spicinessLevel: parseInt(spicinessLevel, 10) }),
+        ...(prepTime !== undefined && { prepTime: parseInt(prepTime, 10) }),
+        ...(calories !== undefined && { calories: parseInt(calories, 10) }),
+        ...(allergens !== undefined && { allergens }),
+      },
+    });
+
+    return successResponse(res, "Menu item updated successfully", updatedItem);
+  } catch (err) {
+    console.error("updateMenuItem error:", err);
+    return errorResponse(res, "Failed to update menu item", 500);
+  }
+}
+
+// Delete menu item
+async function deleteMenuItem(req, res) {
+  try {
+    const { itemId } = req.params;
+    const existingItem = await prisma.menuItem.findUnique({ where: { id: itemId } });
+
+    if (!existingItem) {
+      return errorResponse(res, "Menu item not found", 404);
+    }
+
+    await prisma.menuItem.delete({ where: { id: itemId } });
+    return successResponse(res, "Menu item deleted successfully");
+  } catch (err) {
+    console.error("deleteMenuItem error:", err);
+    return errorResponse(res, "Failed to delete menu item", 500);
+  }
+}
+
 module.exports = {
   createStore,
   listStores,
   getMyStore,
   getStore,
   updateStore,
+  listMenuItems,
   addMenuItem,
+  updateMenuItem,
+  deleteMenuItem,
 };

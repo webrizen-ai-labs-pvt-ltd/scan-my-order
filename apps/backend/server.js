@@ -10,6 +10,7 @@ const ownerRoutes = require("./src/routes/ownerRoutes.js");
 const userRoutes = require("./src/routes/userRoutes.js");
 const storeRoutes = require("./src/routes/storeRoutes.js");
 const subscriptionRoutes = require("./src/routes/subscriptionRoutes.js");
+const tableRoutes = require("./src/routes/tableRoutes.js");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -92,6 +93,7 @@ app.use("/api/owner", ownerRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/stores", storeRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
+app.use("/api/tables", tableRoutes);
 
 // 404 Handler
 app.use((req, res) => {
