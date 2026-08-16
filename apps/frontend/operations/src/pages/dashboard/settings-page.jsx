@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useCallback } from "react"
 import {
   Card,
   CardHeader,
@@ -41,6 +41,12 @@ import { useAuth } from "../../context/auth-context.jsx"
 import {
   getPasskeyRegisterOptionsApi,
   verifyPasskeyRegisterApi,
+  fetchMyPasskeysApi,
+  deletePasskeyApi,
+  changePasswordApi,
+  forgotPasswordApi,
+  resetPasswordWithOtpApi,
+  updateProfileApi,
 } from "../../services/auth-api.js"
 import { fetchMyStoreApi, updateStoreApi } from "../../services/store-api.js"
 
@@ -131,16 +137,26 @@ export default function SettingsPage() {
   const [isResettingWithOtp, setIsResettingWithOtp] = useState(false)
   const [otpSent, setOtpSent] = useState(false)
 
-  // Passkeys State
-  const [registeredPasskeys, setRegisteredPasskeys] = useState(user?.passkeys || [])
+  // Passkeys State - Fetch registered passkeys directly from database API
+  const [registeredPasskeys, setRegisteredPasskeys] = useState([])
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false)
   const [passkeyMsg, setPasskeyMsg] = useState({ text: "", error: false })
 
-  useEffect(() => {
-    if (user?.passkeys) {
-      setRegisteredPasskeys(user.passkeys)
+  const loadPasskeys = useCallback(async () => {
+    if (!token) return
+    try {
+      const res = await fetchMyPasskeysApi(token)
+      if (Array.isArray(res?.data)) {
+        setRegisteredPasskeys(res.data)
+      }
+    } catch (err) {
+      console.error("Failed to fetch passkeys from server:", err)
     }
-  }, [user?.passkeys])
+  }, [token])
+
+  useEffect(() => {
+    loadPasskeys()
+  }, [loadPasskeys])
 
   // Profile Update Handler
   const handleProfileSubmit = async (e) => {
@@ -149,15 +165,14 @@ export default function SettingsPage() {
     setIsUpdatingProfile(true)
 
     try {
-      setTimeout(() => {
-        setIsUpdatingProfile(false)
-        setProfileMsg({ text: "Store staff profile updated successfully!", error: false })
-      }, 600)
+      await updateProfileApi(token, { name, avatar })
+      setProfileMsg({ text: "Profile details updated successfully!", error: false })
     } catch (err) {
       setProfileMsg({
         text: err instanceof Error ? err.message : "Failed to update profile.",
         error: true,
       })
+    } finally {
       setIsUpdatingProfile(false)
     }
   }
@@ -218,42 +233,41 @@ export default function SettingsPage() {
     setIsUpdatingPassword(true)
 
     try {
-      setTimeout(() => {
-        setIsUpdatingPassword(false)
-        setPasswordMsg({ text: "Password updated successfully!", error: false })
-        setCurrentPassword("")
-        setNewPassword("")
-        setConfirmPassword("")
-      }, 600)
+      await changePasswordApi(token, { currentPassword, newPassword })
+      setPasswordMsg({ text: "Password updated successfully!", error: false })
+      setCurrentPassword("")
+      setNewPassword("")
+      setConfirmPassword("")
     } catch (err) {
       setPasswordMsg({
         text: err instanceof Error ? err.message : "Failed to update password.",
         error: true,
       })
+    } finally {
       setIsUpdatingPassword(false)
     }
   }
 
   // Request 6-Digit OTP Email Handler
   const handleSendOtpEmail = async () => {
-    const targetEmail = user?.email || "owner@restaurant.com"
+    const targetEmail = user?.email
+    if (!targetEmail) return
     setPasswordMsg({ text: "", error: false })
     setIsSendingOtp(true)
 
     try {
-      setTimeout(() => {
-        setIsSendingOtp(false)
-        setOtpSent(true)
-        setPasswordMsg({
-          text: `6-digit OTP code sent to ${targetEmail}! Check your inbox.`,
-          error: false,
-        })
-      }, 600)
+      await forgotPasswordApi(targetEmail)
+      setOtpSent(true)
+      setPasswordMsg({
+        text: `6-digit OTP code sent to ${targetEmail}! Check your inbox.`,
+        error: false,
+      })
     } catch (err) {
       setPasswordMsg({
         text: err instanceof Error ? err.message : "Failed to send OTP code.",
         error: true,
       })
+    } finally {
       setIsSendingOtp(false)
     }
   }
@@ -271,20 +285,23 @@ export default function SettingsPage() {
     setIsResettingWithOtp(true)
 
     try {
-      setTimeout(() => {
-        setIsResettingWithOtp(false)
-        setPasswordMsg({ text: "Password reset successfully via OTP code!", error: false })
-        setOtpCode("")
-        setOtpNewPassword("")
-        setOtpConfirmPassword("")
-        setOtpSent(false)
-        setPasswordMode("direct")
-      }, 600)
+      await resetPasswordWithOtpApi({
+        email: user?.email,
+        otp: otpCode,
+        newPassword: otpNewPassword,
+      })
+      setPasswordMsg({ text: "Password reset successfully via OTP code!", error: false })
+      setOtpCode("")
+      setOtpNewPassword("")
+      setOtpConfirmPassword("")
+      setOtpSent(false)
+      setPasswordMode("direct")
     } catch (err) {
       setPasswordMsg({
         text: err instanceof Error ? err.message : "Invalid or expired OTP code.",
         error: true,
       })
+    } finally {
       setIsResettingWithOtp(false)
     }
   }
@@ -309,15 +326,8 @@ export default function SettingsPage() {
         expectedChallenge: options.challenge,
       })
 
-      const newPasskey = {
-        id: `pk_${Date.now()}`,
-        credentialId: registrationResponse.id,
-        deviceName: `${navigator.platform || "Biometric Device"} Passkey`,
-        createdAt: new Date().toISOString().split("T")[0],
-        transports: registrationResponse.response.transports || ["internal"],
-      }
+      await loadPasskeys()
 
-      setRegisteredPasskeys((prev) => [...prev, newPasskey])
       setPasskeyMsg({
         text: "Device fingerprint / Passkey registered successfully!",
         error: false,
@@ -332,9 +342,18 @@ export default function SettingsPage() {
     }
   }
 
-  const handleDeletePasskey = (id) => {
-    setRegisteredPasskeys((prev) => prev.filter((p) => (p.id || p.credentialId) !== id))
-    setPasskeyMsg({ text: "Passkey removed.", error: false })
+  // Passkey Deletion Handler
+  const handleDeletePasskey = async (id) => {
+    try {
+      await deletePasskeyApi(token, id)
+      setPasskeyMsg({ text: "Passkey removed successfully.", error: false })
+      await loadPasskeys()
+    } catch (err) {
+      setPasskeyMsg({
+        text: err instanceof Error ? err.message : "Failed to remove passkey.",
+        error: true,
+      })
+    }
   }
 
   const userInitials = user?.name

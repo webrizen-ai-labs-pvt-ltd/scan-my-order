@@ -98,6 +98,24 @@ export async function verifyPasskeyRegisterApi(token, payload) {
   })
 }
 
+export async function fetchMyPasskeysApi(token) {
+  return request("/auth/passkey/list", {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
+export async function deletePasskeyApi(token, passkeyId) {
+  return request(`/auth/passkey/${passkeyId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+}
+
 export async function getPasskeyAuthOptionsApi(email) {
   return request("/auth/passkey/authenticate-options", {
     method: "POST",

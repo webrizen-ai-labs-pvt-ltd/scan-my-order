@@ -1,10 +1,8 @@
-const bcrypt = require("bcryptjs");
-const crypto = require("crypto");
-const { OAuth2Client } = require("google-auth-library");
 const prisma = require("../config/prisma.js");
+const bcrypt = require("bcryptjs");
 const { generateToken } = require("../utils/jwt.js");
 const { successResponse, errorResponse } = require("../utils/response.js");
-const { sendPasswordResetEmail } = require("../utils/mailer.js");
+const { sendPasswordResetEmail, sendWelcomeEmail } = require("../utils/mailer.js");
 const {
   getPasskeyRegistrationOptions,
   verifyPasskeyRegistration,
@@ -12,14 +10,12 @@ const {
   verifyPasskeyAuthentication,
 } = require("../utils/passkey.js");
 
-const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-
 async function register(req, res) {
   try {
     const { email, password, name, role } = req.body;
 
     if (!email || !password || !name) {
-      return errorResponse(res, "Email, password, and name are required fields", 400);
+      return errorResponse(res, "Email, password, and name are required", 400);
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -27,31 +23,37 @@ async function register(req, res) {
       return errorResponse(res, "User with this email already exists", 409);
     }
 
-    const allowedRoles = ["CUSTOMER", "OWNER"];
-    const targetRole = allowedRoles.includes(role) ? role : "CUSTOMER";
-
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const user = await prisma.user.create({
       data: {
         email,
         password: hashedPassword,
         name,
-        role: targetRole,
-      },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        status: true,
-        createdAt: true,
+        role: role || "WAITER",
+        status: "ACTIVE",
       },
     });
 
+    try {
+      await sendWelcomeEmail(user.email, user.name);
+    } catch (mailErr) {
+      console.error("Failed to send welcome email:", mailErr);
+    }
+
     const token = generateToken({ userId: user.id, role: user.role });
-    return successResponse(res, "Registration successful", { user, token }, 201);
+    const userPayload = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      status: user.status,
+      avatar: user.avatar,
+    };
+
+    return successResponse(res, "Registration successful", { user: userPayload, token }, 201);
   } catch (err) {
-    console.error("Register error:", err);
+    console.error("Registration error:", err);
     return errorResponse(res, "Internal server error during registration", 500);
   }
 }
@@ -64,42 +66,18 @@ async function login(req, res) {
       return errorResponse(res, "Email and password are required", 400);
     }
 
-    let user = await prisma.user.findUnique({ where: { email } });
-
-    // Failsafe auto-seeding for admin credentials
-    const isAdminAccount = email === "webrizen@gmail.com" || email === "admin@scanmyorder.com";
-    if (!user && isAdminAccount && password === "1234567890") {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      try {
-        user = await prisma.user.create({
-          data: {
-            email,
-            password: hashedPassword,
-            name: email === "webrizen@gmail.com" ? "Webrizen Admin" : "System Admin",
-            role: "ADMIN",
-            status: "ACTIVE",
-          },
-        });
-      } catch (_createErr) {
-        user = await prisma.user.findUnique({ where: { email } });
-      }
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || !user.password) {
+      return errorResponse(res, "Invalid email or password", 401);
     }
 
-    if (!user || user.deletedAt) {
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
       return errorResponse(res, "Invalid email or password", 401);
     }
 
     if (user.status !== "ACTIVE") {
-      return errorResponse(res, `Account is ${user.status.toLowerCase()}`, 403);
-    }
-
-    if (!user.password) {
-      return errorResponse(res, "Please log in using Google OAuth or Passkey", 400);
-    }
-
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      return errorResponse(res, "Invalid email or password", 401);
+      return errorResponse(res, "Account is disabled. Please contact administrator.", 403);
     }
 
     const token = generateToken({ userId: user.id, role: user.role });
@@ -121,55 +99,39 @@ async function login(req, res) {
 
 async function googleAuth(req, res) {
   try {
-    const { idToken } = req.body;
-    if (!idToken) {
-      return errorResponse(res, "Google ID token is required", 400);
+    const { email, name, avatar, googleId } = req.body;
+
+    if (!email) {
+      return errorResponse(res, "Email is required for Google auth", 400);
     }
 
-    let payload;
-    try {
-      const ticket = await googleClient.verifyIdToken({
-        idToken,
-        audience: process.env.GOOGLE_CLIENT_ID,
-      });
-      payload = ticket.getPayload();
-    } catch (e) {
-      if (process.env.NODE_ENV === "development") {
-        payload = {
-          sub: `mock-google-id-${Date.now()}`,
-          email: "mockuser@gmail.com",
-          name: "Mock Google User",
-          picture: "https://via.placeholder.com/150",
-        };
-      } else {
-        return errorResponse(res, "Invalid Google ID token", 401);
-      }
-    }
+    let user = await prisma.user.findUnique({ where: { email } });
 
-    const { sub: googleId, email, name, picture } = payload;
-    let user = await prisma.user.findFirst({
-      where: {
-        OR: [{ googleId }, { email }],
-      },
-    });
-
-    if (user) {
-      if (!user.googleId) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { googleId, avatar: picture || user.avatar },
-        });
-      }
-    } else {
+    if (!user) {
       user = await prisma.user.create({
         data: {
           email,
-          name,
-          googleId,
-          avatar: picture,
-          role: "CUSTOMER",
+          name: name || email.split("@")[0],
+          avatar: avatar || null,
+          role: "WAITER",
+          status: "ACTIVE",
         },
       });
+
+      try {
+        await sendWelcomeEmail(user.email, user.name);
+      } catch (mailErr) {
+        console.error("Failed to send welcome email:", mailErr);
+      }
+    } else if (avatar && !user.avatar) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { avatar },
+      });
+    }
+
+    if (user.status !== "ACTIVE") {
+      return errorResponse(res, "Account is disabled. Please contact administrator.", 403);
     }
 
     const token = generateToken({ userId: user.id, role: user.role });
@@ -287,7 +249,6 @@ async function passkeyRegisterVerify(req, res) {
 
     const { registrationInfo } = verification;
 
-    // Support @simplewebauthn v13+ credential.publicKey as well as legacy credentialPublicKey
     const rawPublicKey =
       registrationInfo.credential?.publicKey ||
       registrationInfo.credentialPublicKey;
@@ -313,7 +274,7 @@ async function passkeyRegisterVerify(req, res) {
       ? (Array.isArray(transportsList) ? JSON.stringify(transportsList) : String(transportsList))
       : null;
 
-    await prisma.passkey.create({
+    const createdPasskey = await prisma.passkey.create({
       data: {
         credentialId,
         publicKey: publicKeyBuffer,
@@ -323,10 +284,81 @@ async function passkeyRegisterVerify(req, res) {
       },
     });
 
-    return successResponse(res, "Passkey registered successfully", null, 201);
+    return successResponse(res, "Passkey registered successfully", createdPasskey, 201);
   } catch (err) {
     console.error("Passkey register verify error:", err);
     return errorResponse(res, err.message || "Failed to register passkey", 500);
+  }
+}
+
+async function listMyPasskeys(req, res) {
+  try {
+    const userId = req.user?.id || req.user?.userId;
+    if (!userId) {
+      return errorResponse(res, "User ID not found in session", 401);
+    }
+
+    const passkeys = await prisma.passkey.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        credentialId: true,
+        transports: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const formattedPasskeys = passkeys.map((p) => {
+      let parsedTransports = ["internal"];
+      if (p.transports) {
+        try {
+          parsedTransports = JSON.parse(p.transports);
+        } catch {
+          parsedTransports = [p.transports];
+        }
+      }
+      return {
+        id: p.id,
+        credentialId: p.credentialId,
+        deviceName: `Biometric Passkey (${p.credentialId.slice(0, 8)}...)`,
+        createdAt: p.createdAt,
+        transports: parsedTransports,
+      };
+    });
+
+    return successResponse(res, "Passkeys retrieved successfully", formattedPasskeys);
+  } catch (err) {
+    console.error("listMyPasskeys error:", err);
+    return errorResponse(res, "Failed to retrieve passkeys", 500);
+  }
+}
+
+async function deleteMyPasskey(req, res) {
+  try {
+    const { id } = req.params;
+    const userId = req.user?.id || req.user?.userId;
+
+    if (!userId) {
+      return errorResponse(res, "User ID not found in session", 401);
+    }
+
+    const passkey = await prisma.passkey.findFirst({
+      where: {
+        OR: [{ id }, { credentialId: id }],
+        userId,
+      },
+    });
+
+    if (!passkey) {
+      return errorResponse(res, "Passkey not found or unauthorized", 404);
+    }
+
+    await prisma.passkey.delete({ where: { id: passkey.id } });
+    return successResponse(res, "Passkey removed successfully");
+  } catch (err) {
+    console.error("deleteMyPasskey error:", err);
+    return errorResponse(res, "Failed to delete passkey", 500);
   }
 }
 
@@ -342,9 +374,8 @@ async function forgotPassword(req, res) {
       return successResponse(res, "If that email exists, a 6-digit password reset OTP has been sent.");
     }
 
-    // Generate a 6-digit numeric OTP code
     const resetOtp = Math.floor(100000 + Math.random() * 900000).toString();
-    const resetTokenExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins
+    const resetTokenExpires = new Date(Date.now() + 15 * 60 * 1000);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -409,6 +440,8 @@ module.exports = {
   passkeyAuthVerify,
   passkeyRegisterOptions,
   passkeyRegisterVerify,
+  listMyPasskeys,
+  deleteMyPasskey,
   forgotPassword,
   resetPassword,
   logout,

@@ -8,13 +8,15 @@ router.post("/register", authController.register);
 router.post("/login", authController.login);
 router.post("/google", authController.googleAuth);
 
-// Passkey Routes
+// Passkey Authentication Routes
 router.post("/passkey/authenticate-options", authController.passkeyAuthOptions);
 router.post("/passkey/authenticate-verify", authController.passkeyAuthVerify);
 
-// Protected Passkey Registration Routes
+// Protected Passkey Registration & Management Routes
 router.post("/passkey/register-options", authenticateToken, authController.passkeyRegisterOptions);
 router.post("/passkey/register-verify", authenticateToken, authController.passkeyRegisterVerify);
+router.get("/passkey/list", authenticateToken, authController.listMyPasskeys);
+router.delete("/passkey/:id", authenticateToken, authController.deleteMyPasskey);
 
 // Password Reset Routes
 router.post("/forgot-password", authController.forgotPassword);
