@@ -184,8 +184,85 @@ async function sendWelcomeEmail(email, name) {
   }
 }
 
+async function sendSubscriptionPaymentEmail({ toEmail, ownerName, storeName, planName, amount, interval, checkoutUrl }) {
+  const bodyHtml = `
+    <h2 style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.3px;">Subscription Payment Invoice - PhonePe Checkout</h2>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+      Hello <strong>${ownerName}</strong>,
+    </p>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+      An administrator has generated a subscription payment invoice for your restaurant establishment <strong>${storeName}</strong>.
+    </p>
+
+    <!-- Subscription Invoice Summary Card -->
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 12px; margin: 0 0 24px 0;">
+      <tr>
+        <td style="padding: 20px;">
+          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td style="color: #a1a1aa; font-size: 12px; font-weight: 600; text-transform: uppercase;">Subscription Plan</td>
+              <td align="right" style="color: #ffffff; font-size: 14px; font-weight: 700;">${planName} (${interval})</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; color: #a1a1aa; font-size: 12px; font-weight: 600; text-transform: uppercase;">Restaurant Store</td>
+              <td align="right" style="padding-top: 12px; color: #ffffff; font-size: 14px; font-weight: 600;">${storeName}</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; color: #a1a1aa; font-size: 12px; font-weight: 600; text-transform: uppercase;">Total Payable Amount</td>
+              <td align="right" style="padding-top: 12px; color: #eab308; font-size: 18px; font-weight: 800;">₹${amount}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <!-- PhonePe CTA Button -->
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 24px 0;">
+      <tr>
+        <td align="center">
+          <a href="${checkoutUrl}" target="_blank" style="background-color: #eab308; color: #09090b; font-size: 15px; font-weight: 800; text-decoration: none; padding: 14px 32px; border-radius: 10px; display: inline-block; letter-spacing: -0.2px;">
+            Pay with PhonePe Secure Checkout &rarr;
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="color: #71717a; font-size: 12px; line-height: 1.5; margin: 0; padding-top: 16px; border-top: 1px dashed #27272a;">
+      Or copy & paste this link in your browser: <br/>
+      <a href="${checkoutUrl}" style="color: #eab308; word-break: break-all;">${checkoutUrl}</a>
+    </p>
+  `;
+
+  const attachments = LOGO_PATH
+    ? [
+        {
+          filename: "logo-white.png",
+          path: LOGO_PATH,
+          cid: "scanmyorderlogo",
+        },
+      ]
+    : [];
+
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || '"Scan My Order" <hello@webrizen.com>',
+    to: toEmail,
+    subject: `PhonePe Subscription Checkout: ₹${amount} for ${storeName} - Scan My Order`,
+    html: getEmailWrapper(bodyHtml),
+    attachments,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return info;
+  } catch (err) {
+    console.error("Failed to send subscription payment email:", err);
+    throw err;
+  }
+}
+
 module.exports = {
   transporter,
   sendPasswordResetEmail,
   sendWelcomeEmail,
+  sendSubscriptionPaymentEmail,
 };

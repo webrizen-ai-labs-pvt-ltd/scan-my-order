@@ -15,10 +15,10 @@
 
 ## 📔 Developer Journal
 
-### August 15, 2026
-Successfully migrated the database to Supabase PostgreSQL, integrated WebAuthn biometric passkey registration & authentication, implemented a 6-digit email OTP password reset flow with email-safe HTML templates, and established a child-page architecture for admin User Management and Store Onboarding with fixed network ports (`0.0.0.0`).
+### August 16, 2026
+Integrated complete Store Subscriptions management, PhonePe Payment Gateway (Sandbox), and automatic Nodemailer billing email dispatches in the Admin Portal using modular child routes (`/dashboard/subscriptions`, `/dashboard/subscriptions/plans/new`, `/dashboard/subscriptions/plans/:id/edit`, `/dashboard/subscriptions/assign`).
 
-> **Up Next**: Start working on full store management, menu creation, and digital menu item management within the admin frontend.
+> **Up Next**: Expand customer QR ordering flow, kitchen ticket display (KDS), and live table order status tracking.
 
 ---
 

@@ -7,12 +7,13 @@
   "type": "commonjs",
   "main": "server.js",
   "scripts": {
-    "dev": "node --watch server.js",
+    "dev": "node --watch --watch-path=src --watch-path=server.js server.js",
     "start": "node server.js",
     "build": "echo 'Backend build complete'",
     "lint": "echo 'No lint configured for backend'",
     "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev"
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:seed": "node prisma/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^6.3.1",

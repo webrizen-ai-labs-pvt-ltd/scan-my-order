@@ -26,14 +26,17 @@ async function getPasskeyRegistrationOptions(user) {
     },
   });
 
-  challengeStore.set(`reg_${user.id}`, options.challenge);
+  challengeStore.set(options.challenge, options.challenge);
+  if (user.id) {
+    challengeStore.set(`reg_${user.id}`, options.challenge);
+  }
   return options;
 }
 
 async function verifyPasskeyRegistration(userOrUserId, response, expectedChallengeFromClient) {
   const userId = typeof userOrUserId === "object" ? userOrUserId?.id : userOrUserId;
   const storedChallenge = userId ? challengeStore.get(`reg_${userId}`) : null;
-  const expectedChallenge = storedChallenge || expectedChallengeFromClient;
+  const expectedChallenge = storedChallenge || challengeStore.get(expectedChallengeFromClient) || expectedChallengeFromClient;
 
   if (!expectedChallenge) {
     throw new Error("Challenge expired or not found");
@@ -59,6 +62,9 @@ async function verifyPasskeyRegistration(userOrUserId, response, expectedChallen
   if (userId) {
     challengeStore.delete(`reg_${userId}`);
   }
+  if (expectedChallengeFromClient) {
+    challengeStore.delete(expectedChallengeFromClient);
+  }
   return verification;
 }
 
@@ -74,10 +80,8 @@ async function getPasskeyAuthenticationOptions(userPasskeys = []) {
     userVerification: "preferred",
   });
 
-  const challengeKey = `auth_${options.challenge}`;
-  challengeStore.set(challengeKey, options.challenge);
   challengeStore.set(options.challenge, options.challenge);
-  return { options, challengeKey };
+  return { options, challengeKey: options.challenge };
 }
 
 async function verifyPasskeyAuthentication(response, passkey, challengeKey) {
@@ -108,7 +112,9 @@ async function verifyPasskeyAuthentication(response, passkey, challengeKey) {
     },
   });
 
-  challengeStore.delete(challengeKey);
+  if (challengeKey) {
+    challengeStore.delete(challengeKey);
+  }
   return verification;
 }
 

@@ -15,6 +15,17 @@ import UserEditPage from "../pages/users/user-edit-page.jsx"
 // Store Management Child Pages
 import StoresListPage from "../pages/stores/stores-list-page.jsx"
 import StoreOnboardPage from "../pages/stores/store-onboard-page.jsx"
+import StoreManagePage from "../pages/stores/store-manage-page.jsx"
+
+// Digital Menu Item Management Child Pages
+import MenuItemCreatePage from "../pages/stores/menu-item-create-page.jsx"
+import MenuItemEditPage from "../pages/stores/menu-item-edit-page.jsx"
+
+// Subscription & PhonePe Child Pages
+import SubscriptionsListPage from "../pages/subscriptions/subscriptions-list-page.jsx"
+import PlanCreatePage from "../pages/subscriptions/plan-create-page.jsx"
+import PlanEditPage from "../pages/subscriptions/plan-edit-page.jsx"
+import StoreSubscriptionAssignPage from "../pages/subscriptions/store-subscription-assign-page.jsx"
 
 import SettingsPage from "../pages/settings-page.jsx"
 import NotFoundPage from "../pages/not-found-page.jsx"
@@ -41,8 +52,18 @@ export default function AppRoutes() {
             {/* Store Management & Onboarding Routes */}
             <Route path="stores" element={<StoresListPage />} />
             <Route path="stores/onboard" element={<StoreOnboardPage />} />
+            <Route path="stores/:id/manage" element={<StoreManagePage />} />
 
-            <Route path="subscriptions" element={<StoresListPage />} />
+            {/* Digital Menu Items Routes */}
+            <Route path="stores/:id/menu/new" element={<MenuItemCreatePage />} />
+            <Route path="stores/:id/menu/:itemId/edit" element={<MenuItemEditPage />} />
+
+            {/* Subscriptions & PhonePe Routes */}
+            <Route path="subscriptions" element={<SubscriptionsListPage />} />
+            <Route path="subscriptions/plans/new" element={<PlanCreatePage />} />
+            <Route path="subscriptions/plans/:id/edit" element={<PlanEditPage />} />
+            <Route path="subscriptions/assign" element={<StoreSubscriptionAssignPage />} />
+
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Route>

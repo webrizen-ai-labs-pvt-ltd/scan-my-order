@@ -2,8 +2,11 @@ import React from "react"
 import { Link } from "react-router-dom"
 import { Button } from "@repo/ui"
 import { logoWhite } from "@repo/ui/assets"
+import { useAuth } from "../context/auth-context.jsx"
 
 export default function HomePage() {
+  const { isAuthenticated } = useAuth()
+
   return (
     <div className="h-screen bg-zinc-950 text-zinc-100 flex flex-col justify-between relative">
 
@@ -20,14 +23,15 @@ export default function HomePage() {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <Button asChild variant="outline">
-            <Link to="/authentication">Sign In</Link>
-          </Button>
-          <Button asChild>
-            <Link to="/dashboard">
-              Go to Dashboard
-            </Link>
-          </Button>
+          {isAuthenticated ? (
+            <Button asChild className="bg-zinc-200 hover:bg-zinc-100 text-zinc-900 font-bold text-xs">
+              <Link to="/dashboard">Go to Dashboard &rarr;</Link>
+            </Button>
+          ) : (
+            <Button asChild variant="outline" className="border-zinc-800 text-zinc-200 hover:bg-zinc-800 text-xs">
+              <Link to="/authentication">Sign In</Link>
+            </Button>
+          )}
         </div>
       </header>
 

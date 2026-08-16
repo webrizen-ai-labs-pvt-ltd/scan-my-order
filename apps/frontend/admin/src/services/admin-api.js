@@ -90,9 +90,54 @@ export async function fetchStoresApi(token) {
   })
 }
 
+export async function fetchStoreByIdApi(token, id) {
+  return adminRequest(`/admin/stores/${id}`, token, {
+    method: "GET",
+  })
+}
+
+export async function updateStoreApi(token, id, storeData) {
+  return adminRequest(`/admin/stores/${id}`, token, {
+    method: "PUT",
+    body: JSON.stringify(storeData),
+  })
+}
+
+export async function deleteStoreApi(token, id) {
+  return adminRequest(`/admin/stores/${id}`, token, {
+    method: "DELETE",
+  })
+}
+
 export async function onboardStoreApi(token, storeData) {
   return adminRequest("/admin/onboard-store", token, {
     method: "POST",
     body: JSON.stringify(storeData),
+  })
+}
+
+export async function createMenuItemApi(token, storeId, itemData) {
+  return adminRequest(`/admin/stores/${storeId}/menu`, token, {
+    method: "POST",
+    body: JSON.stringify(itemData),
+  })
+}
+
+export async function updateMenuItemApi(token, storeId, itemId, itemData) {
+  return adminRequest(`/admin/stores/${storeId}/menu/${itemId}`, token, {
+    method: "PUT",
+    body: JSON.stringify(itemData),
+  })
+}
+
+export async function deleteMenuItemApi(token, storeId, itemId) {
+  return adminRequest(`/admin/stores/${storeId}/menu/${itemId}`, token, {
+    method: "DELETE",
+  })
+}
+
+export async function toggleMenuItemAvailabilityApi(token, storeId, itemId) {
+  return adminRequest(`/admin/stores/${storeId}/menu/${itemId}/availability`, token, {
+    method: "PATCH",
   })
 }

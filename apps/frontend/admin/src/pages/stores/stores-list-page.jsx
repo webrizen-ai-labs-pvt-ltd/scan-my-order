@@ -46,7 +46,7 @@ export default function StoresListPage() {
   }, [token])
 
   return (
-    <div className="space-y-6 max-w-7xl w-full">
+    <div className="space-y-6 w-full">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-zinc-800 pb-6">
         <div>
@@ -118,9 +118,9 @@ export default function StoresListPage() {
                       <TableCell className="font-medium text-white">
                         <div className="flex items-center gap-3">
                           {s.brandingLogo ? (
-                            <img src={s.brandingLogo} alt={s.name} className="h-8 w-8 rounded-lg object-contain bg-zinc-950 border border-zinc-800" />
+                            <img src={s.brandingLogo} alt={s.name} className="h-8 w-8 rounded-lg object-contain bg-zinc-950 border border-zinc-800 shrink-0" />
                           ) : (
-                            <div className="h-8 w-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300">
+                            <div className="h-8 w-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-300 shrink-0">
                               <Store className="h-4 w-4" />
                             </div>
                           )}
@@ -148,7 +148,7 @@ export default function StoresListPage() {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => navigate("/dashboard/stores")}
+                          onClick={() => navigate(`/dashboard/stores/${s.id}/manage`)}
                           className="text-xs border-zinc-700 text-zinc-300 hover:bg-zinc-800"
                         >
                           Manage Store
