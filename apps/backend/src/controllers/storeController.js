@@ -18,14 +18,83 @@ async function createStore(req, res) {
         colorScheme,
         fontStyle,
         brandingLogo,
-        operatingHours,
       },
     });
-
     return successResponse(res, "Store created successfully", store, 201);
   } catch (err) {
     console.error("createStore error:", err);
     return errorResponse(res, "Failed to create store", 500);
+  }
+}
+
+async function onboardStore(req, res) {
+  try {
+    const ownerId = req.user.id;
+    const {
+      name,
+      description,
+      cuisineType,
+      address,
+      contactPhone,
+      operatingHours,
+      colorScheme,
+      fontStyle,
+      brandingLogo,
+      tableCount,
+      ownerName,
+    } = req.body;
+
+    if (!name) {
+      return errorResponse(res, "Restaurant name is required for onboarding", 400);
+    }
+
+    // Optional: update owner name if provided
+    if (ownerName) {
+      await prisma.user.update({
+        where: { id: ownerId },
+        data: { name: ownerName },
+      }).catch(() => {});
+    }
+
+    const fullDescription = [
+      description,
+      cuisineType ? `Cuisine: ${cuisineType}` : null,
+      address ? `Address: ${address}` : null,
+      contactPhone ? `Contact: ${contactPhone}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    const store = await prisma.store.create({
+      data: {
+        name,
+        description: fullDescription || description || "Modern Dining Outlet",
+        ownerId,
+        colorScheme: colorScheme || "amber",
+        fontStyle: fontStyle || "inter",
+        brandingLogo: brandingLogo || null,
+        operatingHours: operatingHours || "10:00 AM - 11:00 PM",
+      },
+    });
+
+    // Create default initial tables for QR ordering
+    const numTables = parseInt(tableCount, 10) || 5;
+    const tableData = Array.from({ length: Math.min(numTables, 50) }, (_, i) => ({
+      number: String(i + 1).padStart(2, "0"),
+      name: `Table ${String(i + 1).padStart(2, "0")}`,
+      capacity: 4,
+      section: "Main Dining",
+      storeId: store.id,
+    }));
+
+    await prisma.table.createMany({
+      data: tableData,
+    }).catch(() => {});
+
+    return successResponse(res, "Restaurant onboarded successfully", store, 201);
+  } catch (err) {
+    console.error("onboardStore error:", err);
+    return errorResponse(res, "Failed to onboard store", 500);
   }
 }
 
@@ -247,6 +316,7 @@ async function deleteMenuItem(req, res) {
 
 module.exports = {
   createStore,
+  onboardStore,
   listStores,
   getMyStore,
   getStore,

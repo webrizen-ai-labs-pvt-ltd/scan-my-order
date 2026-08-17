@@ -12,6 +12,7 @@ router.get("/:id/menu", storeController.listMenuItems);
 
 // Owner & Manager Store & Menu Management
 router.post("/", authenticateToken, authorizeRoles("OWNER", "ADMIN"), storeController.createStore);
+router.post("/onboard", authenticateToken, authorizeRoles("OWNER", "ADMIN"), storeController.onboardStore);
 router.put("/:id", authenticateToken, authorizeRoles("OWNER", "ADMIN"), storeController.updateStore);
 
 // Menu Items CRUD

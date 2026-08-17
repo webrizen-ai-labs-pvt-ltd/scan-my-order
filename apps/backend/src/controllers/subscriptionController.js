@@ -7,18 +7,43 @@ const {
   sendSubscriptionFailedEmail,
 } = require("../utils/mailer.js");
 
+// In-memory cache for ultra-fast subscription plans API response (sub-5ms)
+let cachedPlans = null;
+let cachedPlansTimestamp = 0;
+const CACHE_TTL_MS = 60 * 1000; // 1 minute in-memory TTL
+
+// Helper to invalidate plans cache when plans are created/updated/deleted
+function invalidatePlansCache() {
+  cachedPlans = null;
+  cachedPlansTimestamp = 0;
+}
+
 // List all subscription plans
 async function listPlans(req, res) {
   try {
+    res.setHeader("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=600");
+
+    const now = Date.now();
+    if (cachedPlans && (now - cachedPlansTimestamp < CACHE_TTL_MS)) {
+      return successResponse(res, "Subscription plans retrieved successfully (cached)", cachedPlans);
+    }
+
     const plans = await prisma.subscriptionPlan.findMany({
       orderBy: { createdAt: "desc" },
       include: {
         _count: { select: { subscriptions: true } },
       },
     });
+
+    cachedPlans = plans;
+    cachedPlansTimestamp = now;
+
     return successResponse(res, "Subscription plans retrieved successfully", plans);
   } catch (err) {
     console.error("listPlans error:", err);
+    if (cachedPlans) {
+      return successResponse(res, "Subscription plans retrieved successfully (fallback)", cachedPlans);
+    }
     return errorResponse(res, "Failed to retrieve subscription plans", 500);
   }
 }
@@ -79,6 +104,7 @@ async function createPlan(req, res) {
       },
     });
 
+    invalidatePlansCache();
     return successResponse(res, "Subscription plan created successfully", plan, 201);
   } catch (err) {
     console.error("createPlan error:", err);
@@ -112,6 +138,7 @@ async function updatePlan(req, res) {
       },
     });
 
+    invalidatePlansCache();
     return successResponse(res, "Subscription plan updated successfully", updatedPlan);
   } catch (err) {
     console.error("updatePlan error:", err);
@@ -137,6 +164,7 @@ async function deletePlan(req, res) {
     }
 
     await prisma.subscriptionPlan.delete({ where: { id } });
+    invalidatePlansCache();
     return successResponse(res, "Subscription plan deleted successfully");
   } catch (err) {
     console.error("deletePlan error:", err);

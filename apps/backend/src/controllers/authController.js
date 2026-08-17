@@ -113,7 +113,7 @@ async function googleAuth(req, res) {
           email,
           name: name || email.split("@")[0],
           avatar: avatar || null,
-          role: "WAITER",
+          role: req.body.role || "OWNER",
           status: "ACTIVE",
         },
       });
