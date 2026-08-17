@@ -139,9 +139,17 @@ async function getMyStore(req, res) {
     } else {
       const user = await prisma.user.findUnique({
         where: { id: userId },
-        include: { store: { include: { store: true } } },
+        select: { ownerId: true },
       });
-      store = user?.store?.store || null;
+      const targetOwnerId = user?.ownerId || userId;
+      store = await prisma.store.findFirst({
+        where: { ownerId: targetOwnerId },
+        include: {
+          _count: { select: { menuItems: true, tables: true } },
+          subscriptions: { where: { status: "ACTIVE" }, include: { plan: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      });
     }
 
     return successResponse(res, "My store retrieved successfully", store);
