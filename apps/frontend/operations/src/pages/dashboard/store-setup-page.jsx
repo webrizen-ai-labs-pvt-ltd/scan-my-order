@@ -79,6 +79,7 @@ export default function StoreSetupPage() {
 
   // Settings State
   const [storeName, setStoreName] = useState("")
+  const [slug, setSlug] = useState("")
   const [storeDescription, setStoreDescription] = useState("")
   const [operatingHours, setOperatingHours] = useState("")
   const [colorScheme, setColorScheme] = useState("#f59e0b")
@@ -86,6 +87,7 @@ export default function StoreSetupPage() {
   const [brandingLogo, setBrandingLogo] = useState("")
   const [isUpdatingStore, setIsUpdatingStore] = useState(false)
   const [storeMsg, setStoreMsg] = useState({ text: "", error: false })
+  const [copiedMenuLink, setCopiedMenuLink] = useState(false)
 
   const fontOptions = [
     { label: "DM Sans", value: "DM Sans" },
@@ -221,6 +223,7 @@ export default function StoreSetupPage() {
     try {
       const res = await updateStoreApi(token, store.id, {
         name: storeName,
+        slug: slug.trim().toLowerCase(),
         description: storeDescription,
         operatingHours,
         colorScheme,
@@ -232,6 +235,7 @@ export default function StoreSetupPage() {
       if (updated) {
         setStore(updated)
         setStoreName(updated.name || storeName)
+        setSlug(updated.slug || slug)
         setStoreDescription(updated.description || storeDescription)
         setOperatingHours(updated.operatingHours || operatingHours)
         setColorScheme(updated.colorScheme || colorScheme)
@@ -239,7 +243,7 @@ export default function StoreSetupPage() {
         setBrandingLogo(updated.brandingLogo || brandingLogo)
       }
 
-      setStoreMsg({ text: "Store settings saved successfully!", error: false })
+      setStoreMsg({ text: "Store establishment & custom URL slug updated successfully!", error: false })
     } catch (err) {
       setStoreMsg({
         text: err instanceof Error ? err.message : "Failed to update store.",
@@ -605,18 +609,68 @@ export default function StoreSetupPage() {
                   </div>
 
                   <div className="group relative">
-                    <Label htmlFor="operatingHours" className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
-                      <Clock className="h-4 w-4 inline mr-1.5" /> Operating Hours
+                    <Label htmlFor="storeSlug" className="text-xs uppercase tracking-wider text-amber-400 font-medium mb-2 block">
+                      Digital Menu URL Slug *
                     </Label>
                     <Input
-                      id="operatingHours"
+                      id="storeSlug"
                       type="text"
-                      placeholder="Mon-Sun: 10:00 AM - 11:00 PM"
-                      value={operatingHours}
-                      onChange={(e) => setOperatingHours(e.target.value)}
-                      className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-base px-0 py-3 focus:border-zinc-400 transition-colors placeholder:text-zinc-600"
+                      placeholder="e.g. royal-punjab-dhaba"
+                      value={slug}
+                      onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                      className="bg-transparent border-0 border-b-2 border-amber-500/50 rounded-none text-amber-300 font-mono text-base px-0 py-3 focus:border-amber-400 transition-colors placeholder:text-zinc-600"
                     />
                   </div>
+                </div>
+
+                {/* Digital Menu Direct Link Box */}
+                <div className="p-4 rounded-xl bg-zinc-900 border border-zinc-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Public Digital Menu Direct Link</span>
+                    <p className="text-xs text-zinc-300 font-mono">
+                      {(import.meta.env.VITE_MENU_APP_URL || "http://localhost:5174").replace(/\/$/, "")}/{slug || store?.slug || store?.id}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const url = `${(import.meta.env.VITE_MENU_APP_URL || "http://localhost:5174").replace(/\/$/, "")}/${slug || store?.slug || store?.id}`
+                        navigator.clipboard.writeText(url)
+                        setCopiedMenuLink(true)
+                        setTimeout(() => setCopiedMenuLink(false), 2000)
+                      }}
+                      className="text-xs gap-1.5 border-zinc-700 text-zinc-300"
+                    >
+                      {copiedMenuLink ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                      <span>{copiedMenuLink ? "Copied!" : "Copy Link"}</span>
+                    </Button>
+                    <a
+                      href={`${(import.meta.env.VITE_MENU_APP_URL || "http://localhost:5174").replace(/\/$/, "")}/${slug || store?.slug || store?.id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <Button type="button" size="sm" className="text-xs gap-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold">
+                        <ExternalLink className="h-3.5 w-3.5" /> Open Menu
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+
+                <div className="group relative">
+                  <Label htmlFor="operatingHours" className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+                    <Clock className="h-4 w-4 inline mr-1.5" /> Operating Hours
+                  </Label>
+                  <Input
+                    id="operatingHours"
+                    type="text"
+                    placeholder="Mon-Sun: 10:00 AM - 11:00 PM"
+                    value={operatingHours}
+                    onChange={(e) => setOperatingHours(e.target.value)}
+                    className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-base px-0 py-3 focus:border-zinc-400 transition-colors placeholder:text-zinc-600"
+                  />
                 </div>
 
                 <div className="group relative">

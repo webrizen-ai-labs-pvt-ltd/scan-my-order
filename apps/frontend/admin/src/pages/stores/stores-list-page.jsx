@@ -106,6 +106,7 @@ export default function StoresListPage() {
                 <TableHeader className="border-zinc-800">
                   <TableRow className="border-zinc-800 hover:bg-zinc-950">
                     <TableHead className="text-zinc-400">Establishment Name</TableHead>
+                    <TableHead className="text-zinc-400">URL Slug</TableHead>
                     <TableHead className="text-zinc-400">Assigned Owner</TableHead>
                     <TableHead className="text-zinc-400">Menu Items</TableHead>
                     <TableHead className="text-zinc-400">Created Date</TableHead>
@@ -129,6 +130,11 @@ export default function StoresListPage() {
                             <p className="text-xs text-zinc-500 line-clamp-1">{s.description || "No description."}</p>
                           </div>
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className="bg-amber-500/10 text-amber-400 border-amber-500/30 text-xs font-mono font-normal">
+                          {s.slug || "—"}
+                        </Badge>
                       </TableCell>
                       <TableCell>
                         <div className="text-xs">

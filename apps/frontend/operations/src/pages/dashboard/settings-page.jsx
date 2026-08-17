@@ -64,6 +64,7 @@ export default function SettingsPage() {
   const [store, setStore] = useState(null)
   const [isStoreLoading, setIsStoreLoading] = useState(isOwner)
   const [storeName, setStoreName] = useState("")
+  const [slug, setSlug] = useState("")
   const [storeDescription, setStoreDescription] = useState("")
   const [operatingHours, setOperatingHours] = useState("")
   const [colorScheme, setColorScheme] = useState("#f59e0b")
@@ -100,6 +101,7 @@ export default function SettingsPage() {
           if (storeData) {
             setStore(storeData)
             setStoreName(storeData.name || "")
+            setSlug(storeData.slug || "")
             setStoreDescription(storeData.description || "")
             setOperatingHours(storeData.operatingHours || "")
             setColorScheme(storeData.colorScheme || "#f59e0b")
@@ -191,6 +193,7 @@ export default function SettingsPage() {
     try {
       const res = await updateStoreApi(token, store.id, {
         name: storeName,
+        slug: slug.trim().toLowerCase(),
         description: storeDescription,
         operatingHours,
         colorScheme,
@@ -202,6 +205,7 @@ export default function SettingsPage() {
       if (updated) {
         setStore(updated)
         setStoreName(updated.name || storeName)
+        setSlug(updated.slug || slug)
         setStoreDescription(updated.description || storeDescription)
         setOperatingHours(updated.operatingHours || operatingHours)
         setColorScheme(updated.colorScheme || colorScheme)
@@ -209,7 +213,7 @@ export default function SettingsPage() {
         setBrandingLogo(updated.brandingLogo || brandingLogo)
       }
 
-      setStoreMsg({ text: "Store establishment details & font style updated successfully!", error: false })
+      setStoreMsg({ text: "Store details & custom URL slug updated successfully!", error: false })
     } catch (err) {
       setStoreMsg({
         text: err instanceof Error ? err.message : "Failed to update store details.",
@@ -451,18 +455,32 @@ export default function SettingsPage() {
                         </div>
 
                         <div className="space-y-2">
-                          <Label htmlFor="operatingHours" className="text-zinc-200 text-xs flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5 text-zinc-400" /> Operating Hours
+                          <Label htmlFor="storeSlug" className="text-amber-400 text-xs font-semibold">
+                            Digital Menu URL Slug
                           </Label>
                           <Input
-                            id="operatingHours"
+                            id="storeSlug"
                             type="text"
-                            placeholder="e.g. Mon-Sun: 10:00 AM - 11:00 PM"
-                            value={operatingHours}
-                            onChange={(e) => setOperatingHours(e.target.value)}
-                            className="bg-zinc-950 border-zinc-800 text-white text-xs"
+                            placeholder="e.g. royal-punjab-dhaba"
+                            value={slug}
+                            onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                            className="bg-zinc-950 border-amber-500/40 text-amber-300 font-mono text-xs"
                           />
                         </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="operatingHours" className="text-zinc-200 text-xs flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5 text-zinc-400" /> Operating Hours
+                        </Label>
+                        <Input
+                          id="operatingHours"
+                          type="text"
+                          placeholder="e.g. Mon-Sun: 10:00 AM - 11:00 PM"
+                          value={operatingHours}
+                          onChange={(e) => setOperatingHours(e.target.value)}
+                          className="bg-zinc-950 border-zinc-800 text-white text-xs"
+                        />
                       </div>
 
                       <div className="space-y-2">

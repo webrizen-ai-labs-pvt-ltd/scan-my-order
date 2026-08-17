@@ -1,6 +1,28 @@
 const prisma = require("../config/prisma.js");
 const { successResponse, errorResponse } = require("../utils/response.js");
 
+async function generateUniqueSlug(name, storeId = null) {
+  let baseSlug = (name || "store")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  if (!baseSlug) baseSlug = "store";
+
+  let slug = baseSlug;
+  let count = 1;
+
+  while (true) {
+    const existing = await prisma.store.findFirst({ where: { slug } });
+    if (!existing || (storeId && existing.id === storeId)) {
+      return slug;
+    }
+    slug = `${baseSlug}-${count}`;
+    count++;
+  }
+}
+
 async function createStore(req, res) {
   try {
     const ownerId = req.user.id;
@@ -10,9 +32,12 @@ async function createStore(req, res) {
       return errorResponse(res, "Store name is required", 400);
     }
 
+    const slug = await generateUniqueSlug(req.body.slug || name);
+
     const store = await prisma.store.create({
       data: {
         name,
+        slug,
         description,
         ownerId,
         colorScheme,
@@ -65,9 +90,12 @@ async function onboardStore(req, res) {
       .filter(Boolean)
       .join(" | ");
 
+    const slug = await generateUniqueSlug(req.body.slug || name);
+
     const store = await prisma.store.create({
       data: {
         name,
+        slug,
         description: fullDescription || description || "Modern Dining Outlet",
         ownerId,
         colorScheme: colorScheme || "amber",
@@ -152,6 +180,18 @@ async function getMyStore(req, res) {
       });
     }
 
+    if (store && !store.slug) {
+      const slug = await generateUniqueSlug(store.name, store.id);
+      store = await prisma.store.update({
+        where: { id: store.id },
+        data: { slug },
+        include: {
+          _count: { select: { menuItems: true, tables: true } },
+          subscriptions: { where: { status: "ACTIVE" }, include: { plan: true } },
+        },
+      });
+    }
+
     return successResponse(res, "My store retrieved successfully", store);
   } catch (err) {
     console.error("getMyStore error:", err);
@@ -162,17 +202,61 @@ async function getMyStore(req, res) {
 async function getStore(req, res) {
   try {
     const { id } = req.params;
-    const store = await prisma.store.findUnique({
+
+    // 1. Direct UUID lookup
+    let store = await prisma.store.findUnique({
       where: { id },
       include: {
         owner: { select: { id: true, name: true, email: true } },
         menuItems: true,
         tables: true,
       },
-    });
+    }).catch(() => null);
+
+    // 2. Unique Slug lookup
+    if (!store) {
+      store = await prisma.store.findUnique({
+        where: { slug: id.toLowerCase() },
+        include: {
+          owner: { select: { id: true, name: true, email: true } },
+          menuItems: true,
+          tables: true,
+        },
+      }).catch(() => null);
+    }
+
+    // 3. Fallback dynamically generated slug matching
+    if (!store) {
+      const allStores = await prisma.store.findMany({
+        include: {
+          owner: { select: { id: true, name: true, email: true } },
+          menuItems: true,
+          tables: true,
+        },
+      });
+
+      store = allStores.find((s) => {
+        const slug = (s.slug || s.name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+        return slug === id.toLowerCase() || s.id === id;
+      });
+    }
 
     if (!store) {
       return errorResponse(res, "Store not found", 404);
+    }
+
+    // Auto-backfill slug if missing
+    if (!store.slug) {
+      const slug = await generateUniqueSlug(store.name, store.id);
+      store = await prisma.store.update({
+        where: { id: store.id },
+        data: { slug },
+        include: {
+          owner: { select: { id: true, name: true, email: true } },
+          menuItems: true,
+          tables: true,
+        },
+      }).catch(() => store);
     }
 
     return successResponse(res, "Store details retrieved successfully", store);
@@ -185,7 +269,7 @@ async function getStore(req, res) {
 async function updateStore(req, res) {
   try {
     const { id } = req.params;
-    const { name, description, colorScheme, fontStyle, brandingLogo, operatingHours } = req.body;
+    const { name, slug: customSlug, description, colorScheme, fontStyle, brandingLogo, operatingHours } = req.body;
 
     const existingStore = await prisma.store.findUnique({ where: { id } });
     if (!existingStore) {
@@ -196,10 +280,16 @@ async function updateStore(req, res) {
       return errorResponse(res, "Unauthorized to update this store", 403);
     }
 
+    let updatedSlug = undefined;
+    if (customSlug || name) {
+      updatedSlug = await generateUniqueSlug(customSlug || name, id);
+    }
+
     const updatedStore = await prisma.store.update({
       where: { id },
       data: {
         ...(name ? { name } : {}),
+        ...(updatedSlug ? { slug: updatedSlug } : {}),
         ...(description !== undefined ? { description } : {}),
         ...(colorScheme !== undefined ? { colorScheme } : {}),
         ...(fontStyle !== undefined ? { fontStyle } : {}),

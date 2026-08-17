@@ -58,6 +58,7 @@ export default function StoreManagePage() {
 
   // Store Edit Form State
   const [name, setName] = useState("")
+  const [slug, setSlug] = useState("")
   const [description, setDescription] = useState("")
   const [brandingLogo, setBrandingLogo] = useState("")
   const [colorScheme, setColorScheme] = useState("dark")
@@ -80,6 +81,7 @@ export default function StoreManagePage() {
           setStore(storeData)
           setMenuItems(storeData.menuItems || [])
           setName(storeData.name || "")
+          setSlug(storeData.slug || "")
           setDescription(storeData.description || "")
           setBrandingLogo(storeData.brandingLogo || "")
           setColorScheme(storeData.colorScheme || "dark")
@@ -103,13 +105,14 @@ export default function StoreManagePage() {
     try {
       await updateStoreApi(token, id, {
         name,
+        slug: slug.trim().toLowerCase(),
         description,
         brandingLogo,
         colorScheme,
         fontStyle,
         operatingHours,
       })
-      setMsg({ text: "Store branding and operating parameters updated!", error: false })
+      setMsg({ text: "Store establishment details & URL slug updated!", error: false })
     } catch (err) {
       setMsg({ text: err instanceof Error ? err.message : "Failed to update store.", error: true })
     } finally {
@@ -466,18 +469,44 @@ export default function StoreManagePage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="operatingHours" className="text-zinc-200 text-xs font-medium flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5 text-zinc-400" /> Operating Hours
+                  <Label htmlFor="slug" className="text-amber-400 text-xs font-semibold">
+                    Digital Menu URL Slug
                   </Label>
                   <Input
-                    id="operatingHours"
+                    id="slug"
                     type="text"
-                    value={operatingHours}
-                    onChange={(e) => setOperatingHours(e.target.value)}
-                    placeholder="10:00 AM - 11:00 PM"
-                    className="bg-zinc-950 border-zinc-800 text-white text-xs"
+                    placeholder="e.g. royal-punjab-dhaba"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                    className="bg-zinc-950 border-amber-500/40 text-amber-300 font-mono text-xs"
                   />
                 </div>
+              </div>
+
+              <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-between text-xs font-mono">
+                <span className="text-zinc-400">Public Menu Link:</span>
+                <a
+                  href={`http://localhost:5174/${slug || store?.slug || store?.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-amber-400 hover:underline flex items-center gap-1 font-bold"
+                >
+                  http://localhost:5174/{slug || store?.slug || store?.id}
+                </a>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="operatingHours" className="text-zinc-200 text-xs font-medium flex items-center gap-1">
+                  <Clock className="h-3.5 w-3.5 text-zinc-400" /> Operating Hours
+                </Label>
+                <Input
+                  id="operatingHours"
+                  type="text"
+                  value={operatingHours}
+                  onChange={(e) => setOperatingHours(e.target.value)}
+                  placeholder="10:00 AM - 11:00 PM"
+                  className="bg-zinc-950 border-zinc-800 text-white text-xs"
+                />
               </div>
 
               <div className="space-y-2">

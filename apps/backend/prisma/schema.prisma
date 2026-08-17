@@ -93,6 +93,7 @@ model Passkey {
 
 model Store {
   id             String    @id @default(uuid())
+  slug           String?   @unique
   name           String
   description    String?
   ownerId        String

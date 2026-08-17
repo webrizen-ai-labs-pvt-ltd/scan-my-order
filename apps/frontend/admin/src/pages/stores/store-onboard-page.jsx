@@ -21,6 +21,7 @@ export default function StoreOnboardPage() {
 
   // Store Details
   const [name, setName] = useState("")
+  const [slug, setSlug] = useState("")
   const [description, setDescription] = useState("")
   const [brandingLogo, setBrandingLogo] = useState("")
   const [colorScheme, setColorScheme] = useState("dark")
@@ -116,6 +117,7 @@ export default function StoreOnboardPage() {
 
     const payload = {
       name,
+      ...(slug ? { slug: slug.trim().toLowerCase() } : {}),
       description,
       brandingLogo,
       colorScheme,
@@ -196,19 +198,35 @@ export default function StoreOnboardPage() {
             </div>
 
             <div className="space-y-4 pl-11">
-              <div className="group relative">
-                <Label htmlFor="storeName" className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium mb-1.5 block">
-                  Store Name
-                </Label>
-                <Input
-                  id="storeName"
-                  type="text"
-                  placeholder="Bella Italia Bistro"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="bg-transparent border-0 border-b border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors placeholder:text-zinc-600"
-                  required
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div className="group relative">
+                  <Label htmlFor="storeName" className="text-[10px] uppercase tracking-wider text-zinc-500 font-medium mb-1.5 block">
+                    Store Name *
+                  </Label>
+                  <Input
+                    id="storeName"
+                    type="text"
+                    placeholder="Bella Italia Bistro"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    className="bg-transparent border-0 border-b border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors placeholder:text-zinc-600"
+                    required
+                  />
+                </div>
+
+                <div className="group relative">
+                  <Label htmlFor="storeSlug" className="text-[10px] uppercase tracking-wider text-amber-400 font-medium mb-1.5 block">
+                    Custom Store Slug (Optional)
+                  </Label>
+                  <Input
+                    id="storeSlug"
+                    type="text"
+                    placeholder="e.g. bella-italia-bistro"
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                    className="bg-transparent border-0 border-b border-amber-500/50 rounded-none text-amber-300 font-mono text-sm px-0 py-2 focus:border-amber-400 transition-colors placeholder:text-zinc-600"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
