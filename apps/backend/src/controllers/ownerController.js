@@ -1,14 +1,16 @@
 const bcrypt = require("bcryptjs");
 const prisma = require("../config/prisma.js");
 const { successResponse, errorResponse } = require("../utils/response.js");
+const { sendStaffWelcomeEmail } = require("../utils/mailer.js");
 
 async function listEmployees(req, res) {
   try {
     const ownerId = req.user.id;
     const page = parseInt(req.query.page || "1", 10);
-    const limit = parseInt(req.query.limit || "10", 10);
+    const limit = parseInt(req.query.limit || "50", 10);
     const role = req.query.role;
     const status = req.query.status;
+    const search = (req.query.search || "").trim();
 
     const skip = (page - 1) * limit;
 
@@ -18,8 +20,15 @@ async function listEmployees(req, res) {
       role: { in: ["MANAGER", "WAITER", "KITCHEN"] },
     };
 
-    if (role) where.role = role;
-    if (status) where.status = status;
+    if (role && role !== "ALL") where.role = role;
+    if (status && status !== "ALL") where.status = status;
+
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: "insensitive" } },
+        { email: { contains: search, mode: "insensitive" } },
+      ];
+    }
 
     const [employees, total] = await Promise.all([
       prisma.user.findMany({
@@ -32,6 +41,7 @@ async function listEmployees(req, res) {
           status: true,
           avatar: true,
           createdAt: true,
+          updatedAt: true,
         },
         skip,
         take: limit,
@@ -102,7 +112,7 @@ async function createEmployee(req, res) {
       return errorResponse(res, `Invalid employee role. Must be one of: ${allowedRoles.join(", ")}`, 400);
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (existingUser) {
       return errorResponse(res, "User with this email already exists", 409);
     }
@@ -110,11 +120,12 @@ async function createEmployee(req, res) {
     const hashedPassword = await bcrypt.hash(password, 10);
     const employee = await prisma.user.create({
       data: {
-        email,
+        email: email.trim().toLowerCase(),
         password: hashedPassword,
-        name,
+        name: name.trim(),
         role,
         ownerId,
+        status: "ACTIVE",
       },
       select: {
         id: true,
@@ -127,6 +138,15 @@ async function createEmployee(req, res) {
       },
     });
 
+    // Send welcome email with login credentials asynchronously
+    sendStaffWelcomeEmail({
+      toEmail: employee.email,
+      staffName: employee.name,
+      role: employee.role,
+      temporaryPassword: password,
+      ownerName: req.user.name || req.user.email,
+    }).catch((err) => console.error("Failed to dispatch staff welcome email:", err));
+
     return successResponse(res, "Employee account created successfully", employee, 201);
   } catch (err) {
     console.error("Owner createEmployee error:", err);
@@ -138,7 +158,7 @@ async function updateEmployee(req, res) {
   try {
     const ownerId = req.user.id;
     const { id } = req.params;
-    const { name, email, avatar } = req.body;
+    const { name, email, password, role, status, avatar } = req.body;
 
     const employee = await prisma.user.findFirst({
       where: { id, ownerId, deletedAt: null },
@@ -148,11 +168,26 @@ async function updateEmployee(req, res) {
       return errorResponse(res, "Employee not found or unauthorized", 404);
     }
 
+    if (email && email.trim().toLowerCase() !== employee.email.toLowerCase()) {
+      const emailConflict = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+      if (emailConflict) {
+        return errorResponse(res, "Email is already taken by another account", 409);
+      }
+    }
+
+    let hashedPassword = undefined;
+    if (password && password.trim().length > 0) {
+      hashedPassword = await bcrypt.hash(password.trim(), 10);
+    }
+
     const updatedEmployee = await prisma.user.update({
       where: { id },
       data: {
-        ...(name && { name }),
-        ...(email && { email }),
+        ...(name && { name: name.trim() }),
+        ...(email && { email: email.trim().toLowerCase() }),
+        ...(hashedPassword && { password: hashedPassword }),
+        ...(role && ["MANAGER", "WAITER", "KITCHEN"].includes(role) && { role }),
+        ...(status && ["ACTIVE", "INACTIVE", "SUSPENDED"].includes(status) && { status }),
         ...(avatar !== undefined && { avatar }),
       },
       select: {
@@ -195,7 +230,7 @@ async function removeEmployee(req, res) {
       },
     });
 
-    return successResponse(res, "Employee removed successfully");
+    return successResponse(res, "Employee account removed successfully");
   } catch (err) {
     console.error("Owner removeEmployee error:", err);
     return errorResponse(res, "Failed to remove employee", 500);

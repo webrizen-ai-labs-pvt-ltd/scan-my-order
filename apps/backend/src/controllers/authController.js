@@ -18,7 +18,8 @@ async function register(req, res) {
       return errorResponse(res, "Email, password, and name are required", 400);
     }
 
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.trim().toLowerCase();
+    const existingUser = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (existingUser) {
       return errorResponse(res, "User with this email already exists", 409);
     }
@@ -27,9 +28,9 @@ async function register(req, res) {
 
     const user = await prisma.user.create({
       data: {
-        email,
+        email: cleanEmail,
         password: hashedPassword,
-        name,
+        name: name.trim(),
         role: role || "WAITER",
         status: "ACTIVE",
       },
@@ -66,7 +67,8 @@ async function login(req, res) {
       return errorResponse(res, "Email and password are required", 400);
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.trim().toLowerCase();
+    const user = await prisma.user.findUnique({ where: { email: cleanEmail } });
     if (!user || !user.password) {
       return errorResponse(res, "Invalid email or password", 401);
     }
@@ -105,7 +107,8 @@ async function googleAuth(req, res) {
       return errorResponse(res, "Email is required for Google auth", 400);
     }
 
-    let user = await prisma.user.findUnique({ where: { email } });
+    const cleanEmail = email.trim().toLowerCase();
+    let user = await prisma.user.findUnique({ where: { email: cleanEmail } });
 
     if (!user) {
       user = await prisma.user.create({

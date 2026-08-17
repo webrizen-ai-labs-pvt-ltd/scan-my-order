@@ -385,6 +385,83 @@ async function sendSubscriptionFailedEmail({ toEmail, ownerName, storeName, plan
   }
 }
 
+async function sendStaffWelcomeEmail({ toEmail, staffName, role, temporaryPassword, ownerName, loginUrl }) {
+  const targetLoginUrl = loginUrl || process.env.OPERATIONS_APP_URL || "http://localhost:5176/login";
+  const roleTitle = role === "MANAGER" ? "Restaurant Manager" : role === "KITCHEN" ? "Kitchen Staff" : "Waitstaff / Server";
+
+  const bodyHtml = `
+    <h2 style="color: #ffffff; font-size: 20px; font-weight: 700; margin: 0 0 12px 0; letter-spacing: -0.3px;">Welcome to Scan My Order Staff Portal!</h2>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+      Hello <strong>${staffName || "Staff Member"}</strong>,
+    </p>
+    <p style="color: #d4d4d8; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+      Your employee account has been created by <strong>${ownerName || "your store owner"}</strong> on the <strong>Scan My Order</strong> platform.
+    </p>
+
+    <!-- Credentials Card -->
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color: #27272a; border: 1px solid #3f3f46; border-radius: 12px; margin: 0 0 24px 0;">
+      <tr>
+        <td style="padding: 20px;">
+          <table border="0" cellpadding="0" cellspacing="0" width="100%">
+            <tr>
+              <td style="color: #a1a1aa; font-size: 12px; font-weight: 600; text-transform: uppercase;">Assigned Role</td>
+              <td align="right" style="color: #eab308; font-size: 14px; font-weight: 700;">${roleTitle}</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; color: #a1a1aa; font-size: 12px; font-weight: 600; text-transform: uppercase;">Login Email</td>
+              <td align="right" style="padding-top: 12px; color: #ffffff; font-size: 14px; font-family: monospace;">${toEmail}</td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; color: #a1a1aa; font-size: 12px; font-weight: 600; text-transform: uppercase;">Initial Password</td>
+              <td align="right" style="padding-top: 12px; color: #eab308; font-size: 16px; font-family: monospace; font-weight: 800;">${temporaryPassword}</td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+    <p style="color: #a1a1aa; font-size: 13px; line-height: 1.5; margin: 0 0 24px 0;">
+      Please use these credentials to log in to the Operations POS & KDS terminal. We recommend updating your password after your first login.
+    </p>
+
+    <!-- CTA Button -->
+    <table border="0" cellpadding="0" cellspacing="0" width="100%" style="margin: 0 0 24px 0;">
+      <tr>
+        <td align="center">
+          <a href="${targetLoginUrl}" target="_blank" style="background-color: #eab308; color: #09090b; font-size: 15px; font-weight: 800; text-decoration: none; padding: 14px 32px; border-radius: 10px; display: inline-block; letter-spacing: -0.2px;">
+            Log In to Staff Portal &rarr;
+          </a>
+        </td>
+      </tr>
+    </table>
+  `;
+
+  const attachments = LOGO_PATH
+    ? [
+        {
+          filename: "logo-white.png",
+          path: LOGO_PATH,
+          cid: "scanmyorderlogo",
+        },
+      ]
+    : [];
+
+  const mailOptions = {
+    from: process.env.EMAIL_FROM || '"Scan My Order" <hello@webrizen.com>',
+    to: toEmail,
+    subject: `Your Staff Login Credentials (${role}) - Scan My Order`,
+    html: getEmailWrapper(bodyHtml),
+    attachments,
+  };
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    return info;
+  } catch (err) {
+    console.error("Failed to send staff welcome email:", err);
+  }
+}
+
 module.exports = {
   transporter,
   sendPasswordResetEmail,
@@ -392,4 +469,5 @@ module.exports = {
   sendSubscriptionPaymentEmail,
   sendSubscriptionSuccessEmail,
   sendSubscriptionFailedEmail,
+  sendStaffWelcomeEmail,
 };

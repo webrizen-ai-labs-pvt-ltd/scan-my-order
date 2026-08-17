@@ -14,9 +14,13 @@ import LiveOrdersPage from "../pages/dashboard/live-orders-page.jsx"
 import TablesManagementPage from "../pages/dashboard/tables-management-page.jsx"
 import KdsDisplayPage from "../pages/dashboard/kds-display-page.jsx"
 import StoreSetupPage from "../pages/dashboard/store-setup-page.jsx"
-import StaffManagementPage from "../pages/dashboard/staff-management-page.jsx"
 import SubscriptionsPage from "../pages/dashboard/subscriptions-page.jsx"
 import SettingsPage from "../pages/dashboard/settings-page.jsx"
+
+// Staff Sub-pages
+import StaffListPage from "../pages/dashboard/staff/staff-list-page.jsx"
+import StaffCreatePage from "../pages/dashboard/staff/staff-create-page.jsx"
+import StaffEditPage from "../pages/dashboard/staff/staff-edit-page.jsx"
 
 import NotFoundPage from "../pages/not-found-page.jsx"
 
@@ -51,7 +55,13 @@ export default function AppRoutes() {
             <Route element={<RoleRoute allowedRoles={["OWNER", "MANAGER"]} />}>
               <Route path="store-setup" element={<StoreSetupPage />} />
               <Route path="menu" element={<Navigate to="/dashboard/store-setup?tab=menu" replace />} />
-              <Route path="staff" element={<StaffManagementPage />} />
+              
+              {/* Staff Accounts Management Child Routes & Unique URLs */}
+              <Route path="staff">
+                <Route index element={<StaffListPage />} />
+                <Route path="new" element={<StaffCreatePage />} />
+                <Route path=":id/edit" element={<StaffEditPage />} />
+              </Route>
             </Route>
 
             {/* ALL LOGGED IN USERS */}
