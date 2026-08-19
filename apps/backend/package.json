@@ -9,7 +9,8 @@
   "scripts": {
     "dev": "node --watch --watch-path=src --watch-path=server.js server.js",
     "start": "node server.js",
-    "build": "echo 'Backend build complete'",
+    "build": "prisma generate",
+    "vercel-build": "prisma generate",
     "lint": "echo 'No lint configured for backend'",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",

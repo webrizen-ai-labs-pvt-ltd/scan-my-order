@@ -108,6 +108,10 @@ app.use((err, req, res, next) => {
   return errorResponse(res, err.message || "Internal server error", 500);
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Scan My Order Backend Server running on port ${PORT}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Scan My Order Backend Server running on port ${PORT}`);
+  });
+}
+
+module.exports = app;
