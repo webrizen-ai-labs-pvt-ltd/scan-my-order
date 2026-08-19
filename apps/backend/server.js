@@ -16,29 +16,24 @@ const orderRoutes = require("./src/routes/orderRoutes.js");
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// Dynamic CORS & Preflight Middleware supporting scanmyorder.com subdomains and local/staging origins
+// TOP-LEVEL CORS & OPTIONS PREFLIGHT INTERCEPTOR
 app.use((req, res, next) => {
-  const origin = req.headers.origin;
+  const origin = req.headers.origin || "*";
 
-  if (origin) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  } else {
-    res.setHeader("Access-Control-Allow-Origin", "*");
-  }
-
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
+  res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin, X-Api-Version, X-CSRF-Token");
 
   if (req.method === "OPTIONS") {
-    return res.status(200).end();
+    return res.status(200).send("OK");
   }
 
   next();
 });
 
 app.use(cors({
-  origin: true,
+  origin: (origin, callback) => callback(null, true),
   credentials: true,
 }));
 
@@ -102,7 +97,7 @@ async function healthCheckHandler(req, res) {
 }
 
 // Health Check Routes
-app.get("/api/health", healthCheckHandler);
+app.get(["/api/health", "/health"], healthCheckHandler);
 
 app.get("/", (req, res) => {
   res.json({
@@ -111,15 +106,15 @@ app.get("/", (req, res) => {
   });
 });
 
-// API Routes
-app.use("/api/auth", authRoutes);
-app.use("/api/admin", adminRoutes);
-app.use("/api/owner", ownerRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/stores", storeRoutes);
-app.use("/api/subscriptions", subscriptionRoutes);
-app.use("/api/tables", tableRoutes);
-app.use("/api/orders", orderRoutes);
+// API Routes (Mounted on both /api and root paths for serverless URL flexibility)
+app.use(["/api/auth", "/auth"], authRoutes);
+app.use(["/api/admin", "/admin"], adminRoutes);
+app.use(["/api/owner", "/owner"], ownerRoutes);
+app.use(["/api/users", "/users"], userRoutes);
+app.use(["/api/stores", "/stores"], storeRoutes);
+app.use(["/api/subscriptions", "/subscriptions"], subscriptionRoutes);
+app.use(["/api/tables", "/tables"], tableRoutes);
+app.use(["/api/orders", "/orders"], orderRoutes);
 
 // 404 Handler
 app.use((req, res) => {
