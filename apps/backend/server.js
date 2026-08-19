@@ -123,12 +123,18 @@ app.use("/api/orders", orderRoutes);
 
 // 404 Handler
 app.use((req, res) => {
+  const origin = req.headers.origin || "*";
+  res.header("Access-Control-Allow-Origin", origin);
+  res.header("Access-Control-Allow-Credentials", "true");
   return errorResponse(res, `Route ${req.originalUrl} not found`, 404);
 });
 
 // Global Error Handler
 app.use((err, req, res, next) => {
   console.error("Global Error Handler:", err);
+  const origin = req.headers.origin || "*";
+  res.header("Access-Control-Allow-Origin", origin);
+  res.header("Access-Control-Allow-Credentials", "true");
   return errorResponse(res, err.message || "Internal server error", 500);
 });
 
