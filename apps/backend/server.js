@@ -16,8 +16,32 @@ const orderRoutes = require("./src/routes/orderRoutes.js");
 const app = express();
 const PORT = process.env.PORT || 8000;
 
-// Enable CORS and JSON body parser
-app.use(cors());
+// Dynamic CORS & Preflight Middleware supporting scanmyorder.com subdomains and local/staging origins
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+
+  if (origin) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+  }
+
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Accept, Origin");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  next();
+});
+
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
