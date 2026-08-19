@@ -287,7 +287,15 @@ async function passkeyRegisterVerify(req, res) {
       },
     });
 
-    return successResponse(res, "Passkey registered successfully", createdPasskey, 201);
+    const responsePayload = {
+      id: createdPasskey.id,
+      credentialId: createdPasskey.credentialId,
+      counter: Number(createdPasskey.counter),
+      transports: createdPasskey.transports,
+      createdAt: createdPasskey.createdAt,
+    };
+
+    return successResponse(res, "Passkey registered successfully", responsePayload, 201);
   } catch (err) {
     console.error("Passkey register verify error:", err);
     return errorResponse(res, err.message || "Failed to register passkey", 500);

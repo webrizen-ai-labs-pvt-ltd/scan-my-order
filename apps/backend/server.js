@@ -4,6 +4,11 @@ const cors = require("cors");
 const prisma = require("./src/config/prisma.js");
 const { errorResponse } = require("./src/utils/response.js");
 
+// Handle JSON.stringify for BigInt objects returned by Prisma
+BigInt.prototype.toJSON = function () {
+  return Number(this);
+};
+
 const authRoutes = require("./src/routes/authRoutes.js");
 const adminRoutes = require("./src/routes/adminRoutes.js");
 const ownerRoutes = require("./src/routes/ownerRoutes.js");
