@@ -11,6 +11,7 @@ const userRoutes = require("./src/routes/userRoutes.js");
 const storeRoutes = require("./src/routes/storeRoutes.js");
 const subscriptionRoutes = require("./src/routes/subscriptionRoutes.js");
 const tableRoutes = require("./src/routes/tableRoutes.js");
+const orderRoutes = require("./src/routes/orderRoutes.js");
 
 const app = express();
 const PORT = process.env.PORT || 8000;
@@ -94,6 +95,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/stores", storeRoutes);
 app.use("/api/subscriptions", subscriptionRoutes);
 app.use("/api/tables", tableRoutes);
+app.use("/api/orders", orderRoutes);
 
 // 404 Handler
 app.use((req, res) => {

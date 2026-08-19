@@ -31,3 +31,33 @@ async function request(endpoint) {
 export async function fetchStoreBySlugApi(slug) {
   return request(`/stores/${encodeURIComponent(slug)}`)
 }
+
+export async function createOrderApi(orderData) {
+  const primaryUrl = `${API_BASE_URL}/orders`
+  const fallbackUrl = `${FALLBACK_API_URL}/orders`
+
+  try {
+    const res = await fetch(primaryUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(orderData),
+    })
+    const data = await res.json()
+    if (res.ok) return data
+    throw new Error(data?.message || data?.error || "Failed to place order")
+  } catch (err) {
+    if (err instanceof Error && err.message !== "Failed to fetch") throw err
+    const res = await fetch(fallbackUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(orderData),
+    })
+    const data = await res.json()
+    if (res.ok) return data
+    throw new Error(data?.message || data?.error || "Failed to place order")
+  }
+}
+
+export async function fetchOrderStatusApi(orderId) {
+  return request(`/orders/${encodeURIComponent(orderId)}`)
+}

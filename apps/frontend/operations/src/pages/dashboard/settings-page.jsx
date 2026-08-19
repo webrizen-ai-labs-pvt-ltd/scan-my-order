@@ -35,6 +35,7 @@ import {
   Image as ImageIcon,
   ExternalLink,
   QrCode,
+  Receipt,
 } from "lucide-react"
 import { startRegistration } from "@simplewebauthn/browser"
 import { useAuth } from "../../context/auth-context.jsx"
@@ -70,6 +71,14 @@ export default function SettingsPage() {
   const [colorScheme, setColorScheme] = useState("#f59e0b")
   const [fontStyle, setFontStyle] = useState("DM Sans")
   const [brandingLogo, setBrandingLogo] = useState("")
+  const [gstNumber, setGstNumber] = useState("")
+  const [taxType, setTaxType] = useState("FORWARD")
+  const [taxValueType, setTaxValueType] = useState("PERCENTAGE")
+  const [taxValue, setTaxValue] = useState(5)
+  const [serviceFee, setServiceFee] = useState(0)
+  const [couponCode, setCouponCode] = useState("")
+  const [couponValueType, setCouponValueType] = useState("PERCENTAGE")
+  const [couponValue, setCouponValue] = useState(0)
   const [isUpdatingStore, setIsUpdatingStore] = useState(false)
   const [storeMsg, setStoreMsg] = useState({ text: "", error: false })
 
@@ -107,6 +116,14 @@ export default function SettingsPage() {
             setColorScheme(storeData.colorScheme || "#f59e0b")
             setFontStyle(storeData.fontStyle || "DM Sans")
             setBrandingLogo(storeData.brandingLogo || "")
+            setGstNumber(storeData.gstNumber || "")
+            setTaxType(storeData.taxType || "FORWARD")
+            setTaxValueType(storeData.taxValueType || "PERCENTAGE")
+            setTaxValue(storeData.taxValue !== undefined ? storeData.taxValue : 5)
+            setServiceFee(storeData.serviceFee || 0)
+            setCouponCode(storeData.couponCode || "")
+            setCouponValueType(storeData.couponValueType || "PERCENTAGE")
+            setCouponValue(storeData.couponValue || 0)
           } else {
             setStore(null)
           }
@@ -199,6 +216,14 @@ export default function SettingsPage() {
         colorScheme,
         fontStyle,
         brandingLogo,
+        gstNumber,
+        taxType,
+        taxValueType,
+        taxValue,
+        serviceFee,
+        couponCode,
+        couponValueType,
+        couponValue,
       })
 
       const updated = res?.data
@@ -211,6 +236,14 @@ export default function SettingsPage() {
         setColorScheme(updated.colorScheme || colorScheme)
         setFontStyle(updated.fontStyle || fontStyle)
         setBrandingLogo(updated.brandingLogo || brandingLogo)
+        setGstNumber(updated.gstNumber || "")
+        setTaxType(updated.taxType || "FORWARD")
+        setTaxValueType(updated.taxValueType || "PERCENTAGE")
+        setTaxValue(updated.taxValue !== undefined ? updated.taxValue : 5)
+        setServiceFee(updated.serviceFee || 0)
+        setCouponCode(updated.couponCode || "")
+        setCouponValueType(updated.couponValueType || "PERCENTAGE")
+        setCouponValue(updated.couponValue || 0)
       }
 
       setStoreMsg({ text: "Store details & custom URL slug updated successfully!", error: false })
@@ -408,183 +441,330 @@ export default function SettingsPage() {
                 </Card>
               ) : (
                 /* Dynamic Store Configuration Form when store is linked */
-                <Card className="bg-zinc-900 border-amber-500/30 text-zinc-100">
-                  <CardHeader>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <CardTitle className="text-base text-white flex items-center gap-2">
-                          <Building2 className="h-4 w-4 text-amber-400" /> {store.name}
-                        </CardTitle>
-                        <CardDescription className="text-zinc-400 text-xs">
-                          Configure public store details, description, operating hours, theme accent, and menu font family.
-                        </CardDescription>
-                      </div>
-                      <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 px-3 py-1 text-xs font-mono">
-                        LINKED STORE
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent>
-                    <form onSubmit={handleStoreSubmit} className="space-y-6">
-                      {storeMsg.text && (
-                        <div
-                          className={`flex items-center gap-2 text-xs rounded-lg px-3 py-2 border ${
-                            storeMsg.error
-                              ? "bg-red-500/10 border-red-500/20 text-red-400"
-                              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-                          }`}
-                        >
-                          {storeMsg.error ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
-                          {storeMsg.text}
-                        </div>
-                      )}
+                <Card className="bg-zinc-900 border-zinc-800 text-zinc-100 relative overflow-hidden">
+  <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-zinc-400 to-transparent" />
+  
+  <CardHeader>
+    <div className="flex items-center justify-between">
+      <div>
+        <CardTitle className="text-base text-white flex items-center gap-2">
+          <Building2 className="h-5 w-5 text-zinc-300" /> {store.name}
+        </CardTitle>
+        <CardDescription className="text-sm text-zinc-500">
+          Configure store details, hours, theme, and billing
+        </CardDescription>
+      </div>
+      <span className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider bg-zinc-800 px-2 py-1 rounded-md">
+        Linked Store
+      </span>
+    </div>
+  </CardHeader>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="storeName" className="text-zinc-200 text-xs">
-                            Store Name
-                          </Label>
-                          <Input
-                            id="storeName"
-                            type="text"
-                            value={storeName}
-                            onChange={(e) => setStoreName(e.target.value)}
-                            className="bg-zinc-950 border-zinc-800 text-white text-xs"
-                            required
-                          />
-                        </div>
+  <CardContent>
+    <form onSubmit={handleStoreSubmit} className="space-y-8">
+      {storeMsg.text && (
+        <div
+          className={`flex items-center gap-2 text-sm rounded-lg px-4 py-3 border ${
+            storeMsg.error
+              ? "bg-red-500/10 border-red-500/20 text-red-400"
+              : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+          }`}
+        >
+          {storeMsg.error ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
+          {storeMsg.text}
+        </div>
+      )}
 
-                        <div className="space-y-2">
-                          <Label htmlFor="storeSlug" className="text-amber-400 text-xs font-semibold">
-                            Digital Menu URL Slug
-                          </Label>
-                          <Input
-                            id="storeSlug"
-                            type="text"
-                            placeholder="e.g. royal-punjab-dhaba"
-                            value={slug}
-                            onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
-                            className="bg-zinc-950 border-amber-500/40 text-amber-300 font-mono text-xs"
-                          />
-                        </div>
-                      </div>
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
+            <Building2 className="h-5 w-5 text-zinc-300" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-white">Store Details</h2>
+            <p className="text-sm text-zinc-500">Basic information about your establishment</p>
+          </div>
+        </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="operatingHours" className="text-zinc-200 text-xs flex items-center gap-1">
-                          <Clock className="h-3.5 w-3.5 text-zinc-400" /> Operating Hours
-                        </Label>
-                        <Input
-                          id="operatingHours"
-                          type="text"
-                          placeholder="e.g. Mon-Sun: 10:00 AM - 11:00 PM"
-                          value={operatingHours}
-                          onChange={(e) => setOperatingHours(e.target.value)}
-                          className="bg-zinc-950 border-zinc-800 text-white text-xs"
-                        />
-                      </div>
+        <div className="space-y-5 pl-13">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+            <div className="group relative">
+              <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+                Store Name *
+              </label>
+              <input
+                type="text"
+                value={storeName}
+                onChange={(e) => setStoreName(e.target.value)}
+                className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors"
+                required
+              />
+            </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="storeDescription" className="text-zinc-200 text-xs">
-                          Store Description / Bio
-                        </Label>
-                        <Input
-                          id="storeDescription"
-                          type="text"
-                          placeholder="Authentic Wood-fired Pizza & Italian Dining"
-                          value={storeDescription}
-                          onChange={(e) => setStoreDescription(e.target.value)}
-                          className="bg-zinc-950 border-zinc-800 text-white text-xs"
-                        />
-                      </div>
+            <div className="group relative">
+              <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+                Menu URL Slug
+              </label>
+              <input
+                type="text"
+                placeholder="e.g. royal-punjab-dhaba"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors placeholder:text-zinc-600 font-mono"
+              />
+            </div>
+          </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="brandingLogo" className="text-zinc-200 text-xs flex items-center gap-1">
-                            <ImageIcon className="h-3.5 w-3.5 text-zinc-400" /> Branding Logo URL
-                          </Label>
-                          <Input
-                            id="brandingLogo"
-                            type="url"
-                            placeholder="https://example.com/logo.png"
-                            value={brandingLogo}
-                            onChange={(e) => setBrandingLogo(e.target.value)}
-                            className="bg-zinc-950 border-zinc-800 text-white text-xs"
-                          />
-                        </div>
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              <Clock className="h-4 w-4 inline mr-1.5" /> Operating Hours
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. Mon-Sun: 10:00 AM - 11:00 PM"
+              value={operatingHours}
+              onChange={(e) => setOperatingHours(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors placeholder:text-zinc-600"
+            />
+          </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="fontStyle" className="text-zinc-200 text-xs flex items-center gap-1">
-                            <Type className="h-3.5 w-3.5 text-amber-400" /> Font Family / Style
-                          </Label>
-                          <select
-                            id="fontStyle"
-                            value={fontStyle}
-                            onChange={(e) => setFontStyle(e.target.value)}
-                            className="w-full h-9 px-3 bg-zinc-950 border border-zinc-800 rounded-md text-white text-xs focus:outline-none focus:border-amber-500/50"
-                          >
-                            {fontOptions.map((opt) => (
-                              <option key={opt.value} value={opt.value} className="bg-zinc-900 text-white">
-                                {opt.label}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              Description
+            </label>
+            <input
+              type="text"
+              placeholder="Authentic Wood-fired Pizza & Italian Dining"
+              value={storeDescription}
+              onChange={(e) => setStoreDescription(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors placeholder:text-zinc-600"
+            />
+          </div>
+        </div>
+      </div>
 
-                        <div className="space-y-2">
-                          <Label htmlFor="colorScheme" className="text-zinc-200 text-xs flex items-center gap-1">
-                            <Palette className="h-3.5 w-3.5 text-amber-400" /> Theme Color Accent
-                          </Label>
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="color"
-                              value={colorScheme}
-                              onChange={(e) => setColorScheme(e.target.value)}
-                              className="h-9 w-12 bg-zinc-950 border border-zinc-800 rounded cursor-pointer p-0.5"
-                            />
-                            <Input
-                              id="colorScheme"
-                              type="text"
-                              value={colorScheme}
-                              onChange={(e) => setColorScheme(e.target.value)}
-                              className="bg-zinc-950 border-zinc-800 text-white text-xs font-mono"
-                            />
-                          </div>
-                        </div>
-                      </div>
+      <div className="space-y-6 pt-8 border-t border-zinc-800">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
+            <Palette className="h-5 w-5 text-zinc-300" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-white">Branding & Theme</h2>
+            <p className="text-sm text-zinc-500">Customize your menu appearance</p>
+          </div>
+        </div>
 
-                      {/* Live Font Style Preview Box */}
-                      <div className="p-4 rounded-xl bg-zinc-950/80 border border-zinc-800 space-y-1.5">
-                        <span className="text-[10px] uppercase font-mono text-zinc-500 tracking-wider">
-                          Digital Menu Live Font Preview ({fontStyle})
-                        </span>
-                        <p className="text-base font-bold text-white" style={{ fontFamily: fontStyle }}>
-                          {storeName || "Store Menu Header Preview"}
-                        </p>
-                        <p className="text-xs text-zinc-400" style={{ fontFamily: fontStyle }}>
-                          {storeDescription || "Freshly baked artisanal Margherita Pizza with creamy mozzarella & basil."}
-                        </p>
-                      </div>
+        <div className="space-y-5 pl-13">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">
+            <div className="group relative">
+              <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+                <ImageIcon className="h-4 w-4 inline mr-1.5" /> Logo URL
+              </label>
+              <input
+                type="url"
+                placeholder="https://example.com/logo.png"
+                value={brandingLogo}
+                onChange={(e) => setBrandingLogo(e.target.value)}
+                className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors placeholder:text-zinc-600"
+              />
+            </div>
 
-                      <div className="flex justify-end pt-2">
-                        <Button
-                          type="submit"
-                          disabled={isUpdatingStore}
-                          className="bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold text-xs gap-2"
-                        >
-                          {isUpdatingStore ? (
-                            <>
-                              <LoaderCircle className="h-4 w-4 animate-spin" /> Updating Store...
-                            </>
-                          ) : (
-                            <>
-                              <Store className="h-4 w-4" /> Save Store Changes
-                            </>
-                          )}
-                        </Button>
-                      </div>
-                    </form>
-                  </CardContent>
-                </Card>
+            <div className="group relative">
+              <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+                <Type className="h-4 w-4 inline mr-1.5" /> Font Style
+              </label>
+              <select
+                value={fontStyle}
+                onChange={(e) => setFontStyle(e.target.value)}
+                className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base py-3 focus:border-zinc-400 outline-none transition-colors cursor-pointer"
+              >
+                {fontOptions.map((opt) => (
+                  <option key={opt.value} value={opt.value} className="bg-zinc-900">
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="group relative">
+              <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+                <Palette className="h-4 w-4 inline mr-1.5" /> Accent Color
+              </label>
+              <div className="flex items-center gap-3 py-2">
+                <input
+                  type="color"
+                  value={colorScheme}
+                  onChange={(e) => setColorScheme(e.target.value)}
+                  className="h-10 w-16 bg-zinc-950 border border-zinc-800 rounded cursor-pointer p-1"
+                />
+                <input
+                  type="text"
+                  value={colorScheme}
+                  onChange={(e) => setColorScheme(e.target.value)}
+                  className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-sm px-0 py-3 focus:border-zinc-400 outline-none transition-colors font-mono"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-lg bg-zinc-950/60 border border-zinc-800 space-y-1.5">
+            <span className="text-[10px] uppercase font-mono text-zinc-500 tracking-wider">
+              Font Preview ({fontStyle})
+            </span>
+            <p className="text-base font-bold text-white" style={{ fontFamily: fontStyle }}>
+              {storeName || "Store Menu Header Preview"}
+            </p>
+            <p className="text-sm text-zinc-500" style={{ fontFamily: fontStyle }}>
+              {storeDescription || "Freshly baked artisanal Margherita Pizza with creamy mozzarella & basil."}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-6 pt-8 border-t border-zinc-800">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center">
+            <Receipt className="h-5 w-5 text-zinc-300" />
+          </div>
+          <div>
+            <h2 className="text-base font-semibold text-white">Tax & Billing</h2>
+            <p className="text-sm text-zinc-500">Configure GST, tax type, and coupons</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 pl-13">
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              GSTIN Number
+            </label>
+            <input
+              type="text"
+              placeholder="27AAAAA0000A1Z5"
+              value={gstNumber}
+              onChange={(e) => setGstNumber(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors placeholder:text-zinc-600 font-mono"
+            />
+          </div>
+
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              Tax Type
+            </label>
+            <select
+              value={taxType}
+              onChange={(e) => setTaxType(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base py-3 focus:border-zinc-400 outline-none transition-colors cursor-pointer"
+            >
+              <option value="FORWARD" className="bg-zinc-900">Forward (Exclusive)</option>
+              <option value="BACKWARD" className="bg-zinc-900">Backward (Inclusive)</option>
+            </select>
+          </div>
+
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              Tax Value Unit
+            </label>
+            <select
+              value={taxValueType}
+              onChange={(e) => setTaxValueType(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base py-3 focus:border-zinc-400 outline-none transition-colors cursor-pointer"
+            >
+              <option value="PERCENTAGE" className="bg-zinc-900">Percentage (%)</option>
+              <option value="FIXED" className="bg-zinc-900">Fixed (₹)</option>
+            </select>
+          </div>
+
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              Tax Value
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="5"
+              value={taxValue}
+              onChange={(e) => setTaxValue(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors placeholder:text-zinc-600 font-mono"
+            />
+          </div>
+
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              Service Fee (₹)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="10"
+              value={serviceFee}
+              onChange={(e) => setServiceFee(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors placeholder:text-zinc-600 font-mono"
+            />
+          </div>
+
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              Coupon Code
+            </label>
+            <input
+              type="text"
+              placeholder="WELCOME10"
+              value={couponCode}
+              onChange={(e) => setCouponCode(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors placeholder:text-zinc-600 uppercase font-mono"
+            />
+          </div>
+
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              Coupon Type
+            </label>
+            <select
+              value={couponValueType}
+              onChange={(e) => setCouponValueType(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base py-3 focus:border-zinc-400 outline-none transition-colors cursor-pointer"
+            >
+              <option value="PERCENTAGE" className="bg-zinc-900">Percentage (%)</option>
+              <option value="FIXED" className="bg-zinc-900">Fixed (₹)</option>
+            </select>
+          </div>
+
+          <div className="group relative">
+            <label className="text-xs uppercase tracking-wider text-zinc-500 font-medium mb-2 block">
+              Coupon Value
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              placeholder="10"
+              value={couponValue}
+              onChange={(e) => setCouponValue(e.target.value)}
+              className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-white text-base px-0 py-3 focus:border-zinc-400 outline-none transition-colors placeholder:text-zinc-600 font-mono"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="flex justify-end pt-8 border-t border-zinc-800">
+        <Button
+          type="submit"
+          disabled={isUpdatingStore}
+          className="bg-white hover:bg-zinc-200 text-zinc-900 font-medium text-sm gap-2 px-6 py-2"
+        >
+          {isUpdatingStore ? (
+            <>
+              <LoaderCircle className="h-4 w-4 animate-spin" /> Saving...
+            </>
+          ) : (
+            <>
+              <Store className="h-4 w-4" /> Save Changes
+            </>
+          )}
+        </Button>
+      </div>
+    </form>
+  </CardContent>
+</Card>
               )}
             </section>
           )}

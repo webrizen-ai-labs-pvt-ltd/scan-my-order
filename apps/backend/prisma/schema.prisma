@@ -92,23 +92,63 @@ model Passkey {
 }
 
 model Store {
-  id             String    @id @default(uuid())
-  slug           String?   @unique
-  name           String
-  description    String?
-  ownerId        String
-  owner          User      @relation("OwnerStores", fields: [ownerId], references: [id], onDelete: Cascade)
-  colorScheme    String?
-  fontStyle      String?
-  brandingLogo   String?
-  operatingHours String?
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id                  String    @id @default(uuid())
+  slug                String?   @unique
+  name                String
+  description         String?
+  ownerId             String
+  owner               User      @relation("OwnerStores", fields: [ownerId], references: [id], onDelete: Cascade)
+  colorScheme         String?
+  fontStyle           String?
+  brandingLogo        String?
+  operatingHours      String?
 
-  menuItems      MenuItem[]
-  userStoreRels  UserStoreRel[]
-  subscriptions  StoreSubscription[]
-  tables         Table[]
+  // Tax & Dynamic Billing Breakdown Configuration
+  gstNumber           String?
+  taxType             String?   @default("FORWARD") // "FORWARD" (Exclusive) or "BACKWARD" (Inclusive)
+  taxValueType        String?   @default("PERCENTAGE") // "PERCENTAGE" or "FIXED"
+  taxValue            Float?    @default(5) // Default 5% GST
+  serviceFee          Float?    @default(0) // Platform / Service Fee
+  allowManualDiscount Boolean   @default(true)
+  couponCode          String?   // e.g. "WELCOME10"
+  couponValueType     String?   @default("PERCENTAGE") // "PERCENTAGE" or "FIXED"
+  couponValue         Float?    @default(0) // Coupon discount
+
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  menuItems           MenuItem[]
+  userStoreRels       UserStoreRel[]
+  subscriptions       StoreSubscription[]
+  tables              Table[]
+  orders              Order[]
+}
+
+enum OrderType {
+  DINING
+  TAKEAWAY
+}
+
+enum PaymentType {
+  PREPAID
+  POSTPAID
+}
+
+enum OrderStatus {
+  PENDING_VERIFICATION
+  ACCEPTED
+  PREPARING
+  READY
+  SERVED
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
 }
 
 model Table {
@@ -144,6 +184,45 @@ model MenuItem {
   allergens      String?
   createdAt      DateTime    @default(now())
   updatedAt      DateTime    @updatedAt
+}
+
+model Order {
+  id             String        @id @default(uuid())
+  orderNumber    String        
+  storeId        String
+  store          Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tableNumber    String?       
+  orderType      OrderType     @default(DINING)
+  customerName   String?
+  customerEmail  String?
+  customerPhone  String?
+  paymentType    PaymentType   @default(POSTPAID)
+  paymentStatus  PaymentStatus @default(PENDING)
+  orderStatus    OrderStatus   @default(PENDING_VERIFICATION)
+  notes          String?       
+
+  subtotal       Float
+  tax            Float         @default(0)
+  serviceFee     Float         @default(0)
+  discount       Float         @default(0)
+  totalAmount    Float
+
+  items          OrderItem[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId  String?
+  name        String
+  price       Float
+  quantity    Int
+  itemTotal   Float
+  notes       String?  
+  createdAt   DateTime @default(now())
 }
 
 model SubscriptionPlan {

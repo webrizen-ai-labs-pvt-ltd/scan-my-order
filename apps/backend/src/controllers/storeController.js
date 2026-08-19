@@ -269,7 +269,24 @@ async function getStore(req, res) {
 async function updateStore(req, res) {
   try {
     const { id } = req.params;
-    const { name, slug: customSlug, description, colorScheme, fontStyle, brandingLogo, operatingHours } = req.body;
+    const {
+      name,
+      slug: customSlug,
+      description,
+      colorScheme,
+      fontStyle,
+      brandingLogo,
+      operatingHours,
+      gstNumber,
+      taxType,
+      taxValueType,
+      taxValue,
+      serviceFee,
+      allowManualDiscount,
+      couponCode,
+      couponValueType,
+      couponValue,
+    } = req.body;
 
     const existingStore = await prisma.store.findUnique({ where: { id } });
     if (!existingStore) {
@@ -295,6 +312,15 @@ async function updateStore(req, res) {
         ...(fontStyle !== undefined ? { fontStyle } : {}),
         ...(brandingLogo !== undefined ? { brandingLogo } : {}),
         ...(operatingHours !== undefined ? { operatingHours } : {}),
+        ...(gstNumber !== undefined ? { gstNumber } : {}),
+        ...(taxType !== undefined ? { taxType } : {}),
+        ...(taxValueType !== undefined ? { taxValueType } : {}),
+        ...(taxValue !== undefined ? { taxValue: parseFloat(taxValue) || 0 } : {}),
+        ...(serviceFee !== undefined ? { serviceFee: parseFloat(serviceFee) || 0 } : {}),
+        ...(allowManualDiscount !== undefined ? { allowManualDiscount: Boolean(allowManualDiscount) } : {}),
+        ...(couponCode !== undefined ? { couponCode: couponCode ? String(couponCode).trim().toUpperCase() : null } : {}),
+        ...(couponValueType !== undefined ? { couponValueType } : {}),
+        ...(couponValue !== undefined ? { couponValue: parseFloat(couponValue) || 0 } : {}),
       },
     });
 

@@ -1117,56 +1117,152 @@ export default function StoreSetupPage() {
               <p className="text-sm text-zinc-500">Configure item details</p>
             </div>
 
-            <form onSubmit={handleSaveMenuItem} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSaveMenuItem} className="space-y-4 max-h-[75vh] overflow-y-auto pr-1">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <Label className="text-sm text-zinc-400">Item Name *</Label>
+                  <Label className="text-xs text-zinc-400">Item Name *</Label>
                   <Input
                     type="text"
+                    placeholder="e.g. Paneer Butter Masala"
                     value={menuForm.name}
                     onChange={(e) => setMenuForm({ ...menuForm, name: e.target.value })}
-                    className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-base px-0 py-2.5 focus:border-zinc-400 transition-colors"
+                    className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors"
                     required
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-sm text-zinc-400">Price (₹) *</Label>
+                  <Label className="text-xs text-zinc-400">Price (₹) *</Label>
                   <Input
                     type="number"
+                    step="0.01"
+                    placeholder="299"
                     value={menuForm.price}
                     onChange={(e) => setMenuForm({ ...menuForm, price: e.target.value })}
-                    className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-base px-0 py-2.5 focus:border-zinc-400 transition-colors font-mono"
+                    className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors font-mono"
                     required
                   />
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400">Category</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Main Course, Starters, Breads"
+                    value={menuForm.category}
+                    onChange={(e) => setMenuForm({ ...menuForm, category: e.target.value })}
+                    className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400">Dietary Classification *</Label>
+                  <select
+                    value={menuForm.dietaryType}
+                    onChange={(e) => setMenuForm({ ...menuForm, dietaryType: e.target.value })}
+                    className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-sm text-white py-2 focus:outline-none focus:border-zinc-400 transition-colors cursor-pointer"
+                  >
+                    <option value="VEG" className="bg-zinc-900 text-white">🟢 Pure Veg</option>
+                    <option value="NON_VEG" className="bg-zinc-900 text-white">🔴 Non-Veg</option>
+                    <option value="EGG" className="bg-zinc-900 text-white">🟡 Contains Egg</option>
+                    <option value="VEGAN" className="bg-zinc-900 text-white">🌱 Vegan</option>
+                  </select>
+                </div>
+              </div>
+
               <div className="space-y-1.5">
-                <Label className="text-sm text-zinc-400">Category</Label>
+                <Label className="text-xs text-zinc-400">Dish Image URL</Label>
+                <Input
+                  type="url"
+                  placeholder="https://images.unsplash.com/photo-..."
+                  value={menuForm.image}
+                  onChange={(e) => setMenuForm({ ...menuForm, image: e.target.value })}
+                  className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors placeholder:text-zinc-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400">Spiciness Level</Label>
+                  <select
+                    value={menuForm.spicinessLevel}
+                    onChange={(e) => setMenuForm({ ...menuForm, spicinessLevel: e.target.value })}
+                    className="w-full bg-transparent border-0 border-b-2 border-zinc-800 text-sm text-white py-2 focus:outline-none focus:border-zinc-400 transition-colors cursor-pointer"
+                  >
+                    <option value={0} className="bg-zinc-900 text-white">Not Spicy (0)</option>
+                    <option value={1} className="bg-zinc-900 text-white">🌶️ Mild (1)</option>
+                    <option value={2} className="bg-zinc-900 text-white">🌶️🌶️ Medium (2)</option>
+                    <option value={3} className="bg-zinc-900 text-white">🌶️🌶️🌶️ Hot (3)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400">Prep Time (mins)</Label>
+                  <Input
+                    type="number"
+                    placeholder="15"
+                    value={menuForm.prepTime}
+                    onChange={(e) => setMenuForm({ ...menuForm, prepTime: e.target.value })}
+                    className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-zinc-400">Calories (kcal)</Label>
+                  <Input
+                    type="number"
+                    placeholder="350"
+                    value={menuForm.calories}
+                    onChange={(e) => setMenuForm({ ...menuForm, calories: e.target.value })}
+                    className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs text-zinc-400">Allergens Info</Label>
                 <Input
                   type="text"
-                  value={menuForm.category}
-                  onChange={(e) => setMenuForm({ ...menuForm, category: e.target.value })}
-                  className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-base px-0 py-2.5 focus:border-zinc-400 transition-colors"
+                  placeholder="e.g. Contains Nuts, Dairy, Gluten"
+                  value={menuForm.allergens}
+                  onChange={(e) => setMenuForm({ ...menuForm, allergens: e.target.value })}
+                  className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-sm text-zinc-400">Description</Label>
+                <Label className="text-xs text-zinc-400">Description / Bio</Label>
                 <Input
                   type="text"
+                  placeholder="Rich tomato gravy cooked with cottage cheese and aromatic spices"
                   value={menuForm.description}
                   onChange={(e) => setMenuForm({ ...menuForm, description: e.target.value })}
-                  className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-base px-0 py-2.5 focus:border-zinc-400 transition-colors"
+                  className="bg-transparent border-0 border-b-2 border-zinc-800 rounded-none text-white text-sm px-0 py-2 focus:border-zinc-400 transition-colors"
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-4">
+              <div className="flex items-center gap-3 pt-2">
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={menuForm.isAvailable}
+                    onChange={(e) => setMenuForm({ ...menuForm, isAvailable: e.target.checked })}
+                    className="sr-only peer"
+                  />
+                  <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500" />
+                </label>
+                <span className="text-xs text-zinc-300 font-medium">
+                  {menuForm.isAvailable ? "Available on Digital Menu" : "Hidden from Digital Menu"}
+                </span>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
                 <Button type="button" variant="ghost" onClick={() => setIsMenuModalOpen(false)} className="text-zinc-400 hover:text-white text-sm">
                   Cancel
                 </Button>
                 <Button type="submit" disabled={isSavingMenuItem} className="bg-white hover:bg-zinc-200 text-zinc-900 font-medium text-sm">
-                  {isSavingMenuItem ? <LoaderCircle className="h-4 w-4 animate-spin" /> : "Save"}
+                  {isSavingMenuItem ? <LoaderCircle className="h-4 w-4 animate-spin" /> : "Save Menu Item"}
                 </Button>
               </div>
             </form>
