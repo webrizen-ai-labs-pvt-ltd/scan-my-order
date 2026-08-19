@@ -164,7 +164,7 @@ async function passkeyAuthOptions(req, res) {
         passkeys = user.passkeys;
       }
     }
-    const options = await getPasskeyAuthenticationOptions(passkeys);
+    const options = await getPasskeyAuthenticationOptions(passkeys, req);
     return successResponse(res, "Authentication options generated", options);
   } catch (err) {
     console.error("Passkey auth options error:", err);
@@ -184,7 +184,7 @@ async function passkeyAuthVerify(req, res) {
       return errorResponse(res, "Passkey not registered", 404);
     }
 
-    const verification = await verifyPasskeyAuthentication(credential, passkey, expectedChallenge);
+    const verification = await verifyPasskeyAuthentication(credential, passkey, expectedChallenge, req);
     if (!verification.verified) {
       return errorResponse(res, "Passkey verification failed", 401);
     }
@@ -228,7 +228,7 @@ async function passkeyRegisterOptions(req, res) {
       return errorResponse(res, "User account not found", 404);
     }
 
-    const options = await getPasskeyRegistrationOptions(user, user.passkeys);
+    const options = await getPasskeyRegistrationOptions(user, req);
     return successResponse(res, "Registration options generated", options);
   } catch (err) {
     console.error("Passkey register options error:", err);
@@ -245,7 +245,7 @@ async function passkeyRegisterVerify(req, res) {
       return errorResponse(res, "User ID not found in token session", 401);
     }
 
-    const verification = await verifyPasskeyRegistration(userId, credential, expectedChallenge);
+    const verification = await verifyPasskeyRegistration(userId, credential, expectedChallenge, req);
     if (!verification.verified || !verification.registrationInfo) {
       return errorResponse(res, "Passkey verification failed", 400);
     }
