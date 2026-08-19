@@ -486,12 +486,12 @@ export default function StoreManagePage() {
               <div className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 flex items-center justify-between text-xs font-mono">
                 <span className="text-zinc-400">Public Menu Link:</span>
                 <a
-                  href={`http://localhost:5174/${slug || store?.slug || store?.id}`}
+                  href={`${(import.meta.env.VITE_MENU_APP_URL || "https://menu.scanmyorder.com").replace(/\/$/, "")}/${slug || store?.slug || store?.id}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-amber-400 hover:underline flex items-center gap-1 font-bold"
                 >
-                  http://localhost:5174/{slug || store?.slug || store?.id}
+                  {(import.meta.env.VITE_MENU_APP_URL || "https://menu.scanmyorder.com").replace(/\/$/, "")}/{slug || store?.slug || store?.id}
                 </a>
               </div>
 

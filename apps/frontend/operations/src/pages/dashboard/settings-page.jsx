@@ -1283,7 +1283,7 @@ export default function SettingsPage() {
                 <div className="flex items-center justify-between text-xs text-zinc-400">
                   <span>Customer View Ready</span>
                   <a
-                    href={`http://localhost:5173/store/${store.id}`}
+                    href={`${(import.meta.env.VITE_CUSTOMER_APP_URL || import.meta.env.VITE_MENU_APP_URL || "https://menu.scanmyorder.com").replace(/\/$/, "")}/${store.slug || store.id}`}
                     target="_blank"
                     rel="noreferrer"
                     className="text-amber-400 hover:text-amber-300 flex items-center gap-1 font-medium"

@@ -416,7 +416,7 @@ export default function StoreSetupPage() {
   }
 
   const getTableQrUrl = (tableNumber) => {
-    const customerAppUrl = import.meta.env.VITE_CUSTOMER_APP_URL || "http://localhost:5175"
+    const customerAppUrl = import.meta.env.VITE_CUSTOMER_APP_URL || import.meta.env.VITE_MENU_APP_URL || "https://menu.scanmyorder.com"
     return `${customerAppUrl.replace(/\/$/, "")}/store/${store?.id}?table=${encodeURIComponent(tableNumber)}`
   }
 
@@ -628,7 +628,7 @@ export default function StoreSetupPage() {
                   <div className="space-y-1">
                     <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider">Public Digital Menu Direct Link</span>
                     <p className="text-xs text-zinc-300 font-mono">
-                      {(import.meta.env.VITE_MENU_APP_URL || "http://localhost:5174").replace(/\/$/, "")}/{slug || store?.slug || store?.id}
+                      {(import.meta.env.VITE_CUSTOMER_APP_URL || import.meta.env.VITE_MENU_APP_URL || "https://menu.scanmyorder.com").replace(/\/$/, "")}/{slug || store?.slug || store?.id}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -637,7 +637,7 @@ export default function StoreSetupPage() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        const url = `${(import.meta.env.VITE_MENU_APP_URL || "http://localhost:5174").replace(/\/$/, "")}/${slug || store?.slug || store?.id}`
+                        const url = `${(import.meta.env.VITE_CUSTOMER_APP_URL || import.meta.env.VITE_MENU_APP_URL || "https://menu.scanmyorder.com").replace(/\/$/, "")}/${slug || store?.slug || store?.id}`
                         navigator.clipboard.writeText(url)
                         setCopiedMenuLink(true)
                         setTimeout(() => setCopiedMenuLink(false), 2000)
@@ -648,7 +648,7 @@ export default function StoreSetupPage() {
                       <span>{copiedMenuLink ? "Copied!" : "Copy Link"}</span>
                     </Button>
                     <a
-                      href={`${(import.meta.env.VITE_MENU_APP_URL || "http://localhost:5174").replace(/\/$/, "")}/${slug || store?.slug || store?.id}`}
+                      href={`${(import.meta.env.VITE_CUSTOMER_APP_URL || import.meta.env.VITE_MENU_APP_URL || "https://menu.scanmyorder.com").replace(/\/$/, "")}/${slug || store?.slug || store?.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
                     >

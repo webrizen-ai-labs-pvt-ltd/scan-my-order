@@ -5,9 +5,29 @@ const {
   verifyAuthenticationResponse,
 } = require("@simplewebauthn/server");
 
-const RP_ID = process.env.RP_ID || "localhost";
+const RP_ID = process.env.RP_ID || (process.env.NODE_ENV === "production" ? "scanmyorder.com" : "localhost");
 const RP_NAME = process.env.RP_NAME || "Scan My Order";
-const ORIGIN = process.env.ORIGIN || "http://localhost:5173";
+const ORIGIN = process.env.ORIGIN || "https://admin.scanmyorder.com";
+
+function getAllowedOrigins() {
+  const envOrigins = [
+    ORIGIN,
+    process.env.ADMIN_APP_URL,
+    process.env.MENU_APP_URL,
+    process.env.OPERATIONS_APP_URL,
+    process.env.MARKETING_APP_URL,
+    "https://admin.scanmyorder.com",
+    "https://operations.scanmyorder.com",
+    "https://menu.scanmyorder.com",
+    "https://scanmyorder.com",
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://localhost:5176",
+    "http://localhost:8000",
+  ];
+  return Array.from(new Set(envOrigins.filter(Boolean)));
+}
 
 // Memory cache for user challenge options during WebAuthn flow
 const challengeStore = new Map();
@@ -42,20 +62,10 @@ async function verifyPasskeyRegistration(userOrUserId, response, expectedChallen
     throw new Error("Challenge expired or not found");
   }
 
-  const allowedOrigins = [
-    ORIGIN,
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:5175",
-    "http://localhost:5176",
-    "http://localhost:8000",
-    "http://127.0.0.1:5173",
-  ];
-
   const verification = await verifyRegistrationResponse({
     response,
     expectedChallenge,
-    expectedOrigin: allowedOrigins,
+    expectedOrigin: getAllowedOrigins(),
     expectedRPID: RP_ID,
   });
 
@@ -90,20 +100,10 @@ async function verifyPasskeyAuthentication(response, passkey, challengeKey) {
     throw new Error("Challenge expired or not found");
   }
 
-  const allowedOrigins = [
-    ORIGIN,
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "http://localhost:5175",
-    "http://localhost:5176",
-    "http://localhost:8000",
-    "http://127.0.0.1:5173",
-  ];
-
   const verification = await verifyAuthenticationResponse({
     response,
     expectedChallenge,
-    expectedOrigin: allowedOrigins,
+    expectedOrigin: getAllowedOrigins(),
     expectedRPID: RP_ID,
     credential: {
       id: passkey.credentialId,
