@@ -28,12 +28,26 @@ async function request(endpoint, options = {}) {
   }
 }
 
+export async function createPosOrderApi(token, orderData) {
+  return request(`/orders`, {
+    method: "POST",
+    token,
+    body: JSON.stringify(orderData),
+  })
+}
+
 export async function fetchStoreOrdersApi(token, storeId, query = {}) {
   const params = new URLSearchParams()
   if (query.status) params.append("status", query.status)
   if (query.paymentType) params.append("paymentType", query.paymentType)
+  if (query.orderType) params.append("orderType", query.orderType)
+  if (query.search) params.append("search", query.search)
   const queryString = params.toString() ? `?${params.toString()}` : ""
   return request(`/orders/store/${storeId}${queryString}`, { token })
+}
+
+export async function fetchOrderAnalyticsApi(token, storeId) {
+  return request(`/orders/store/${storeId}/analytics`, { token })
 }
 
 export async function verifyPostpaidOrderApi(token, orderId) {
@@ -48,5 +62,20 @@ export async function updateOrderStatusApi(token, orderId, payload) {
     method: "PATCH",
     token,
     body: JSON.stringify(payload),
+  })
+}
+
+export async function cancelOrderApi(token, orderId, reason) {
+  return request(`/orders/${orderId}/cancel`, {
+    method: "POST",
+    token,
+    body: JSON.stringify({ reason }),
+  })
+}
+
+export async function requestTableServiceApi(storeId, payload) {
+  return request(`/orders/call-waiter`, {
+    method: "POST",
+    body: JSON.stringify({ storeId, ...payload }),
   })
 }

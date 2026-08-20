@@ -58,6 +58,21 @@ export async function createOrderApi(orderData) {
   }
 }
 
+export async function requestTableServiceApi(serviceData) {
+  const primaryUrl = `${API_BASE_URL}/orders/call-waiter`
+  try {
+    const res = await fetch(primaryUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(serviceData),
+    })
+    return await res.json()
+  } catch (err) {
+    console.error("Failed to request table service:", err)
+    return { success: false }
+  }
+}
+
 export async function fetchOrderStatusApi(orderId) {
   return request(`/orders/${encodeURIComponent(orderId)}`)
 }

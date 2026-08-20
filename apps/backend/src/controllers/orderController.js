@@ -1,4 +1,9 @@
 const prisma = require("../config/prisma.js")
+const {
+  broadcastNewOrder,
+  broadcastOrderUpdate,
+  broadcastTableServiceRequest,
+} = require("../sockets/orderSocketManager.js")
 
 // Generate clean readable order number e.g. ORD-8472
 function generateOrderNumber() {
@@ -76,21 +81,16 @@ async function createOrder(req, res) {
     let tax = 0
     if (taxValueType === "PERCENTAGE") {
       if (taxType === "BACKWARD") {
-        // Tax is already included in item subtotal
         tax = Math.round((subtotal - subtotal / (1 + storeTaxValue / 100)) * 100) / 100
       } else {
-        // Forward Tax added on top of subtotal
         tax = Math.round((subtotal * (storeTaxValue / 100)) * 100) / 100
       }
     } else {
-      // Fixed Tax amount
       tax = Math.round(storeTaxValue * 100) / 100
     }
 
-    // Dynamic Service / Packaging Fee configured by store
     const serviceFee = subtotal > 0 ? parseFloat(store.serviceFee) || 0 : 0
 
-    // Coupon & Manual Discount Calculation
     let calculatedDiscount = parseFloat(discount) || 0
     if (appliedCouponCode && store.couponCode && appliedCouponCode.trim().toUpperCase() === store.couponCode.trim().toUpperCase()) {
       const couponValue = parseFloat(store.couponValue) || 0
@@ -102,9 +102,6 @@ async function createOrder(req, res) {
     }
 
     const numericDiscount = Math.min(subtotal, Math.max(0, calculatedDiscount))
-
-    // Total Amount Computation
-    // If BACKWARD tax (inclusive), subtotal already includes tax. If FORWARD tax (exclusive), tax is added.
     const basePayable = taxType === "BACKWARD" ? subtotal : subtotal + tax
     const totalAmount = Math.max(0, Math.round((basePayable + serviceFee - numericDiscount) * 100) / 100)
 
@@ -154,6 +151,9 @@ async function createOrder(req, res) {
       },
     })
 
+    // REAL-TIME WEBSOCKET BROADCAST TO KITCHEN / WAITER DASHBOARDS
+    broadcastNewOrder(storeId, order)
+
     return res.status(201).json({
       success: true,
       message: isPrepaid
@@ -178,7 +178,7 @@ async function createOrder(req, res) {
 async function getStoreOrders(req, res) {
   try {
     const { storeId } = req.params
-    const { status, paymentType } = req.query
+    const { status, paymentType, orderType, search } = req.query
 
     if (!storeId) {
       return res.status(400).json({ success: false, message: "Store ID is required." })
@@ -190,6 +190,19 @@ async function getStoreOrders(req, res) {
     }
     if (paymentType && paymentType !== "ALL") {
       where.paymentType = paymentType
+    }
+    if (orderType && orderType !== "ALL") {
+      where.orderType = orderType
+    }
+
+    if (search && String(search).trim() !== "") {
+      const q = String(search).trim()
+      where.OR = [
+        { orderNumber: { contains: q, mode: "insensitive" } },
+        { customerName: { contains: q, mode: "insensitive" } },
+        { customerPhone: { contains: q, mode: "insensitive" } },
+        { tableNumber: { contains: q, mode: "insensitive" } },
+      ]
     }
 
     const orders = await prisma.order.findMany({
@@ -246,6 +259,9 @@ async function verifyPostpaidOrder(req, res) {
       },
     })
 
+    // REAL-TIME WEBSOCKET BROADCAST
+    broadcastOrderUpdate(updated.storeId, updated.id, updated)
+
     return res.status(200).json({
       success: true,
       message: "Postpaid order verified by waiter and dispatched to kitchen!",
@@ -294,6 +310,9 @@ async function updateOrderStatus(req, res) {
       },
     })
 
+    // REAL-TIME WEBSOCKET BROADCAST TO STAFF & CUSTOMER
+    broadcastOrderUpdate(updated.storeId, updated.id, updated)
+
     return res.status(200).json({
       success: true,
       message: `Order status updated to ${updated.orderStatus}!`,
@@ -304,6 +323,140 @@ async function updateOrderStatus(req, res) {
     return res.status(500).json({
       success: false,
       message: "Failed to update order status.",
+      error: error.message,
+    })
+  }
+}
+
+/**
+ * Cancel Order (Staff / Waiter / Kitchen)
+ * POST /api/orders/:id/cancel
+ */
+async function cancelOrder(req, res) {
+  try {
+    const { id } = req.params
+    const { reason = "Cancelled by staff" } = req.body
+
+    const existing = await prisma.order.findUnique({ where: { id } })
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Order not found." })
+    }
+
+    const updated = await prisma.order.update({
+      where: { id },
+      data: {
+        orderStatus: "CANCELLED",
+        notes: existing.notes ? `${existing.notes} | Cancellation Reason: ${reason}` : `Cancellation Reason: ${reason}`,
+      },
+      include: {
+        items: true,
+      },
+    })
+
+    // REAL-TIME WEBSOCKET BROADCAST
+    broadcastOrderUpdate(updated.storeId, updated.id, updated)
+
+    return res.status(200).json({
+      success: true,
+      message: "Order cancelled successfully.",
+      data: updated,
+    })
+  } catch (error) {
+    console.error("Cancel Order Error:", error)
+    return res.status(500).json({
+      success: false,
+      message: "Failed to cancel order.",
+      error: error.message,
+    })
+  }
+}
+
+/**
+ * Request Table Service ("Call Waiter", "Request Bill", "Need Water", "Clear Table")
+ * POST /api/orders/call-waiter
+ */
+async function requestTableService(req, res) {
+  try {
+    const { storeId, tableNumber, serviceType = "WAITER", notes } = req.body
+
+    if (!storeId || !tableNumber) {
+      return res.status(400).json({ success: false, message: "Store ID and Table Number are required." })
+    }
+
+    const payload = {
+      tableNumber: String(tableNumber).trim(),
+      serviceType: String(serviceType).toUpperCase(),
+      notes: notes ? String(notes).trim() : null,
+      requestedAt: new Date().toISOString(),
+    }
+
+    // Broadcast table alert in real-time to waiter/staff dashboards
+    broadcastTableServiceRequest(storeId, payload)
+
+    return res.status(200).json({
+      success: true,
+      message: `Table ${tableNumber} ${serviceType} request dispatched to staff!`,
+      data: payload,
+    })
+  } catch (error) {
+    console.error("Table Service Request Error:", error)
+    return res.status(500).json({
+      success: false,
+      message: "Failed to request table service.",
+      error: error.message,
+    })
+  }
+}
+
+/**
+ * Fetch Store Order Analytics / Metrics
+ * GET /api/orders/store/:storeId/analytics
+ */
+async function getStoreOrderAnalytics(req, res) {
+  try {
+    const { storeId } = req.params
+
+    if (!storeId) {
+      return res.status(400).json({ success: false, message: "Store ID is required." })
+    }
+
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+
+    const [
+      pendingCount,
+      preparingCount,
+      readyCount,
+      completedTodayCount,
+      revenueResult,
+    ] = await Promise.all([
+      prisma.order.count({ where: { storeId, orderStatus: "PENDING_VERIFICATION" } }),
+      prisma.order.count({ where: { storeId, orderStatus: "PREPARING" } }),
+      prisma.order.count({ where: { storeId, orderStatus: "READY" } }),
+      prisma.order.count({ where: { storeId, orderStatus: "COMPLETED", createdAt: { gte: todayStart } } }),
+      prisma.order.aggregate({
+        where: { storeId, paymentStatus: "PAID", createdAt: { gte: todayStart } },
+        _sum: { totalAmount: true },
+      }),
+    ])
+
+    const totalRevenueToday = parseFloat(revenueResult._sum.totalAmount || 0)
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        pendingVerification: pendingCount,
+        preparing: preparingCount,
+        ready: readyCount,
+        completedToday: completedTodayCount,
+        totalRevenueToday,
+      },
+    })
+  } catch (error) {
+    console.error("Get Order Analytics Error:", error)
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch order analytics.",
       error: error.message,
     })
   }
@@ -357,5 +510,8 @@ module.exports = {
   getStoreOrders,
   verifyPostpaidOrder,
   updateOrderStatus,
+  cancelOrder,
+  requestTableService,
+  getStoreOrderAnalytics,
   getOrderById,
 }

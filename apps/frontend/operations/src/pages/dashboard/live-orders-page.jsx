@@ -32,6 +32,12 @@ import {
   Users,
   Search,
   Filter,
+  Volume2,
+  VolumeX,
+  Bell,
+  Radio,
+  Printer,
+  Ban,
 } from "lucide-react"
 import { useAuth } from "../../context/auth-context.jsx"
 import { fetchMyStoreApi } from "../../services/store-api.js"
@@ -39,10 +45,12 @@ import {
   fetchStoreOrdersApi,
   verifyPostpaidOrderApi,
   updateOrderStatusApi,
+  cancelOrderApi,
 } from "../../services/order-api.js"
+import { useOrderSocket } from "../../hooks/useOrderSocket.js"
 
 export default function LiveOrdersPage() {
-  const { token, user } = useAuth()
+  const { token } = useAuth()
 
   const [store, setStore] = useState(null)
   const [isStoreLoading, setIsStoreLoading] = useState(true)
@@ -52,10 +60,15 @@ export default function LiveOrdersPage() {
   const [actionMsg, setActionMsg] = useState({ text: "", error: false })
 
   // Filters
-  const [statusFilter, setStatusFilter] = useState("ALL") // 'ALL', 'PENDING_VERIFICATION', 'ACCEPTED', 'PREPARING', 'READY', 'SERVED', 'COMPLETED'
+  const [statusFilter, setStatusFilter] = useState("ALL")
   const [paymentTypeFilter, setPaymentTypeFilter] = useState("ALL")
   const [searchQuery, setSearchQuery] = useState("")
   const [actionLoadingId, setActionLoadingId] = useState(null)
+
+  // Cancel Modal State
+  const [cancelModalOrder, setCancelModalOrder] = useState(null)
+  const [cancelReason, setCancelReason] = useState("Out of stock item")
+  const [tableAlerts, setTableAlerts] = useState([])
 
   // 1. Fetch Store
   useEffect(() => {
@@ -97,14 +110,37 @@ export default function LiveOrdersPage() {
     loadOrders()
   }, [loadOrders])
 
-  // Auto-refresh orders every 8 seconds
-  useEffect(() => {
-    if (!token || !store?.id) return
-    const interval = setInterval(() => {
-      loadOrders()
-    }, 8000)
-    return () => clearInterval(interval)
-  }, [token, store?.id, loadOrders])
+  // WebSocket Handlers for Real-Time Instant Updates
+  const handleSocketOrderCreated = useCallback((newOrder) => {
+    setOrders((prev) => {
+      const exists = prev.some((o) => o.id === newOrder.id)
+      if (exists) return prev
+      return [newOrder, ...prev]
+    })
+    setActionMsg({
+      text: `⚡ New Order #${newOrder.orderNumber} received at Table #${newOrder.tableNumber}!`,
+      error: false,
+    })
+  }, [])
+
+  const handleSocketOrderUpdated = useCallback((updatedOrder) => {
+    setOrders((prev) =>
+      prev.map((o) => (o.id === updatedOrder.id ? updatedOrder : o))
+    )
+  }, [])
+
+  const handleSocketTableService = useCallback((serviceData) => {
+    setTableAlerts((prev) => [
+      { id: Date.now(), ...serviceData },
+      ...prev.slice(0, 4),
+    ])
+  }, [])
+
+  const { isConnected, soundEnabled, toggleSound } = useOrderSocket(store?.id, {
+    onOrderCreated: handleSocketOrderCreated,
+    onOrderUpdated: handleSocketOrderUpdated,
+    onTableServiceRequested: handleSocketTableService,
+  })
 
   // Waiter Manual Verification Action for Postpaid Cash Orders
   const handleVerifyPostpaidOrder = async (orderId, orderNumber) => {
@@ -153,6 +189,30 @@ export default function LiveOrdersPage() {
     }
   }
 
+  // Cancel Order Action
+  const handleConfirmCancelOrder = async () => {
+    if (!cancelModalOrder) return
+    setActionLoadingId(cancelModalOrder.id)
+    setActionMsg({ text: "", error: false })
+
+    try {
+      await cancelOrderApi(token, cancelModalOrder.id, cancelReason)
+      setActionMsg({
+        text: `Order #${cancelModalOrder.orderNumber} cancelled. Reason: ${cancelReason}`,
+        error: false,
+      })
+      setCancelModalOrder(null)
+      loadOrders()
+    } catch (err) {
+      setActionMsg({
+        text: err instanceof Error ? err.message : "Failed to cancel order.",
+        error: true,
+      })
+    } finally {
+      setActionLoadingId(null)
+    }
+  }
+
   const filteredOrders = orders.filter((o) => {
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase()
@@ -194,8 +254,17 @@ export default function LiveOrdersPage() {
       {/* Header */}
       <div className="border-b border-zinc-800 pb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3 mb-1">
+          <div className="flex flex-wrap items-center gap-3 mb-1">
             <h1 className="text-2xl font-bold text-white tracking-tight">Live Customer Orders</h1>
+            {isConnected ? (
+              <Badge className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-xs gap-1.5 py-1 px-2.5">
+                <Radio className="h-3 w-3 animate-pulse text-emerald-400" /> WebSockets Live
+              </Badge>
+            ) : (
+              <Badge className="bg-amber-500/10 text-amber-400 border border-amber-500/30 text-xs gap-1.5 py-1 px-2.5">
+                <RefreshCw className="h-3 w-3 animate-spin text-amber-400" /> Connecting Sockets...
+              </Badge>
+            )}
             {pendingVerificationCount > 0 && (
               <Badge className="bg-amber-500/20 text-amber-400 border border-amber-500/40 font-mono text-xs animate-pulse">
                 {pendingVerificationCount} Waiter Verification Required
@@ -203,19 +272,63 @@ export default function LiveOrdersPage() {
             )}
           </div>
           <p className="text-sm text-zinc-400">
-            Real-time dining table orders, waiter manual verification for postpaid cash orders, and kitchen display.
+            Real-time dining table orders, instant kitchen dispatch, and waiter service request stream.
           </p>
         </div>
 
-        <Button
-          onClick={loadOrders}
-          disabled={isOrdersLoading}
-          variant="outline"
-          className="border-zinc-800 text-zinc-300 hover:bg-zinc-800 text-xs gap-2"
-        >
-          <RefreshCw className={`h-3.5 w-3.5 ${isOrdersLoading ? "animate-spin" : ""}`} /> Refresh Orders
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={toggleSound}
+            className={`text-xs gap-1.5 border-zinc-800 ${
+              soundEnabled ? "text-emerald-400 bg-emerald-500/10 border-emerald-500/30" : "text-zinc-500 hover:text-zinc-300"
+            }`}
+          >
+            {soundEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+            <span>{soundEnabled ? "Audio Alert On" : "Audio Muted"}</span>
+          </Button>
+
+          <Button
+            onClick={loadOrders}
+            disabled={isOrdersLoading}
+            variant="outline"
+            className="border-zinc-800 text-zinc-300 hover:bg-zinc-800 text-xs gap-2"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isOrdersLoading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
       </div>
+
+      {/* Real-time Table Service Alerts Banner */}
+      {tableAlerts.length > 0 && (
+        <div className="space-y-2">
+          {tableAlerts.map((alert) => (
+            <div
+              key={alert.id}
+              className="p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200 flex items-center justify-between gap-3 text-xs animate-bounce"
+            >
+              <div className="flex items-center gap-2">
+                <Bell className="h-4 w-4 text-amber-400 animate-spin" />
+                <span className="font-bold">Table #{alert.tableNumber} Requested:</span>
+                <Badge className="bg-amber-400 text-zinc-950 font-bold uppercase text-[10px]">
+                  {alert.serviceType || "WAITER ASSISTANCE"}
+                </Badge>
+                {alert.notes && <span className="text-zinc-300 italic">"{alert.notes}"</span>}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setTableAlerts((prev) => prev.filter((a) => a.id !== alert.id))}
+                className="h-7 w-7 p-0 text-amber-400 hover:bg-amber-500/20"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {actionMsg.text && (
         <div
@@ -306,9 +419,9 @@ export default function LiveOrdersPage() {
             return (
               <Card
                 key={order.id}
-                className={`bg-zinc-900 text-zinc-100 flex flex-col justify-between transition-colors ${
+                className={`bg-zinc-900 text-zinc-100 flex flex-col justify-between transition-all ${
                   isPendingVerification
-                    ? "border-2 border-amber-500/60 bg-gradient-to-b from-amber-950/20 to-zinc-900"
+                    ? "border-2 border-amber-500/60 bg-gradient-to-b from-amber-950/20 to-zinc-900 shadow-lg shadow-amber-500/5"
                     : "border-zinc-800"
                 }`}
               >
@@ -409,7 +522,7 @@ export default function LiveOrdersPage() {
                 </CardContent>
 
                 {/* Card Action Footer */}
-                <CardFooter className="p-4 border-t border-zinc-800/60 pt-3">
+                <CardFooter className="p-4 border-t border-zinc-800/60 pt-3 flex-col gap-2">
                   {isPendingVerification ? (
                     <div className="flex items-center gap-2 w-full">
                       <Button
@@ -430,27 +543,37 @@ export default function LiveOrdersPage() {
                         type="button"
                         variant="outline"
                         disabled={actionLoadingId === order.id}
-                        onClick={() => handleUpdateStatus(order.id, "CANCELLED")}
+                        onClick={() => setCancelModalOrder(order)}
                         className="text-xs border-zinc-800 text-red-400 hover:bg-red-500/10"
                       >
                         Reject
                       </Button>
                     </div>
                   ) : order.orderStatus === "ACCEPTED" ? (
-                    <Button
-                      type="button"
-                      disabled={actionLoadingId === order.id}
-                      onClick={() => handleUpdateStatus(order.id, "PREPARING")}
-                      className="w-full bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs gap-1.5"
-                    >
-                      {actionLoadingId === order.id ? (
-                        <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <>
-                          <ChefHat className="h-3.5 w-3.5" /> Start Preparing 🍳
-                        </>
-                      )}
-                    </Button>
+                    <div className="flex items-center gap-2 w-full">
+                      <Button
+                        type="button"
+                        disabled={actionLoadingId === order.id}
+                        onClick={() => handleUpdateStatus(order.id, "PREPARING")}
+                        className="flex-1 bg-white hover:bg-zinc-200 text-zinc-950 font-bold text-xs gap-1.5"
+                      >
+                        {actionLoadingId === order.id ? (
+                          <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <>
+                            <ChefHat className="h-3.5 w-3.5" /> Start Preparing 🍳
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={() => setCancelModalOrder(order)}
+                        className="text-xs text-zinc-500 hover:text-red-400"
+                      >
+                        <Ban className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
                   ) : order.orderStatus === "PREPARING" ? (
                     <Button
                       type="button"
@@ -506,6 +629,58 @@ export default function LiveOrdersPage() {
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {/* Cancel Order Modal */}
+      {cancelModalOrder && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 space-y-4 text-zinc-100">
+            <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <Ban className="h-4 w-4 text-red-400" /> Cancel Order #{cancelModalOrder.orderNumber}
+              </h3>
+              <button onClick={() => setCancelModalOrder(null)} className="text-zinc-500 hover:text-white">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-400">
+              Please select or enter a reason for cancelling this order at Table #{cancelModalOrder.tableNumber}:
+            </p>
+
+            <div className="space-y-2">
+              {["Out of stock item", "Customer changed mind", "Order mistake by waiter", "Kitchen overload"].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setCancelReason(r)}
+                  className={`w-full text-left p-2.5 rounded-lg border text-xs font-medium transition-colors ${
+                    cancelReason === r
+                      ? "bg-red-500/20 border-red-500/50 text-red-300"
+                      : "bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200"
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-zinc-800">
+              <Button type="button" variant="outline" size="sm" onClick={() => setCancelModalOrder(null)} className="text-xs border-zinc-800 text-zinc-400">
+                Back
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleConfirmCancelOrder}
+                disabled={actionLoadingId === cancelModalOrder.id}
+                className="bg-red-500 hover:bg-red-400 text-white font-bold text-xs gap-1.5"
+              >
+                {actionLoadingId === cancelModalOrder.id ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : "Confirm Cancel"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

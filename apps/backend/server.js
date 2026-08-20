@@ -112,8 +112,14 @@ app.use((err, req, res, next) => {
   return errorResponse(res, err.message || "Internal server error", 500);
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Scan My Order Backend Server running on port ${PORT}`);
+const http = require("http");
+const { initOrderSockets } = require("./src/sockets/orderSocketManager.js");
+
+const server = http.createServer(app);
+initOrderSockets(server);
+
+server.listen(PORT, () => {
+  console.log(`🚀 Scan My Order Backend Server & Real-Time WebSockets running on port ${PORT}`);
 });
 
 module.exports = app;
