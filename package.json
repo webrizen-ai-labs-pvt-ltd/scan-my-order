@@ -1,28 +1,18 @@
 {
-  "name": "scan-my-order",
+  "name": "smo",
   "private": true,
-  "version": "1.0.0",
-  "description": "Scan My Order - Monorepo Architecture",
-  "packageManager": "npm@11.7.0",
+  "packageManager": "npm@11.6.2",
   "workspaces": [
-    "apps/backend",
+    "apps/*",
     "apps/frontend/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo build",
     "dev": "turbo dev",
-    "lint": "turbo lint"
+    "build": "turbo build",
+    "start": "npm --workspace @smo/backend start"
   },
   "devDependencies": {
-    "turbo": "^2.4.4"
-  },
-  "optionalDependencies": {
-    "@rolldown/binding-linux-x64-gnu": "^1.2.5",
-    "@rolldown/binding-linux-x64-musl": "^1.2.5",
-    "@tailwindcss/oxide-linux-x64-gnu": "^4.3.3",
-    "@tailwindcss/oxide-linux-x64-musl": "^4.3.3",
-    "lightningcss-linux-x64-gnu": "^1.33.0",
-    "lightningcss-linux-x64-musl": "^1.33.0"
+    "turbo": "^2.10.11"
   }
 }

@@ -1,19 +1,19 @@
-import React from "react"
-import { BrowserRouter, Routes, Route } from "react-router-dom"
-import HomePage from "./pages/home-page.jsx"
-import StoreMenuPage from "./pages/store-menu-page.jsx"
-import CustomerAuthPage from "./pages/customer-auth-page.jsx"
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { HomePage } from './pages/home-page';
+import { BrandPage } from './pages/brand-page';
+import { StoreMenuPage } from './pages/store-menu-page';
 
-export default function App() {
+function App() {
   return (
-    <BrowserRouter>
+    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 font-sans text-zinc-900 dark:text-zinc-100">
       <Routes>
         <Route path="/" element={<HomePage />} />
-
-        <Route path="/auth" element={<CustomerAuthPage />} />
-
-        <Route path="/:slug" element={<StoreMenuPage />} />
+        <Route path="/:brandSlug" element={<BrandPage />} />
+        <Route path="/:brandSlug/:storeSlug" element={<StoreMenuPage />} />
       </Routes>
-    </BrowserRouter>
-  )
+    </div>
+  );
 }
+
+export default App;

@@ -1,52 +1,66 @@
-const { verifyToken } = require("../utils/jwt.js");
-const { errorResponse } = require("../utils/response.js");
-const prisma = require("../config/prisma.js");
+const { getPrismaClient } = require("../lib/prisma");
+const { verifyJwt } = require("../lib/jwt");
+const { userStatuses } = require("../constants/roles");
+const { createHttpError } = require("./error-handler");
 
-async function authenticateToken(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+function readBearerToken(req) {
+  const header = req.headers.authorization || "";
 
-  if (!token) {
-    return errorResponse(res, "Access token is required", 401);
+  if (header.startsWith("Bearer ")) {
+    return header.slice("Bearer ".length).trim();
   }
 
-  const decoded = verifyToken(token);
-  if (!decoded || !decoded.userId) {
-    return errorResponse(res, "Invalid or expired access token", 401);
+  if (req.query && req.query.token) {
+    return req.query.token;
   }
 
+  return undefined;
+}
+
+async function authenticate(req, _res, next) {
   try {
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        role: true,
-        status: true,
-        ownerId: true,
-        storeId: true,
-        avatar: true,
-        deletedAt: true,
-      },
-    });
+    const token = readBearerToken(req);
 
-    if (!user || user.deletedAt) {
-      return errorResponse(res, "User account not found or has been deactivated", 401);
+    if (!token) {
+      throw createHttpError(401, "Missing bearer token");
     }
 
-    if (user.status !== "ACTIVE") {
-      return errorResponse(res, `Account is ${user.status.toLowerCase()}`, 403);
+    const payload = verifyJwt(token);
+    const user = await getPrismaClient().user.findUnique({
+      where: {
+        id: payload.sub
+      },
+      include: {
+        tenant: true,
+        store: true
+      }
+    });
+
+    if (!user || user.status !== userStatuses.active) {
+      throw createHttpError(401, "Invalid or inactive user");
     }
 
     req.user = user;
+    req.auth = payload;
     next();
-  } catch (err) {
-    console.error("Auth middleware error:", err);
-    return errorResponse(res, "Internal authentication error", 500);
+  } catch (error) {
+    next(error.statusCode ? error : createHttpError(401, "Invalid bearer token"));
   }
 }
 
+function authorizeRoles(...roles) {
+  return (req, _res, next) => {
+    if (!req.user || !roles.includes(req.user.role)) {
+      next(createHttpError(403, "You do not have permission for this action"));
+      return;
+    }
+
+    next();
+  };
+}
+
 module.exports = {
-  authenticateToken,
+  authenticate,
+  authorizeRoles,
+  readBearerToken
 };

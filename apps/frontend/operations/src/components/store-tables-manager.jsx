@@ -1,0 +1,249 @@
+import React, { useEffect, useState, useRef } from 'react';
+import api from '../lib/api';
+import { QRCodeSVG } from 'qrcode.react';
+import { jsPDF } from 'jspdf';
+import { Card, CardContent, Button, Input, Skeleton } from '@smo/ui';
+import { QrCodeIcon, Download01Icon, PlusSignIcon, Delete02Icon, AlertCircleIcon, DocumentCodeIcon, Loading03Icon } from 'hugeicons-react';
+
+export const StoreTablesManager = ({ storeId, storeSlug }) => {
+  const [tables, setTables] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [newTableNumber, setNewTableNumber] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
+
+  const fetchTables = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get(`/stores/${storeId}/tables`);
+      if (res.data.success) {
+        setTables(res.data.data);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load tables');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTables();
+  }, [storeId]);
+
+  const handleAddTable = async (e) => {
+    e.preventDefault();
+    if (!newTableNumber) return;
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      await api.post(`/stores/${storeId}/tables`, { tableNumber: parseInt(newTableNumber) });
+      setNewTableNumber('');
+      fetchTables();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to add table');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (tableId) => {
+    if (!window.confirm("Are you sure you want to delete this table?")) return;
+    try {
+      await api.delete(`/stores/${storeId}/tables/${tableId}`);
+      fetchTables();
+    } catch (err) {
+      setError('Failed to delete table');
+    }
+  };
+
+  const getQRUrl = (tableNumber) => {
+    const domain = window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://order.scanmyorder.com';
+    return `${domain}/${storeSlug}?table=${tableNumber}`;
+  };
+
+  const getCanvasForTable = (tableNumber) => {
+    return new Promise((resolve) => {
+      const svg = document.getElementById(`qr-${tableNumber}`);
+      if (!svg) return resolve(null);
+      const svgData = new XMLSerializer().serializeToString(svg);
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      const img = new Image();
+
+      img.onload = () => {
+        canvas.width = img.width + 80;
+        canvas.height = img.height + 140;
+        ctx.fillStyle = "white";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.fillStyle = "black";
+        ctx.font = "bold 24px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText(`Scan to Order`, canvas.width / 2, 40);
+        ctx.font = "bold 28px Arial";
+        ctx.fillText(`Table ${tableNumber}`, canvas.width / 2, 80);
+
+        ctx.drawImage(img, 40, 100);
+        resolve(canvas.toDataURL("image/png"));
+      };
+
+      img.src = `data:image/svg+xml;base64,${btoa(svgData)}`;
+    });
+  };
+
+  const downloadAllQRsAsPDF = async () => {
+    setIsGeneratingPDF(true);
+    try {
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageWidth = pdf.internal.pageSize.getWidth();
+
+      const qrWidth = 80; // mm
+      const qrHeight = 100; // mm
+      const cols = 2;
+      const margin = (pageWidth - (qrWidth * cols)) / (cols + 1); // evenly space columns
+      const topMargin = 20;
+
+      let x = margin;
+      let y = topMargin;
+      let qrsOnPage = 0;
+
+      for (let i = 0; i < tables.length; i++) {
+        const table = tables[i];
+        const dataUrl = await getCanvasForTable(table.tableNumber);
+
+        if (dataUrl) {
+          pdf.addImage(dataUrl, 'PNG', x, y, qrWidth, qrHeight);
+          qrsOnPage++;
+
+          if (qrsOnPage % 2 === 0) {
+            // Move to next row
+            x = margin;
+            y += qrHeight + 10;
+          } else {
+            // Move to next column
+            x += qrWidth + margin;
+          }
+
+          // Max 4 QRs per A4 page
+          if (qrsOnPage === 4 && i < tables.length - 1) {
+            pdf.addPage();
+            qrsOnPage = 0;
+            x = margin;
+            y = topMargin;
+          }
+        }
+      }
+
+      pdf.save(`${storeSlug}-table-qrs.pdf`);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to generate PDF");
+    } finally {
+      setIsGeneratingPDF(false);
+    }
+  };
+
+  const downloadQR = async (tableNumber) => {
+    const pngFile = await getCanvasForTable(tableNumber);
+    if (!pngFile) return;
+    const downloadLink = document.createElement("a");
+    downloadLink.download = `table-${tableNumber}-qr.png`;
+    downloadLink.href = pngFile;
+    downloadLink.click();
+  };
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">
+        <div>
+          <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Tables & QR Codes</h3>
+          <p className="text-sm text-zinc-500">Manage your tables and print QR codes for dine-in ordering.</p>
+        </div>
+
+        <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+          {tables.length > 0 && (
+            <Button variant="link" onClick={downloadAllQRsAsPDF} disabled={isGeneratingPDF}>
+              {isGeneratingPDF ? (
+                <><Loading03Icon size={16} className="animate-spin" /> Generating PDF...</>
+              ) : (
+                <><DocumentCodeIcon size={16} /> Bulk Export PDF</>
+              )}
+            </Button>
+          )}
+          <form onSubmit={handleAddTable} className="flex items-center gap-2">
+            <Input
+              type="number"
+              min="1"
+              placeholder="Table No."
+              value={newTableNumber}
+              onChange={(e) => setNewTableNumber(e.target.value)}
+              className="w-24 rounded-l-3xl rounded-r-none h-9"
+              required
+            />
+            <Button type="submit" disabled={isSubmitting} className="rounded-l-none">
+              <PlusSignIcon size={16} /> Add
+            </Button>
+          </form>
+        </div>
+      </div>
+
+      {error && (
+        <div className="flex items-center gap-2 p-3 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 rounded-md">
+          <AlertCircleIcon size={16} />
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-64 rounded-xl" />)}
+        </div>
+      ) : tables.length === 0 ? (
+        <div className="text-center py-12 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl">
+          <QrCodeIcon size={48} className="mx-auto text-zinc-300 dark:text-zinc-600 mb-4" />
+          <h4 className="text-lg font-medium text-zinc-900 dark:text-zinc-100">No tables yet</h4>
+          <p className="text-sm text-zinc-500">Add a table number above to generate your first QR code.</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {tables.map(table => (
+            <Card key={table.id} className="border-zinc-200 dark:border-zinc-800 text-center flex flex-col group">
+              <CardContent className="p-6 flex-1 flex flex-col items-center justify-between gap-4">
+                <div className="w-full flex justify-between items-center">
+                  <h4 className="font-bold text-lg text-zinc-900 dark:text-zinc-100">Table {table.tableNumber}</h4>
+                  <button
+                    onClick={() => handleDelete(table.id)}
+                    className="text-zinc-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Delete02Icon size={18} />
+                  </button>
+                </div>
+
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-zinc-100 mx-auto">
+                  <QRCodeSVG
+                    id={`qr-${table.tableNumber}`}
+                    value={getQRUrl(table.tableNumber)}
+                    size={140}
+                    level="H"
+                    includeMargin={false}
+                  />
+                </div>
+
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="w-full mt-2"
+                  onClick={() => downloadQR(table.tableNumber)}
+                > Download QR
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};

@@ -8,26 +8,34 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-enum Role {
-  ADMIN
-  OWNER
-  MANAGER
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum StoreStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  TENANT_ADMIN
+  STORE_MANAGER
   WAITER
-  KITCHEN
+  CASHIER
+  KITCHEN_STAFF
   CUSTOMER
 }
 
-enum Status {
+enum UserStatus {
   ACTIVE
-  INACTIVE
+  INVITED
   SUSPENDED
-}
-
-enum DietaryType {
-  VEG
-  NON_VEG
-  EGG
-  VEGAN
+  DISABLED
+  DELETED
 }
 
 enum PlanInterval {
@@ -37,226 +45,443 @@ enum PlanInterval {
 
 enum SubscriptionStatus {
   ACTIVE
-  EXPIRED
-  CANCELLED
-  PENDING
+  PAST_DUE
+  CANCELED
+  TRIALING
 }
 
-model User {
-  id                 String    @id @default(uuid())
-  email              String    @unique
-  password           String?
-  name               String
-  avatar             String?
-  role               Role      @default(CUSTOMER)
-  status             Status    @default(ACTIVE)
-  
-  // Employer / Employee hierarchy
-  ownerId            String?
-  owner              User?     @relation("OwnerEmployees", fields: [ownerId], references: [id], onDelete: SetNull)
-  employees          User[]    @relation("OwnerEmployees")
-  
-  // Store relation
-  storeId            String?
-  store              UserStoreRel? @relation(fields: [storeId], references: [id])
-  
-  // Auth providers
-  googleId           String?   @unique
-  resetToken         String?
-  resetTokenExpires  DateTime?
-  
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
-  deletedAt          DateTime?
-
-  passkeys           Passkey[]
-  ownedStores        Store[]   @relation("OwnerStores")
+enum PaymentProvider {
+  RAZORPAY
 }
 
-model UserStoreRel {
-  id        String   @id @default(uuid())
-  storeId   String
-  store     Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  users     User[]
+enum UnitOfMeasure {
+  KG
+  GRAM
+  LITER
+  MILLILITER
+  PIECE
+  DOZEN
 }
 
-model Passkey {
-  id           String   @id @default(uuid())
-  credentialId String   @unique
-  publicKey    Bytes
-  counter      BigInt   @default(0)
-  transports   String?
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
+enum DietaryPreference {
+  VEG
+  NON_VEG
+  VEGAN
+  EGG
 }
 
-model Store {
-  id                  String    @id @default(uuid())
-  slug                String?   @unique
-  name                String
-  description         String?
-  ownerId             String
-  owner               User      @relation("OwnerStores", fields: [ownerId], references: [id], onDelete: Cascade)
-  colorScheme         String?
-  fontStyle           String?
-  brandingLogo        String?
-  operatingHours      String?
+enum SpiceLevel {
+  NONE
+  MILD
+  MEDIUM
+  HOT
+  EXTRA_HOT
+}
 
-  // Tax & Dynamic Billing Breakdown Configuration
-  gstNumber           String?
-  taxType             String?   @default("FORWARD") // "FORWARD" (Exclusive) or "BACKWARD" (Inclusive)
-  taxValueType        String?   @default("PERCENTAGE") // "PERCENTAGE" or "FIXED"
-  taxValue            Float?    @default(5) // Default 5% GST
-  serviceFee          Float?    @default(0) // Platform / Service Fee
-  allowManualDiscount Boolean   @default(true)
-  couponCode          String?   // e.g. "WELCOME10"
-  couponValueType     String?   @default("PERCENTAGE") // "PERCENTAGE" or "FIXED"
-  couponValue         Float?    @default(0) // Coupon discount
+enum TransactionType {
+  RESTOCK
+  CONSUME
+  ADJUST
+}
 
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
-
-  menuItems           MenuItem[]
-  userStoreRels       UserStoreRel[]
-  subscriptions       StoreSubscription[]
-  tables              Table[]
-  orders              Order[]
+enum OrderOrigin {
+  QR_MENU
+  POS
 }
 
 enum OrderType {
-  DINING
+  DINE_IN
   TAKEAWAY
+  DELIVERY
 }
 
-enum PaymentType {
+enum PaymentModel {
   PREPAID
   POSTPAID
 }
 
 enum OrderStatus {
+  DRAFT
   PENDING_VERIFICATION
-  ACCEPTED
-  PREPARING
+  PENDING_PAYMENT
+  PROCESSING
   READY
   SERVED
-  COMPLETED
+  SETTLED
   CANCELLED
 }
 
-enum PaymentStatus {
+enum WaiterCallType {
+  WATER
+  BILL
+  CALL_WAITER
+}
+
+enum WaiterCallStatus {
   PENDING
-  PAID
-  FAILED
-  REFUNDED
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model Tenant {
+  id        String       @id @default(cuid())
+  name      String
+  slug      String       @unique
+  status           TenantStatus           @default(ACTIVE)
+  logo             String?
+  brandColor       String?
+  description      String?
+  gstin            String?
+  companyLegalName String?
+  registeredAddress String?
+  stores           Store[]
+  users            User[]
+  subscription     TenantSubscription?
+  paymentGateways  TenantPaymentGateway[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model Store {
+  id        String      @id @default(cuid())
+  tenantId  String
+  tenant    Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  slug      String
+  address   String?
+  contactPhone String?
+  contactEmail String?
+  operatingHours Json?
+  banner    String?
+  status    StoreStatus @default(ACTIVE)
+  users        User[]
+  categories   MenuCategory[]
+  menuItems    MenuItem[]
+  rawMaterials RawMaterial[]
+  tables       Table[]
+  orders       Order[]
+  waiterCalls  WaiterCall[]
+  feedbacks    Feedback[]
+  googleReviewUrl String?
+  
+  // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
+  taxRules     Json?       @default("[]")
+  promoCodes   PromoCode[]
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@unique([tenantId, slug])
+  @@index([tenantId])
+}
+
+model User {
+  id           String     @id @default(cuid())
+  tenantId     String?
+  tenant       Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId      String?
+  store        Store?     @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  email        String
+  name         String?
+  phone        String?
+  profilePhoto String?
+  passwordHash String?
+  currentChallenge String?
+  role         UserRole
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  passkeys     Passkey[]
+  orders       Order[]
+  resolvedCalls WaiterCall[]
+
+  @@unique([tenantId, email])
+  @@index([role])
+  @@index([tenantId, role])
+  @@index([storeId, role])
+}
+
+model Passkey {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  credentialId String   @unique
+  publicKey    Bytes
+  counter      BigInt
+  transports   String?
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime @default(now())
+}
+
+model SubscriptionPlan {
+  id          String   @id @default(cuid())
+  name        String
+  price       Int
+  currency    String   @default("INR")
+  maxStores   Int
+  interval    PlanInterval
+  isActive    Boolean  @default(true)
+  
+  subscriptions TenantSubscription[]
+}
+
+model TenantSubscription {
+  id               String   @id @default(cuid())
+  tenantId         String   @unique
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId           String
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id])
+  status           SubscriptionStatus @default(ACTIVE)
+  currentPeriodEnd DateTime
+  providerSubId    String?
+  gracePeriodEndsAt DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model TenantPaymentGateway {
+  id           String          @id @default(cuid())
+  tenantId     String
+  tenant       Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider     PaymentProvider
+  merchantId   String
+  apiKey       String
+  secretKey    String?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@unique([tenantId, provider])
+}
+
+model MenuCategory {
+  id          String     @id @default(cuid())
+  storeId     String
+  store       Store      @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  sortOrder   Int        @default(0)
+  items       MenuItem[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([storeId])
+}
+
+model MenuItem {
+  id                 String            @id @default(cuid())
+  storeId            String
+  store              Store             @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  categoryId         String
+  category           MenuCategory      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  name               String
+  description        String?
+  price              Int               // Stored in smallest currency unit
+  image              String?
+  dietary            DietaryPreference @default(VEG)
+  spiceLevel         SpiceLevel        @default(NONE)
+  
+  isManuallyDisabled Boolean           @default(false)
+  isSystemDisabled   Boolean           @default(false)
+  
+  recipe             RecipeIngredient[]
+  modifierGroups     MenuModifierGroup[]
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  orderItems         OrderItem[]
+
+  @@index([storeId])
+}
+
+model MenuModifierGroup {
+  id            String               @id @default(cuid())
+  menuItemId    String
+  menuItem      MenuItem             @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  name          String               
+  isRequired    Boolean              @default(false)
+  minSelections Int                  @default(0)
+  maxSelections Int                  @default(1)
+  options       MenuModifierOption[]
+}
+
+model MenuModifierOption {
+  id            String            @id @default(cuid())
+  groupId       String
+  group         MenuModifierGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  name          String
+  price         Int               @default(0) 
+  recipe        RecipeIngredient[]
+  orderItemModifiers OrderItemModifier[]
+}
+
+model RawMaterial {
+  id                String             @id @default(cuid())
+  storeId           String
+  store             Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name              String
+  unit              UnitOfMeasure
+  currentStock      Float              @default(0)
+  lowStockThreshold Float              @default(0)
+  
+  recipes           RecipeIngredient[]
+  transactions      StockTransaction[]
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([storeId])
+}
+
+model StockTransaction {
+  id            String          @id @default(cuid())
+  materialId    String
+  material      RawMaterial     @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  type          TransactionType
+  quantity      Float           
+  reference     String?         
+  createdAt     DateTime        @default(now())
+}
+
+model RecipeIngredient {
+  id               String              @id @default(cuid())
+  rawMaterialId    String
+  rawMaterial      RawMaterial         @relation(fields: [rawMaterialId], references: [id], onDelete: Cascade)
+  
+  menuItemId       String?
+  menuItem         MenuItem?           @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  
+  modifierOptionId String?
+  modifierOption   MenuModifierOption? @relation(fields: [modifierOptionId], references: [id], onDelete: Cascade)
+  
+  quantity         Float               
+
+  // To ensure we don't have duplicates of the same raw material on the same item or option
+  @@unique([menuItemId, rawMaterialId])
+  @@unique([modifierOptionId, rawMaterialId])
 }
 
 model Table {
   id          String   @id @default(uuid())
-  number      String
-  name        String?
-  capacity    Int      @default(4)
-  section     String?  @default("Main Dining")
-  status      String   @default("AVAILABLE")
-  qrCodeUrl   String?
   storeId     String
   store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tableNumber Int
+  isActive    Boolean  @default(true)
+  
+  orders      Order[]
+  waiterCalls WaiterCall[]
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([storeId, number])
+  @@unique([storeId, tableNumber])
 }
 
-model MenuItem {
-  id             String      @id @default(uuid())
-  storeId        String
-  store          Store       @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  name           String
-  description    String?
-  price          Float
-  image          String?
-  category       String?
-  isAvailable    Boolean     @default(true)
-  dietaryType    DietaryType @default(VEG)
-  spicinessLevel Int         @default(0)
-  prepTime       Int?
-  calories       Int?
-  allergens      String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+enum DiscountType {
+  PERCENTAGE
+  FLAT
+}
+
+model PromoCode {
+  id            String   @id @default(cuid())
+  storeId       String
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  code          String   
+  discountType  DiscountType
+  discountValue Float    
+  minOrderValue Int      @default(0)
+  maxDiscount   Int?
+  isActive      Boolean  @default(true)
+  validUntil    DateTime?
+  
+  orders        Order[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([storeId, code])
 }
 
 model Order {
-  id             String        @id @default(uuid())
-  orderNumber    String        
-  storeId        String
-  store          Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  tableNumber    String?       
-  orderType      OrderType     @default(DINING)
-  customerName   String?
-  customerEmail  String?
-  customerPhone  String?
-  paymentType    PaymentType   @default(POSTPAID)
-  paymentStatus  PaymentStatus @default(PENDING)
-  orderStatus    OrderStatus   @default(PENDING_VERIFICATION)
-  notes          String?       
+  id              String         @id @default(cuid())
+  storeId         String
+  store           Store          @relation(fields: [storeId], references: [id])
+  
+  origin          OrderOrigin
+  type            OrderType
+  tableId         String?        
+  table           Table?         @relation(fields: [tableId], references: [id])
+  staffId         String?        
+  staff           User?          @relation(fields: [staffId], references: [id])
 
-  subtotal       Float
-  tax            Float         @default(0)
-  serviceFee     Float         @default(0)
-  discount       Float         @default(0)
-  totalAmount    Float
+  paymentModel    PaymentModel
+  status          OrderStatus    @default(DRAFT)
+  
+  subTotal        Int            @default(0)
+  taxAmount       Int            @default(0)
+  discountAmount  Int            @default(0)
+  promoCodeId     String?
+  promoCode       PromoCode?     @relation(fields: [promoCodeId], references: [id])
+  totalAmount     Int            @default(0) 
+  
+  items           OrderItem[]
+  feedbacks       Feedback[]
 
-  items          OrderItem[]
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([storeId, status])
 }
 
 model OrderItem {
-  id          String   @id @default(uuid())
-  orderId     String
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  menuItemId  String?
-  name        String
-  price       Float
-  quantity    Int
-  itemTotal   Float
-  notes       String?  
+  id              String               @id @default(cuid())
+  orderId         String
+  order           Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  menuItemId      String
+  menuItem        MenuItem             @relation(fields: [menuItemId], references: [id])
+  
+  quantity        Int                  @default(1)
+  kitchenNotes    String?              
+  priceAtOrder    Int                  
+  
+  modifiers       OrderItemModifier[]
+}
+
+model OrderItemModifier {
+  id               String             @id @default(cuid())
+  orderItemId      String
+  orderItem        OrderItem          @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  modifierOptionId String
+  modifierOption   MenuModifierOption @relation(fields: [modifierOptionId], references: [id])
+  
+  priceAtOrder     Int                
+}
+
+model WaiterCall {
+  id          String           @id @default(cuid())
+  storeId     String
+  store       Store            @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tableId     String
+  table       Table            @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  type        WaiterCallType
+  status      WaiterCallStatus @default(PENDING)
+  resolvedById String?
+  resolvedBy  User?            @relation(fields: [resolvedById], references: [id])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([storeId, status])
+}
+
+model Feedback {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId     String?
+  order       Order?   @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  rating      Int      
+  comment     String?
+  isPublic    Boolean  @default(false) 
   createdAt   DateTime @default(now())
-}
-
-model SubscriptionPlan {
-  id             String         @id @default(uuid())
-  name           String
-  code           String         @unique
-  description    String?
-  price          Float
-  currency       String         @default("INR")
-  interval       PlanInterval   @default(MONTHLY)
-  features       String?
-  maxStores      Int            @default(1)
-  maxMenuItems   Int            @default(100)
-  status         Status         @default(ACTIVE)
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
-
-  subscriptions  StoreSubscription[]
-}
-
-model StoreSubscription {
-  id                   String             @id @default(uuid())
-  storeId              String
-  store                Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
-  planId               String
-  plan                 SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Cascade)
-  status               SubscriptionStatus @default(ACTIVE)
-  startDate            DateTime           @default(now())
-  endDate              DateTime
-  autoRenew            Boolean            @default(true)
-  phonepeTxnId         String?            @unique
-  phonepeMerchantTxnId String?            @unique
-  amountPaid           Float
-  paymentStatus        String             @default("SUCCESS")
-  createdAt            DateTime           @default(now())
-  updatedAt            DateTime           @updatedAt
 }
