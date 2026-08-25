@@ -60,7 +60,7 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
   };
 
   const getQRUrl = (tableNumber) => {
-    const domain = window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://order.scanmyorder.com';
+    const domain = window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://menu.scanmyorder.com';
     return `${domain}/${brandSlug}/${storeSlug}?table=${tableNumber}`;
   };
 
