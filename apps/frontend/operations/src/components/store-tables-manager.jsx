@@ -5,7 +5,7 @@ import { jsPDF } from 'jspdf';
 import { Card, CardContent, Button, Input, Skeleton } from '@smo/ui';
 import { QrCodeIcon, Download01Icon, PlusSignIcon, Delete02Icon, AlertCircleIcon, DocumentCodeIcon, Loading03Icon } from 'hugeicons-react';
 
-export const StoreTablesManager = ({ storeId, storeSlug }) => {
+export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
   const [tables, setTables] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -61,7 +61,7 @@ export const StoreTablesManager = ({ storeId, storeSlug }) => {
 
   const getQRUrl = (tableNumber) => {
     const domain = window.location.hostname === 'localhost' ? 'http://localhost:5173' : 'https://order.scanmyorder.com';
-    return `${domain}/${storeSlug}?table=${tableNumber}`;
+    return `${domain}/${brandSlug}/${storeSlug}?table=${tableNumber}`;
   };
 
   const getCanvasForTable = (tableNumber) => {

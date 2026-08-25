@@ -105,7 +105,7 @@ export const StoreEdit = () => {
           <StoreMenuManager storeId={initialData.id} />
         )}
         {activeTab === 'tables' && (
-          <StoreTablesManager storeId={initialData.id} storeSlug={initialData.slug} />
+          <StoreTablesManager storeId={initialData.id} storeSlug={initialData.slug} brandSlug={initialData.tenant?.slug}  />
         )}
         {activeTab === 'promos' && (
           <StorePromoManager storeId={initialData.id} />

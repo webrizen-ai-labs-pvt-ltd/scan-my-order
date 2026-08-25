@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import App from './App.jsx'
 import '@smo/ui/globals.css'
+import './index.css'
 import { ThemeProvider } from '@smo/ui'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
