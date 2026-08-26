@@ -291,8 +291,11 @@ async function handleRazorpayWebhook(tenantId, payload, signature, rawBody) {
   const isValid = Razorpay.validateWebhookSignature(bodyToVerify, signature, webhookSecret);
   
   if (!isValid) {
+    console.error("[Webhook Error] Signature mismatch! Body length:", bodyToVerify.length, "Signature:", signature);
     throw createHttpError(401, "Invalid webhook signature");
   }
+  
+  console.log(`[Webhook Success] Received event: ${payload.event}`);
   
   console.log("[Webhook] Received Razorpay Webhook:", payload.event);
 
@@ -357,8 +360,9 @@ async function verifyRazorpayPayment(actor, storeId, orderId) {
     let match = null;
     try {
       const links = await razorpay.paymentLink.all({ count: 50 });
-      const allMatches = links?.items?.filter(l => l.notes?.order_id === orderId || (l.reference_id && l.reference_id.startsWith(`${orderId}_`)));
-      match = allMatches?.find(l => l.status === 'paid' || l.status === 'partially_paid');
+      const items = links?.payment_links || links?.items || [];
+      const allMatches = items.filter(l => l.notes?.order_id === orderId || (l.reference_id && l.reference_id.startsWith(`${orderId}_`)));
+      match = allMatches.find(l => l.status === 'paid' || l.status === 'partially_paid');
     } catch(err) {
       console.warn("Could not fetch payment links:", err.message || err);
     }
