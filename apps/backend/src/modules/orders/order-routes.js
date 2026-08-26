@@ -7,7 +7,8 @@ const {
   getActiveOrders,
   getKdsOrders,
   updateOrderStatus, 
-  handleRazorpayWebhook 
+  handleRazorpayWebhook,
+  getOrderById
 } = require("./order-service");
 const { subscribeToStore } = require("./sse-service");
 
@@ -71,6 +72,19 @@ router.patch("/:id/status", asyncHandler(async (req, res) => {
 router.post("/:id/payment-link", asyncHandler(async (req, res) => {
   const { generatePaymentLink } = require("./order-service");
   const result = await generatePaymentLink(req.user, req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/:id/verify-payment
+router.post("/:id/verify-payment", asyncHandler(async (req, res) => {
+  const { verifyRazorpayPayment } = require("./order-service");
+  const result = await verifyRazorpayPayment(req.user, req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/orders/:id
+router.get("/:id", asyncHandler(async (req, res) => {
+  const result = await getOrderById(req.params.storeId, req.params.id);
   res.json(createApiResponse(result));
 }));
 

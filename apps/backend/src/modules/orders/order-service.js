@@ -125,7 +125,7 @@ async function createOrder(storeId, actor, origin, input) {
       storeId,
       origin,
       type,
-      tableId: origin === 'QR_MENU' ? tableId : null,
+      tableId: tableId || null,
       staffId: origin === 'POS' ? actor.id : null,
       paymentModel,
       status,
@@ -139,8 +139,14 @@ async function createOrder(storeId, actor, origin, input) {
       }
     },
     include: {
+      table: true,
       items: {
-        include: { modifiers: true }
+        include: {
+          menuItem: true,
+          modifiers: {
+            include: { modifierOption: true }
+          }
+        }
       }
     }
   });
@@ -322,6 +328,70 @@ async function handleRazorpayWebhook(tenantId, payload, signature) {
   return { success: true };
 }
 
+async function verifyRazorpayPayment(actor, storeId, orderId) {
+  if (actor) await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+  
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order || order.storeId !== storeId) throw createHttpError(404, "Order not found");
+  
+  if (['PROCESSING', 'SETTLED', 'READY', 'SERVED'].includes(order.status)) {
+    return { success: true, status: order.status, message: "Order is already paid/processed." };
+  }
+
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
+  const gateway = await prisma.tenantPaymentGateway.findUnique({
+    where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
+  });
+  
+  if (!gateway || !gateway.isActive) throw createHttpError(400, "Razorpay is not configured");
+  
+  const razorpay = new Razorpay({
+    key_id: decrypt(gateway.apiKey),
+    key_secret: decrypt(gateway.secretKey)
+  });
+
+  try {
+    // 1. Check recent payment links
+    let match = null;
+    try {
+      const links = await razorpay.paymentLink.all({ count: 50 });
+      const allMatches = links?.items?.filter(l => l.notes?.order_id === orderId || (l.reference_id && l.reference_id.startsWith(`${orderId}_`)));
+      match = allMatches?.find(l => l.status === 'paid' || l.status === 'partially_paid');
+    } catch(err) {
+      console.warn("Could not fetch payment links:", err.message || err);
+    }
+    
+    if (match && (match.status === 'paid' || match.status === 'partially_paid')) {
+      let newStatus = order.paymentModel === 'POSTPAID' ? 'SETTLED' : 'PROCESSING';
+      await updateOrderStatus(null, storeId, orderId, newStatus, true);
+      return { success: true, status: newStatus, message: "Payment verified successfully via Link!" };
+    }
+
+    // 2. Check Razorpay Orders (Prepaid POS without QR)
+    let rpOrder = null;
+    try {
+      const rpOrders = await razorpay.orders.all({ receipt: orderId });
+      if (rpOrders && rpOrders.items && rpOrders.items.length > 0) {
+        rpOrder = rpOrders.items[0];
+      }
+    } catch(err) {
+      console.warn("Could not fetch razorpay orders:", err.message || err);
+    }
+
+    if (rpOrder && rpOrder.status === 'paid') {
+      await updateOrderStatus(null, storeId, orderId, 'PROCESSING', true);
+      return { success: true, status: 'PROCESSING', message: "Payment verified successfully via Order!" };
+    }
+
+    return { success: false, status: order.status, message: "Payment not completed yet on Razorpay." };
+
+  } catch (err) {
+    console.error("Razorpay verification failed:", err);
+    const msg = err.error?.description || err.message || err.description || String(err);
+    throw createHttpError(500, "Failed to verify with Razorpay: " + msg);
+  }
+}
 
 // 3. LIFECYCLE MANAGEMENT
 async function deductInventory(prisma, order) {
@@ -467,11 +537,35 @@ async function getActiveOrders(actor, storeId, statuses = []) {
   });
 }
 
+async function getOrderById(storeId, orderId) {
+  const prisma = getPrismaClient();
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      table: true,
+      items: {
+        include: {
+          menuItem: true,
+          modifiers: {
+            include: { modifierOption: true }
+          }
+        }
+      }
+    }
+  });
+  if (!order || order.storeId !== storeId) {
+    throw createHttpError(404, "Order not found");
+  }
+  return order;
+}
+
 module.exports = {
   createOrder,
   handleRazorpayWebhook,
   updateOrderStatus,
   getKdsOrders,
   getActiveOrders,
-  generatePaymentLink
+  generatePaymentLink,
+  verifyRazorpayPayment,
+  getOrderById
 };

@@ -2,99 +2,64 @@ import React from 'react';
 import { BentoGrid, BentoGridItem } from '../components/bento-grid';
 import { SoftCard } from '../components/soft-card';
 import { Button } from '@smo/ui';
+import { Link } from 'react-router-dom';
+import WebThreads from '../components/web-threads';
+import { BorderBeam } from 'border-beam';
 
 export default function HomePage() {
-  return (
-    <div className="min-h-screen bg-background relative overflow-hidden">
-      {/* Background glow effects */}
-      <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] glow-bg pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] glow-bg pointer-events-none" />
-
-
-      <main className="max-w-7xl mx-auto px-6 py-20 relative z-10">
-        {/* Hero Section */}
-        <section className="text-center max-w-3xl mx-auto mb-24">
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tighter text-foreground mb-6">
-            The Modern <span className="text-primary">Restaurant OS</span>
-          </h1>
-          <p className="text-xl text-muted-foreground mb-10 leading-relaxed">
-            Consolidate your operations with our minimalist, powerful platform. From QR menus to KDS, everything you need to run your restaurant seamlessly.
-          </p>
-          <div className="flex items-center justify-center gap-4">
-            <Button size="lg" className="rounded-none bg-primary text-primary-foreground hover:bg-primary/90 h-14 px-8 text-lg">
-              Start Free Trial
-            </Button>
-            <Button size="lg" variant="outline" className="rounded-none h-14 px-8 text-lg border-border hover:bg-muted">
-              Book a Demo
-            </Button>
-          </div>
-        </section>
-
-        {/* Bento Grid Features */}
-        <section className="mb-24">
-          <BentoGrid>
-            {/* Main Feature - Hero Image */}
-            <BentoGridItem colSpan={2} rowSpan={2} className="p-0 border border-border">
-              <SoftCard className="h-full p-8 flex flex-col items-start border-none">
-                <h3 className="text-3xl font-bold mb-2">Unified Point of Sale</h3>
-                <p className="text-muted-foreground mb-6 max-w-md">
-                  A lightning-fast POS designed for modern hardware. Integrated directly with your kitchen display and QR menus.
-                </p>
-                <div className="flex-grow flex items-end justify-center w-full mt-4">
-                  <img src="/images/hero.jpg" alt="Modern POS System" className="object-cover w-full h-auto rounded-none soft-border" />
+    return (
+        <section className="w-full flex flex-col items-center justify-center md:p-8 p-2">
+            <BorderBeam size="md" colorVariant="colorful" strength={0.9} className="w-full relative">
+                <div className="absolute inset-0 z-0">
+                    <WebThreads
+                    color1="#FACC15"
+                    color2="#EAB308"
+                    color3="#FFFFFF"
+                    speed={2}
+                    threadCount={3}
+                    frequency={14}
+                    spread={0.21}
+                    taper={1}
+                    position={0.5}
+                    fanMode="center"
+                    glow={0.034}
+                    falloff={0.6}
+                    thickness={0.8}
+                    brightness={0.85}
+                    opacity={1}
+                    mirror
+                    shimmer={false}
+                    grain
+                    grainIntensity={0}
+                    mouseInteraction
+                    mouseStrength={0.3}
+                />
                 </div>
-              </SoftCard>
-            </BentoGridItem>
+                <div className="container mx-auto px-8 py-12 flex flex-col w-full h-full gap-8 relative z-20">
+                    <h1 className="text-4xl md:text-8xl font-bold max-w-7xl">The only OS you need for your restaurant.</h1>
+                    <p className="text-lg md:text-xl max-w-2xl">Streamline your restaurant operations with our all-in-one platform that connects your kitchen, bar, and front of house.</p>
+                    <div className="flex md:flex-row flex-col gap-4">
+                        <Button asChild size="lg">
+                            <Link to="/signup">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-6">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+                                </svg>
 
-            {/* QR Menus */}
-            <BentoGridItem colSpan={1} rowSpan={2} className="p-0 border border-border">
-              <SoftCard className="h-full p-8 flex flex-col items-start border-none">
-                <h3 className="text-2xl font-bold mb-2">Dynamic QR Menus</h3>
-                <p className="text-muted-foreground mb-6">
-                  Beautiful, scannable menus that sync in real-time with your inventory.
-                </p>
-                <div className="flex-grow flex items-end justify-center w-full">
-                  <img src="/images/qr.jpg" alt="QR Menu on Smartphone" className="object-cover w-full h-auto rounded-none soft-border" />
+                                Get Started</Link>
+                        </Button>
+                        <Button asChild variant="link" size="lg">
+                            <Link to="/login">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-6">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a7.464 7.464 0 0 1-1.15 3.993m1.989 3.559A11.209 11.209 0 0 0 8.25 10.5a3.75 3.75 0 1 1 7.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 0 1-3.6 9.75m6.633-4.596a18.666 18.666 0 0 1-2.485 5.33" />
+                                </svg>
+
+                                Authenticate to your account
+                            </Link>
+                        </Button>
+                    </div>
+                    <img src="https://cdn.dribbble.com/userupload/48030667/file/9c355e5f3b4fbef2eb8365a750260275.png?resize=1024x768&vertical=center" alt="Restaurant Dashboard" className="w-full h-full" />
                 </div>
-              </SoftCard>
-            </BentoGridItem>
-
-            {/* Kitchen Display */}
-            <BentoGridItem colSpan={1} className="p-0 border border-border">
-              <SoftCard className="h-full p-6 border-none">
-                <h3 className="text-xl font-bold mb-2">Kitchen Display</h3>
-                <p className="text-muted-foreground">Keep your back-of-house in sync with real-time order routing.</p>
-              </SoftCard>
-            </BentoGridItem>
-
-            {/* Inventory Management */}
-            <BentoGridItem colSpan={1} className="p-0 border border-border">
-              <SoftCard className="h-full p-6 border-none">
-                <h3 className="text-xl font-bold mb-2">Smart Inventory</h3>
-                <p className="text-muted-foreground">Automated stock tracking directly tied to your recipes.</p>
-              </SoftCard>
-            </BentoGridItem>
-
-            {/* Analytics */}
-            <BentoGridItem colSpan={2} className="p-0 border border-border">
-              <SoftCard className="h-full p-6 border-none flex flex-col justify-center">
-                <h3 className="text-2xl font-bold mb-2">Bring Your Own Keys (BYOAK)</h3>
-                <p className="text-muted-foreground">
-                  Connect your own Razorpay account. No transaction fee skimming—you keep 100% of your revenue.
-                </p>
-              </SoftCard>
-            </BentoGridItem>
-
-          </BentoGrid>
+            </BorderBeam>
         </section>
-      </main>
-
-      <footer className="border-t border-border bg-card">
-        <div className="max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row items-center justify-between">
-          <div className="font-elsie text-2xl text-primary font-bold mb-4 md:mb-0">SMO</div>
-          <p className="text-muted-foreground text-sm">© {new Date().getFullYear()} Webrizen AI Labs Pvt Ltd. All rights reserved.</p>
-        </div>
-      </footer>
-    </div>
-  );
+    );
 }
