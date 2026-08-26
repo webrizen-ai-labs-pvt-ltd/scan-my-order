@@ -269,7 +269,7 @@ async function generatePaymentLink(actor, storeId, orderId) {
 }
 
 // 2. PAYMENT WEBHOOK VALIDATION (Razorpay)
-async function handleRazorpayWebhook(tenantId, payload, signature) {
+async function handleRazorpayWebhook(tenantId, payload, signature, rawBody) {
   const prisma = getPrismaClient();
   
   const gateway = await prisma.tenantPaymentGateway.findUnique({
@@ -286,8 +286,9 @@ async function handleRazorpayWebhook(tenantId, payload, signature) {
   const webhookSecret = gateway.secretKey ? decrypt(gateway.secretKey) : null; 
   if (!webhookSecret) throw createHttpError(400, "Webhook secret not configured");
   
-  // Validate signature
-  const isValid = Razorpay.validateWebhookSignature(JSON.stringify(payload), signature, webhookSecret);
+  // Validate signature using raw body if available, otherwise stringified payload
+  const bodyToVerify = rawBody || JSON.stringify(payload);
+  const isValid = Razorpay.validateWebhookSignature(bodyToVerify, signature, webhookSecret);
   
   if (!isValid) {
     throw createHttpError(401, "Invalid webhook signature");

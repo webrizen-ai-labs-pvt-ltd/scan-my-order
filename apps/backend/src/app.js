@@ -8,7 +8,11 @@ const { errorHandler, notFoundHandler } = require("./middleware/error-handler");
 const app = express();
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString('utf8');
+  }
+}));
 app.use(ASSET_ROUTES.basePath, express.static(sharedAssetsPath));
 app.use("/api", apiRoutes);
 

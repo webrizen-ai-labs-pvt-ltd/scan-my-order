@@ -172,7 +172,7 @@ router.post("/webhooks/razorpay/:tenantId", express.json(), asyncHandler(async (
     return res.status(400).json(createApiResponse(null, "Missing signature"));
   }
   
-  const result = await handleRazorpayWebhook(req.params.tenantId, req.body, signature);
+  const result = await handleRazorpayWebhook(req.params.tenantId, req.body, signature, req.rawBody);
   res.json(createApiResponse(result));
 }));
 
