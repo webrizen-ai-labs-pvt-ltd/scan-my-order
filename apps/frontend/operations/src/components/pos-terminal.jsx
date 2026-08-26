@@ -299,6 +299,31 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     }
   };
 
+  useEffect(() => {
+    let interval;
+    if (qrModal.isOpen && qrModal.orderId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await api.post(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/verify-payment`);
+          if (res.data.success && res.data.data.success) {
+             setQrModal({ isOpen: false, url: '', orderId: '' });
+             setCart([]);
+             setSelectedTableId('');
+             setAppliedPromo(null);
+             
+             const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}`);
+             if (orderRes.data.success) {
+               setReceiptOrder(orderRes.data.data);
+             }
+          }
+        } catch (err) {
+          // Silent failure for polling
+        }
+      }, 5000); // Poll every 5 seconds
+    }
+    return () => clearInterval(interval);
+  }, [qrModal.isOpen, qrModal.orderId, selectedStoreId]);
+
   if (loading) {
     return (
       <div className="flex h-full gap-4">

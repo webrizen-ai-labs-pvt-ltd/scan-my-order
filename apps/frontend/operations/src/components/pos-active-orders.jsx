@@ -103,6 +103,24 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
     }
   };
 
+  useEffect(() => {
+    let interval;
+    if (qrModal.isOpen && qrModal.orderId) {
+      interval = setInterval(async () => {
+        try {
+          const res = await api.post(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/verify-payment`);
+          if (res.data.success && res.data.data.success) {
+             setQrModal({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
+             fetchOrders(selectedStoreId);
+          }
+        } catch (err) {
+          // Silent failure for polling
+        }
+      }, 5000); // Poll every 5 seconds
+    }
+    return () => clearInterval(interval);
+  }, [qrModal.isOpen, qrModal.orderId, selectedStoreId]);
+
   const getStatusDisplay = (status) => {
     switch(status) {
       case 'PENDING_VERIFICATION': return { label: 'Awaiting Approval', color: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800' };
