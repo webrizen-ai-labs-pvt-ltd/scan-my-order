@@ -8,7 +8,8 @@ const {
   getKdsOrders,
   updateOrderStatus, 
   handleRazorpayWebhook,
-  getOrderById
+  getOrderById,
+  getOrderHistory
 } = require("./order-service");
 const { subscribeToStore } = require("./sse-service");
 
@@ -40,6 +41,12 @@ router.get("/", asyncHandler(async (req, res) => {
   }
   
   const result = await getActiveOrders(req.user, req.params.storeId, statuses);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/orders/history
+router.get("/history", asyncHandler(async (req, res) => {
+  const result = await getOrderHistory(req.user, req.params.storeId, req.query);
   res.json(createApiResponse(result));
 }));
 

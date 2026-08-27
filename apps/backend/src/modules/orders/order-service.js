@@ -542,6 +542,71 @@ async function getActiveOrders(actor, storeId, statuses = []) {
   });
 }
 
+async function getOrderHistory(actor, storeId, filters = {}) {
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+  
+  const { page = 1, limit = 20, search, status, paymentModel, origin, startDate, endDate } = filters;
+  
+  const where = { storeId };
+  
+  if (search) {
+    where.id = { contains: search, mode: 'insensitive' };
+  }
+  
+  if (status) {
+    where.status = status;
+  }
+  
+  if (paymentModel) {
+    where.paymentModel = paymentModel;
+  }
+  
+  if (origin) {
+    where.origin = origin;
+  }
+  
+  if (startDate || endDate) {
+    where.createdAt = {};
+    if (startDate) where.createdAt.gte = new Date(startDate);
+    if (endDate) where.createdAt.lte = new Date(endDate);
+  }
+  
+  const skip = (page - 1) * limit;
+  
+  const [total, orders] = await Promise.all([
+    prisma.order.count({ where }),
+    prisma.order.findMany({
+      where,
+      include: {
+        table: true,
+        staff: { select: { name: true } },
+        items: {
+          include: {
+            menuItem: true,
+            modifiers: {
+              include: { modifierOption: true }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' },
+      skip,
+      take: parseInt(limit, 10)
+    })
+  ]);
+  
+  return {
+    orders,
+    pagination: {
+      total,
+      pages: Math.ceil(total / limit),
+      current: parseInt(page, 10),
+      limit: parseInt(limit, 10)
+    }
+  };
+}
+
 async function getOrderById(storeId, orderId) {
   const prisma = getPrismaClient();
   const order = await prisma.order.findUnique({
@@ -572,5 +637,6 @@ module.exports = {
   getActiveOrders,
   generatePaymentLink,
   verifyRazorpayPayment,
-  getOrderById
+  getOrderById,
+  getOrderHistory
 };

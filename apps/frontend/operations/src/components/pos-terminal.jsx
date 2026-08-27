@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../lib/api';
 import { Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
-import { Add01Icon, Remove01Icon, ShoppingCart01Icon, Tick02Icon, Cancel01Icon, QrCodeIcon, Tag01Icon, PrinterIcon } from 'hugeicons-react';
+import { Add01Icon, Remove01Icon, ShoppingCart01Icon, Tick02Icon, Cancel01Icon, QrCodeIcon, Tag01Icon, PrinterIcon, Loading02Icon } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from './receipt';
 
@@ -380,7 +380,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
 
             {/* Selected background glow */}
             {selectedCategoryId === cat.id && (
-              <span className="absolute inset-0 bg-indigo-50 dark:bg-indigo-500/10 rounded-md -z-10" />
+              <span className="absolute inset-0 bg-yellow-50 dark:bg-yellow-500/10 rounded-md -z-10" />
             )}
           </button>
         ))}
@@ -562,22 +562,22 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
               variant="outline"
               className="w-full h-11"
             >
-              Kitchen Only
+              {isSubmitting ? <Loading02Icon size={18} /> : 'Kitchen Only'}
             </Button>
             <Button
               disabled={cart.length === 0 || isSubmitting}
               onClick={() => handleCheckout('PREPAID')}
-              className="w-full h-11 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+              className="w-full h-11 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center gap-2"
             >
-              Pay Cash
+              {isSubmitting ? <Loading02Icon size={18} /> : 'Pay Cash'}
             </Button>
           </div>
           <Button
             disabled={cart.length === 0 || isSubmitting}
             onClick={() => handleCheckout('PREPAID', true)}
-            className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-2"
+            className="w-full h-11 bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-2"
           >
-            <QrCodeIcon size={18} /> Generate Payment QR
+            {isSubmitting ? <Loading02Icon size={18} /> : <QrCodeIcon size={18} />} Generate Payment QR
           </Button>
         </div>
 
@@ -650,11 +650,11 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
       {qrModal.isOpen && (
         <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center p-6 backdrop-blur-md">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl p-8 max-w-sm w-full flex flex-col items-center text-center">
-            <div className="bg-indigo-50 dark:bg-indigo-500/10 p-4 rounded-full mb-4">
-              <QrCodeIcon size={32} className="text-indigo-600 dark:text-indigo-400" />
+            <div className="bg-yellow-50 dark:bg-yellow-500/10 p-4 rounded-full mb-4">
+              <QrCodeIcon size={32} className="text-yellow-600 dark:text-yellow-400" />
             </div>
             <h3 className="font-bold text-xl mb-1">Scan to Pay</h3>
-            <p className="text-sm text-zinc-500 mb-4">Ask the customer to scan this QR code.</p>
+            <p className="text-sm text-zinc-500 mb-4">Please scan this QR code to pay.</p>
             
             <div className="bg-white p-4 rounded-xl shadow-inner border border-zinc-100 inline-block mb-4">
               <QRCodeSVG value={qrModal.url} size={200} level="M" includeMargin={false} />
@@ -664,10 +664,10 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
               ₹{totalAmount}
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400 font-medium mb-6">
+            <div className="flex items-center justify-center gap-2 text-yellow-600 dark:text-yellow-400 font-medium mb-6">
                <span className="relative flex h-3 w-3">
-                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                 <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
+                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+                 <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
                </span>
                Waiting for payment...
             </div>
@@ -716,7 +716,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                 Close
               </Button>
               <Button 
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center gap-2"
+                className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-2"
                 onClick={() => {
                   const printWindow = window.open('', '', 'width=400,height=600');
                   printWindow.document.write(`
