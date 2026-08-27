@@ -3,9 +3,10 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { StoreForm } from '../components/store-form';
 import { StoreMenuManager } from '../components/store-menu-manager';
+import { StoreMenuBuilder } from '../components/store-menu-builder';
 import { StoreTablesManager } from '../components/store-tables-manager';
 import { StorePromoManager } from '../components/store-promo-manager';
-import { Loading03Icon, Settings01Icon, Menu01Icon, QrCodeIcon, Tag01Icon } from 'hugeicons-react';
+import { Loading03Icon, Settings01Icon, Menu01Icon, QrCodeIcon, Tag01Icon, ZapIcon } from 'hugeicons-react';
 
 export const StoreEdit = () => {
   const { id } = useParams();
@@ -54,12 +55,12 @@ export const StoreEdit = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{initialData.name}</h2>
           <p className="text-sm text-zinc-500">Manage store settings, menu, and tables.</p>
         </div>
-        <div className="flex bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
+        <div className="flex flex-wrap bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800">
           <button
             onClick={() => setActiveTab('settings')}
             className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
@@ -75,6 +76,14 @@ export const StoreEdit = () => {
             }`}
           >
             <Menu01Icon size={16} /> Menu Builder
+          </button>
+          <button
+            onClick={() => setActiveTab('smart')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === 'smart' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+            }`}
+          >
+            <ZapIcon size={16} /> Smart Builder
           </button>
           <button
             onClick={() => setActiveTab('tables')}
@@ -103,6 +112,11 @@ export const StoreEdit = () => {
         )}
         {activeTab === 'menu' && (
           <StoreMenuManager storeId={initialData.id} />
+        )}
+        {activeTab === 'smart' && (
+          <div className="p-6">
+            <StoreMenuBuilder storeId={initialData.id} />
+          </div>
         )}
         {activeTab === 'tables' && (
           <StoreTablesManager storeId={initialData.id} storeSlug={initialData.slug} brandSlug={initialData.tenant?.slug}  />

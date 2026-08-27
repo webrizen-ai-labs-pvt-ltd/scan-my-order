@@ -12,6 +12,7 @@
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
     "@smo/ui": "^0.1.0",
+    "@xyflow/react": "^12.11.5",
     "axios": "^1.19.0",
     "hugeicons-react": "^0.4.0",
     "jspdf": "^4.2.1",

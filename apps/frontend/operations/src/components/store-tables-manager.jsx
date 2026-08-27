@@ -73,6 +73,10 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
       const ctx = canvas.getContext("2d");
       const img = new Image();
 
+      // Load logo
+      const logo = new Image();
+      logo.crossOrigin = "anonymous";
+      
       img.onload = () => {
         canvas.width = img.width + 80;
         canvas.height = img.height + 140;
@@ -86,8 +90,32 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
         ctx.font = "bold 28px Arial";
         ctx.fillText(`Table ${tableNumber}`, canvas.width / 2, 80);
 
+        // Draw QR code
         ctx.drawImage(img, 40, 100);
-        resolve(canvas.toDataURL("image/png"));
+
+        // Draw logo in center of QR code
+        logo.onload = () => {
+          const logoSize = 40;
+          const qrX = 40;
+          const qrY = 100;
+          const qrSize = img.width;
+          const logoX = qrX + (qrSize / 2) - (logoSize / 2);
+          const logoY = qrY + (qrSize / 2) - (logoSize / 2);
+          
+          // Optional: Add white background behind logo for better visibility
+          ctx.fillStyle = "white";
+          ctx.fillRect(logoX - 2, logoY - 2, logoSize + 4, logoSize + 4);
+          
+          ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+          resolve(canvas.toDataURL("image/png"));
+        };
+
+        logo.onerror = () => {
+          // If logo fails to load, just draw QR code without logo
+          resolve(canvas.toDataURL("image/png"));
+        };
+
+        logo.src = '/logo.svg';
       };
 
       img.src = `data:image/svg+xml;base64,${btoa(svgData)}`;
@@ -222,13 +250,22 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
                   </button>
                 </div>
 
-                <div className="bg-white p-3 rounded-xl shadow-sm border border-zinc-100 mx-auto">
+                <div className="bg-white p-3 rounded-xl shadow-sm border border-zinc-100 mx-auto relative">
                   <QRCodeSVG
                     id={`qr-${table.tableNumber}`}
                     value={getQRUrl(table.tableNumber)}
                     size={140}
-                    level="H"
+                    level="L"
                     includeMargin={false}
+                    imageSettings={{
+                      src: '/logo.png',
+                      x: undefined,
+                      y: undefined,
+                      height: 40,
+                      width: 40,
+                      opacity: 1,
+                      excavate: true,
+                    }}
                   />
                 </div>
 

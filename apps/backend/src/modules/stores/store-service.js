@@ -300,10 +300,56 @@ async function deleteStore(actor, storeId) {
   return { success: true };
 }
 
+async function getStoreFloorStatus(actor, storeId) {
+  const prisma = getPrismaClient();
+  
+  // Verify access first
+  await getStoreById(actor, storeId);
+
+  const orders = await prisma.order.findMany({
+    where: {
+      storeId,
+      status: {
+        in: ['DRAFT', 'PENDING_PAYMENT', 'PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED']
+      }
+    },
+    select: {
+      id: true,
+      origin: true,
+      status: true
+    }
+  });
+
+  const activeTables = await prisma.table.count({
+    where: {
+      storeId,
+      orders: {
+        some: {
+          status: { in: ['PROCESSING', 'READY', 'SERVED'] }
+        }
+      }
+    }
+  });
+
+  const waiterCalls = await prisma.waiterCall.count({
+    where: {
+      storeId,
+      status: { in: ['PENDING', 'ACKNOWLEDGED'] }
+    }
+  });
+
+  return {
+    orders,
+    activeTables,
+    waiterCalls
+  };
+}
+
 module.exports = {
   createStore,
   getStores,
   getStoreById,
   updateStore,
-  deleteStore
+  deleteStore,
+  getStoreFloorStatus
 };

@@ -7,7 +7,8 @@ const {
   getStores,
   getStoreById,
   updateStore,
-  deleteStore
+  deleteStore,
+  getStoreFloorStatus
 } = require("./store-service");
 const menuRoutes = require("../menu/menu-routes");
 const inventoryRoutes = require("../inventory/inventory-routes");
@@ -36,6 +37,11 @@ router.get("/", asyncHandler(async (req, res) => {
 
 router.get("/:id", asyncHandler(async (req, res) => {
   const result = await getStoreById(req.user, req.params.id);
+  res.json(createApiResponse(result));
+}));
+
+router.get("/:id/floor-status", asyncHandler(async (req, res) => {
+  const result = await getStoreFloorStatus(req.user, req.params.id);
   res.json(createApiResponse(result));
 }));
 

@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import api from '../lib/api';
-import { Card, CardContent, CardHeader, CardTitle } from '@smo/ui';
+import { Card, CardContent, CardHeader, CardTitle, Select, SelectContent, SelectItem, SelectTrigger, SelectValue, FloorMap } from '@smo/ui';
 import { Money01Icon, Store01Icon, UserGroupIcon, Invoice01Icon } from 'hugeicons-react';
 
 export const Dashboard = () => {
   const [metrics, setMetrics] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [stores, setStores] = useState([]);
+  const [selectedStoreId, setSelectedStoreId] = useState('');
+  const [floorStatus, setFloorStatus] = useState(null);
 
   useEffect(() => {
     const fetchDashboard = async () => {
@@ -13,6 +16,14 @@ export const Dashboard = () => {
         const response = await api.get('/dashboard');
         if (response.data.success) {
           setMetrics(response.data.data);
+        }
+        
+        const storesResponse = await api.get('/stores');
+        if (storesResponse.data.success) {
+          setStores(storesResponse.data.data);
+          if (storesResponse.data.data.length > 0) {
+            setSelectedStoreId(storesResponse.data.data[0].id);
+          }
         }
       } catch (error) {
         console.error("Failed to fetch dashboard metrics", error);
@@ -22,6 +33,31 @@ export const Dashboard = () => {
     };
     fetchDashboard();
   }, []);
+
+  useEffect(() => {
+    let intervalId;
+    if (selectedStoreId) {
+      const fetchFloorStatus = async () => {
+        try {
+          const res = await api.get(`/stores/${selectedStoreId}/floor-status`);
+          if (res.data.success) {
+            setFloorStatus(res.data.data);
+          }
+        } catch (error) {
+          console.error("Failed to fetch floor status", error);
+        }
+      };
+
+      fetchFloorStatus(); // initial fetch
+      intervalId = setInterval(fetchFloorStatus, 5000); // Poll every 5 seconds
+    } else {
+      setFloorStatus(null);
+    }
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [selectedStoreId]);
+
 
   if (loading) return <div className="p-8 text-center text-zinc-500">Loading metrics...</div>;
   if (!metrics) return <div className="p-8 text-center text-red-500">Failed to load dashboard.</div>;
@@ -80,6 +116,35 @@ export const Dashboard = () => {
                    </div>
                  ))}
                </div>
+             )}
+          </CardContent>
+        </Card>
+        
+        <Card className="col-span-3 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-sm overflow-hidden flex flex-col">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle>Live Floor Map</CardTitle>
+            <div className="w-32">
+              <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="Select Store" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stores.map(store => (
+                    <SelectItem key={store.id} value={store.id}>{store.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </CardHeader>
+          <CardContent className="flex-1 p-0 relative min-h-[300px]">
+             {selectedStoreId ? (
+                <div className="absolute inset-0 m-4">
+                   <FloorMap floorStatus={floorStatus} />
+                </div>
+             ) : (
+                <div className="flex h-full items-center justify-center p-4 text-center text-sm text-zinc-500">
+                  Select a store to view its live floor operations.
+                </div>
              )}
           </CardContent>
         </Card>

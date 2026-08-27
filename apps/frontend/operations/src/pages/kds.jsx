@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import { Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
@@ -43,6 +43,8 @@ export const KDS = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState(null);
+  // View Mode
+  const [viewMode, setViewMode] = useState('ORDER'); // 'ORDER', 'TABLE', 'ITEM'
   
   // UI Zoom Control
   const [zoom, setZoom] = useState(1);
@@ -135,12 +137,139 @@ export const KDS = () => {
     return Math.floor((new Date() - new Date(createdAt)) / 60000);
   };
 
+  // Grouping Logic
+  const groupedByTable = useMemo(() => {
+    if (viewMode !== 'TABLE') return {};
+    const groups = {};
+    orders.forEach(order => {
+      const tableKey = order.table ? `Table ${order.table.tableNumber}` : (order.type === 'TAKEAWAY' ? 'Takeaway' : (order.type === 'DELIVERY' ? 'Delivery' : 'No Table'));
+      if (!groups[tableKey]) groups[tableKey] = { orders: [], oldestWait: 0 };
+      groups[tableKey].orders.push(order);
+      const wait = getWaitTime(order.createdAt);
+      if (wait > groups[tableKey].oldestWait) groups[tableKey].oldestWait = wait;
+    });
+    return groups;
+  }, [orders, viewMode]);
+  
+  const groupedByItem = useMemo(() => {
+    if (viewMode !== 'ITEM') return [];
+    const itemMap = {};
+    orders.forEach(order => {
+      order.items.forEach(item => {
+        // Create a unique key for the item + modifiers
+        const modKey = (item.modifiers || []).map(m => m.modifierOption?.name).sort().join('|');
+        const key = `${item.menuItem.id}-${modKey}`;
+        if (!itemMap[key]) {
+          itemMap[key] = {
+            menuItem: item.menuItem,
+            modifiers: item.modifiers || [],
+            quantity: 0,
+            dietary: item.menuItem.dietary
+          };
+        }
+        itemMap[key].quantity += item.quantity;
+      });
+    });
+    return Object.values(itemMap).sort((a, b) => b.quantity - a.quantity);
+  }, [orders, viewMode]);
+
   // Force re-render every minute so timers update
   const [, setTick] = useState(0);
   useEffect(() => {
     const timer = setInterval(() => setTick(t => t + 1), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  const renderOrderCard = (order) => {
+    const waitTime = getWaitTime(order.createdAt);
+    const isLate = waitTime >= 15; // >15 mins turns header red
+    const isCompleting = completingTickets.has(order.id);
+    
+    return (
+      <div 
+        key={order.id} 
+        className={`
+          relative rounded-xl overflow-hidden flex flex-col shadow-xl transition-all duration-400 ease-in-out
+          ${isCompleting ? 'scale-95 opacity-0 translate-y-4 bg-green-900' : 'scale-100 opacity-100 translate-y-0 bg-zinc-900 border border-zinc-800'}
+        `}
+      >
+        {/* Ticket Header */}
+        <div className={`px-4 py-3 flex justify-between items-start transition-colors ${
+            isCompleting ? 'bg-green-600' :
+            isLate ? 'bg-red-600 border-b-2 border-red-800 shadow-[inset_0_-5px_10px_rgba(0,0,0,0.2)]' 
+                   : 'bg-zinc-800 border-b border-zinc-700'
+          }`}>
+          <div>
+            <span className={`text-[10px] uppercase tracking-widest font-bold block mb-0.5 ${isLate || isCompleting ? 'text-white/80' : 'text-zinc-400'}`}>
+              {order.type}
+            </span>
+            <span className="text-xl font-bold text-white leading-none">
+              Tbl {order.table?.tableNumber || '?'}
+            </span>
+          </div>
+          <div className={`flex flex-col items-end ${isLate ? 'animate-pulse' : ''}`}>
+            <div className={`flex items-center gap-1 font-mono text-lg font-bold ${isLate || isCompleting ? 'text-white' : 'text-zinc-300'}`}>
+              <Clock01Icon size={18} className={isLate ? 'text-red-200' : 'text-zinc-500'} />
+              {waitTime}m
+            </div>
+          </div>
+        </div>
+      
+        {/* Ticket Items */}
+        <div className="flex-1 p-4 space-y-4 bg-zinc-900">
+          {order.items.map((item, idx) => (
+            <div key={idx} className="relative pl-10 border-b border-zinc-800/80 pb-4 last:border-0 last:pb-0">
+              {/* Normal Quantity Badge */}
+              <div className="absolute left-0 top-0 w-7 h-7 bg-zinc-100 text-zinc-950 font-bold rounded-md flex items-center justify-center text-sm shadow-sm">
+                {item.quantity}
+              </div>
+              
+              <div className="flex-1">
+                <h3 className="font-semibold text-lg leading-tight text-white mb-0.5">{item.menuItem?.name}</h3>
+                
+                {item.modifiers?.length > 0 && (
+                  <ul className="space-y-1 mt-1">
+                    {item.modifiers.map((mod, midx) => (
+                      <li key={midx} className="text-sm font-medium text-amber-400 flex items-start">
+                        <span className="mr-1.5 text-amber-600/50 select-none">↳</span>
+                        {mod.modifierOption?.name}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                
+                {item.kitchenNotes && (
+                  <div className="mt-2 text-sm bg-red-950/40 text-red-400 p-2.5 rounded-md border border-red-900/50">
+                    <span className="font-bold text-red-500 block uppercase text-[10px] tracking-wider mb-0.5">Kitchen Note</span>
+                    {item.kitchenNotes}
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        
+        {/* Action Footer */}
+        <div className={`p-3 bg-zinc-950 border-t transition-colors ${isCompleting ? 'border-green-800 bg-green-950' : 'border-zinc-800'}`}>
+          <Button 
+            className={`w-full h-12 text-lg font-bold rounded-lg transition-all shadow-md active:scale-95 ${
+              isCompleting 
+                ? 'bg-green-500 hover:bg-green-500 text-white' 
+                : 'bg-zinc-100 hover:bg-green-500 hover:text-white text-zinc-950'
+            }`}
+            onClick={() => markAsReady(order.id)}
+            disabled={isCompleting}
+          >
+            {isCompleting ? (
+              <><CheckmarkBadge01Icon size={24} className="mr-2 animate-bounce" /> DONE</>
+            ) : (
+              'MARK READY'
+            )}
+          </Button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="flex flex-col h-full bg-zinc-950 min-h-screen text-zinc-100 overflow-hidden">
@@ -175,6 +304,17 @@ export const KDS = () => {
             <button onClick={() => setZoom(z => Math.min(2, z + 0.1))} className="text-zinc-400 hover:text-white font-bold px-2">+</button>
           </div>
           
+          <Select value={viewMode} onValueChange={setViewMode}>
+            <SelectTrigger className="w-[180px] h-12 text-sm font-bold bg-zinc-950 border-zinc-700 text-white rounded-xl focus:ring-green-500">
+              <SelectValue placeholder="View By" />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-700 text-white text-sm font-bold">
+              <SelectItem value="ORDER">Group by Order</SelectItem>
+              <SelectItem value="TABLE">Group by Table</SelectItem>
+              <SelectItem value="ITEM">Group by Item</SelectItem>
+            </SelectContent>
+          </Select>
+
           {!user?.store && (
             <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
               <SelectTrigger className="w-[240px] h-12 text-lg font-bold bg-zinc-950 border-zinc-700 text-white rounded-xl focus:ring-green-500">
@@ -222,98 +362,83 @@ export const KDS = () => {
               <p className="text-lg font-medium text-zinc-600">Waiting for new orders...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 items-start auto-rows-max">
-              {orders.map(order => {
-                const waitTime = getWaitTime(order.createdAt);
-                const isLate = waitTime >= 15; // >15 mins turns header red
-                const isCompleting = completingTickets.has(order.id);
-                
-                return (
-                  <div 
-                    key={order.id} 
-                    className={`
-                      relative rounded-xl overflow-hidden flex flex-col shadow-xl transition-all duration-400 ease-in-out
-                      ${isCompleting ? 'scale-95 opacity-0 translate-y-4 bg-green-900' : 'scale-100 opacity-100 translate-y-0 bg-zinc-900 border border-zinc-800'}
-                    `}
-                  >
-                    {/* Ticket Header */}
-                    <div className={`px-4 py-3 flex justify-between items-start transition-colors ${
-                        isCompleting ? 'bg-green-600' :
-                        isLate ? 'bg-red-600 border-b-2 border-red-800 shadow-[inset_0_-5px_10px_rgba(0,0,0,0.2)]' 
-                               : 'bg-zinc-800 border-b border-zinc-700'
-                      }`}>
-                      <div>
-                        <span className={`text-[10px] uppercase tracking-widest font-bold block mb-0.5 ${isLate || isCompleting ? 'text-white/80' : 'text-zinc-400'}`}>
-                          {order.type}
-                        </span>
-                        <span className="text-xl font-bold text-white leading-none">
-                          Tbl {order.table?.tableNumber || '?'}
-                        </span>
-                      </div>
-                      <div className={`flex flex-col items-end ${isLate ? 'animate-pulse' : ''}`}>
-                        <div className={`flex items-center gap-1 font-mono text-lg font-bold ${isLate || isCompleting ? 'text-white' : 'text-zinc-300'}`}>
-                          <Clock01Icon size={18} className={isLate ? 'text-red-200' : 'text-zinc-500'} />
-                          {waitTime}m
+            <div className="w-full">
+              {viewMode === 'ORDER' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 items-start auto-rows-max">
+                  {orders.map(order => renderOrderCard(order))}
+                </div>
+              )}
+
+              {viewMode === 'TABLE' && (
+                <div className="flex flex-col gap-8">
+                  {Object.entries(groupedByTable).sort(([,a], [,b]) => b.oldestWait - a.oldestWait).map(([tableName, group]) => (
+                    <div key={tableName} className="bg-zinc-900 rounded-2xl border border-zinc-800 p-6 shadow-xl">
+                      <div className="flex items-center justify-between mb-6 pb-4 border-b border-zinc-800">
+                        <div className="flex items-center gap-4">
+                          <h2 className="text-3xl font-black text-white tracking-tight">{tableName}</h2>
+                          <div className="px-3 py-1 rounded-full bg-zinc-800 text-sm font-bold text-zinc-300">
+                            {group.orders.length} Order{group.orders.length > 1 ? 's' : ''}
+                          </div>
                         </div>
+                        <div className={`flex items-center gap-2 font-mono text-xl font-bold ${group.oldestWait >= 15 ? 'text-red-400 animate-pulse' : 'text-zinc-400'}`}>
+                          <Clock01Icon size={24} /> Max Wait: {group.oldestWait}m
+                        </div>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 items-start auto-rows-max">
+                        {group.orders.map(order => renderOrderCard(order))}
                       </div>
                     </div>
-                  
-                  {/* Ticket Items */}
-                  <div className="flex-1 p-4 space-y-4 bg-zinc-900">
-                    {order.items.map((item, idx) => (
-                      <div key={idx} className="relative pl-10 border-b border-zinc-800/80 pb-4 last:border-0 last:pb-0">
-                        {/* Normal Quantity Badge */}
-                        <div className="absolute left-0 top-0 w-7 h-7 bg-zinc-100 text-zinc-950 font-bold rounded-md flex items-center justify-center text-sm shadow-sm">
-                          {item.quantity}
+                  ))}
+                </div>
+              )}
+
+              {viewMode === 'ITEM' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 items-start auto-rows-max">
+                  {groupedByItem.map((itemGroup, idx) => (
+                    <div key={idx} className="relative rounded-xl overflow-hidden flex flex-col shadow-xl bg-zinc-900 border border-zinc-800">
+                      <div className="px-4 py-3 flex justify-between items-center bg-zinc-800 border-b border-zinc-700">
+                        <div className="flex items-center gap-2">
+                           <span
+                              className={`size-3 rounded-full border ${itemGroup.dietary === 'VEG'
+                                ? 'bg-green-500 border-green-600'
+                                : itemGroup.dietary === 'NON_VEG'
+                                  ? 'bg-red-500 border-red-600'
+                                  : itemGroup.dietary === 'VEGAN'
+                                    ? 'bg-cyan-400 border-cyan-500'
+                                    : itemGroup.dietary === 'EGG'
+                                      ? 'bg-amber-400 border-amber-500'
+                                      : 'bg-zinc-300 border-zinc-400'
+                                }`}
+                            />
+                            <span className="text-xl font-bold text-white leading-none line-clamp-1">{itemGroup.menuItem?.name}</span>
                         </div>
-                        
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg leading-tight text-white mb-0.5">{item.menuItem?.name}</h3>
-                          
-                          {item.modifiers?.length > 0 && (
-                            <ul className="space-y-1 mt-1">
-                              {item.modifiers.map((mod, midx) => (
-                                <li key={midx} className="text-sm font-medium text-amber-400 flex items-start">
-                                  <span className="mr-1.5 text-amber-600/50 select-none">↳</span>
+                        <div className="w-12 h-12 bg-yellow-500 text-yellow-950 font-black rounded-lg flex items-center justify-center text-2xl shadow-sm shrink-0 ml-4">
+                          {itemGroup.quantity}
+                        </div>
+                      </div>
+                      <div className="flex-1 p-4 bg-zinc-900">
+                        {itemGroup.modifiers?.length > 0 ? (
+                          <div className="space-y-2">
+                            <span className="text-xs uppercase tracking-widest font-bold text-zinc-500">Modifiers</span>
+                            <ul className="space-y-1.5">
+                              {itemGroup.modifiers.map((mod, midx) => (
+                                <li key={midx} className="text-base font-bold text-amber-400 flex items-start">
+                                  <span className="mr-2 text-amber-600/50 select-none">↳</span>
                                   {mod.modifierOption?.name}
                                 </li>
                               ))}
                             </ul>
-                          )}
-                          
-                          {item.kitchenNotes && (
-                            <div className="mt-2 text-sm bg-red-950/40 text-red-400 p-2.5 rounded-md border border-red-900/50">
-                              <span className="font-bold text-red-500 block uppercase text-[10px] tracking-wider mb-0.5">Kitchen Note</span>
-                              {item.kitchenNotes}
-                            </div>
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          <div className="text-sm font-bold text-zinc-600 italic mt-2">No modifiers</div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                  
-                  {/* Action Footer */}
-                  <div className={`p-3 bg-zinc-950 border-t transition-colors ${isCompleting ? 'border-green-800 bg-green-950' : 'border-zinc-800'}`}>
-                    <Button 
-                      className={`w-full h-12 text-lg font-bold rounded-lg transition-all shadow-md active:scale-95 ${
-                        isCompleting 
-                          ? 'bg-green-500 hover:bg-green-500 text-white' 
-                          : 'bg-zinc-100 hover:bg-green-500 hover:text-white text-zinc-950'
-                      }`}
-                      onClick={() => markAsReady(order.id)}
-                      disabled={isCompleting}
-                    >
-                      {isCompleting ? (
-                        <><CheckmarkBadge01Icon size={24} className="mr-2 animate-bounce" /> DONE</>
-                      ) : (
-                        'MARK READY'
-                      )}
-                    </Button>
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </div>
         )}
         </div>
       </div>

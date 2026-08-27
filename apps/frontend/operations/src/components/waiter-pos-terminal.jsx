@@ -431,10 +431,10 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
       {totalCartItems > 0 && !isCartOpen && (
         <div className="absolute bottom-3 left-3 right-3 z-10 animate-in slide-in-from-bottom-5">
           <Button 
-            className="w-full h-12 bg-yellow-600 hover:bg-yellow-700 text-white shadow-xl flex justify-between items-center px-4 rounded-lg text-sm font-bold"
+            className="w-full h-12 bg-yellow-600 hover:bg-yellow-700 text-white shadow-xl flex justify-between items-center px-4 text-sm font-bold"
             onClick={() => setIsCartOpen(true)}
           >
-            <div className="flex items-center gap-1.5 bg-yellow-700 px-2 py-1 rounded">
+            <div className="flex items-center gap-1.5 bg-yellow-700 px-2 py-1 rounded-full">
               <ShoppingCart01Icon size={16} />
               <span className="text-xs">{totalCartItems} items</span>
             </div>
@@ -581,14 +581,14 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
                 disabled={cart.length === 0 || isSubmitting}
                 onClick={() => handleCheckout('POSTPAID')}
                 variant="outline"
-                className="w-full h-11 text-sm font-bold rounded-lg border-zinc-300 dark:border-zinc-700"
+                className="w-full h-11 text-sm font-bold rounded-r-none border-zinc-300 dark:border-zinc-700"
               >
                 {isSubmitting ? <Loading02Icon size={16} className="animate-spin" /> : 'Send to Kitchen'}
               </Button>
               <Button
                 disabled={cart.length === 0 || isSubmitting}
                 onClick={() => handleCheckout('PREPAID')}
-                className="w-full h-11 text-sm font-bold rounded-lg bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center gap-1.5 shadow"
+                className="w-full h-11 text-sm font-bold rounded-l-none bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center gap-1.5 shadow"
               >
                 {isSubmitting ? <Loading02Icon size={16} className="animate-spin" /> : 'Pay Cash'}
               </Button>
@@ -596,7 +596,7 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
             <Button
               disabled={cart.length === 0 || isSubmitting}
               onClick={() => handleCheckout('PREPAID', true)}
-              className="w-full h-11 text-sm font-bold rounded-lg bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-1.5 shadow mt-1"
+              className="w-full h-11 text-sm font-bold bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-1.5 shadow mt-1"
             >
               {isSubmitting ? <Loading02Icon size={16} className="animate-spin" /> : <QrCodeIcon size={16} />} Generate QR Pay
             </Button>

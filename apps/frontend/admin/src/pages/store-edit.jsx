@@ -2,7 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { StoreForm } from '../components/store-form';
+import { StoreMenuBuilder } from '../components/store-menu-builder';
 import { Loading03Icon } from 'hugeicons-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@smo/ui';
 
 export const StoreEdit = () => {
   const { id } = useParams();
@@ -48,5 +50,21 @@ export const StoreEdit = () => {
     );
   }
 
-  return <StoreForm isEdit={true} initialData={initialData} />;
+  return (
+    <Tabs defaultValue="details" className="w-full">
+      <div className="flex justify-between items-center mb-6">
+        <TabsList>
+          <TabsTrigger value="details">Store Details</TabsTrigger>
+          <TabsTrigger value="menu">Menu Build Up</TabsTrigger>
+        </TabsList>
+      </div>
+
+      <TabsContent value="details" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+        <StoreForm isEdit={true} initialData={initialData} />
+      </TabsContent>
+      <TabsContent value="menu" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
+        <StoreMenuBuilder storeId={id} />
+      </TabsContent>
+    </Tabs>
+  );
 };
