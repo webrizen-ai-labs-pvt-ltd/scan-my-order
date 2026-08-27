@@ -113,6 +113,7 @@ export const WaiterTasks = () => {
   const [paymentOrder, setPaymentOrder] = useState(null);
   const [qrUrl, setQrUrl] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState('SERVE');
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -125,7 +126,7 @@ export const WaiterTasks = () => {
     setError('');
 
     try {
-      const res = await api.get(`/stores/${storeIdToFetch}/orders?statuses=PENDING_VERIFICATION,READY`);
+      const res = await api.get(`/stores/${storeIdToFetch}/orders?statuses=PENDING_VERIFICATION,READY,SERVED`);
       if (res.data.success) {
         setOrders(res.data.data);
       }
@@ -264,6 +265,7 @@ export const WaiterTasks = () => {
 
   const pendingOrders = orders.filter(o => o.status === 'PENDING_VERIFICATION');
   const readyOrders = orders.filter(o => o.status === 'READY');
+  const servedOrders = orders.filter(o => o.status === 'SERVED');
 
   return (
     <div className="flex flex-col h-full relative">
@@ -378,10 +380,44 @@ export const WaiterTasks = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 flex-1 min-h-0">
+      {/* Mobile Tabs */}
+      <div className="flex lg:hidden bg-zinc-100 dark:bg-zinc-900 p-1 mb-4 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800">
+        <button
+          onClick={() => setActiveTab('VERIFY')}
+          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+            activeTab === 'VERIFY'
+              ? 'bg-white dark:bg-zinc-800 text-yellow-600 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-700'
+          }`}
+        >
+          Verify <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 px-1.5 py-0.5 rounded-full text-xs ml-1">{pendingOrders.length}</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('SERVE')}
+          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+            activeTab === 'SERVE'
+              ? 'bg-white dark:bg-zinc-800 text-green-600 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-700'
+          }`}
+        >
+          Serve <span className="bg-green-100 dark:bg-green-900/30 text-green-700 px-1.5 py-0.5 rounded-full text-xs ml-1">{readyOrders.length}</span>
+        </button>
+        <button
+          onClick={() => setActiveTab('COLLECT')}
+          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
+            activeTab === 'COLLECT'
+              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
+              : 'text-zinc-500 hover:text-zinc-700'
+          }`}
+        >
+          Collect <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 px-1.5 py-0.5 rounded-full text-xs ml-1">{servedOrders.length}</span>
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
 
         {/* Verification Inbox */}
-        <div className="flex flex-col h-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden transition-all hover:shadow-xl">
+        <div className={`flex-col h-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden transition-all hover:shadow-xl ${activeTab === 'VERIFY' ? 'flex' : 'hidden lg:flex'}`}>
           <div className="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 px-4 py-4 border-b border-yellow-200 dark:border-yellow-800/50 flex justify-between items-center">
             <div>
               <h2 className="font-semibold text-yellow-800 dark:text-yellow-400 text-lg">Needs Verification</h2>
@@ -443,7 +479,7 @@ export const WaiterTasks = () => {
         </div>
 
         {/* Service Queue */}
-        <div className="flex flex-col h-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden transition-all hover:shadow-xl">
+        <div className={`flex-col h-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden transition-all hover:shadow-xl ${activeTab === 'SERVE' ? 'flex' : 'hidden lg:flex'}`}>
           <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 px-4 py-4 border-b border-green-200 dark:border-green-800/50 flex justify-between items-center">
             <div>
               <h2 className="font-semibold text-green-800 dark:text-green-400 text-lg">Ready to Serve</h2>
@@ -493,22 +529,71 @@ export const WaiterTasks = () => {
                        ))}
                     </div>
 
-                    {order.paymentModel === 'POSTPAID' ? (
-                      <Button
-                        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md text-base h-12"
-                        onClick={() => { setPaymentOrder(order); setQrUrl(null); }}
-                      >
-                        <Money01Icon size={20} className="mr-2" /> Serve & Collect Payment
-                      </Button>
-                    ) : (
-                      <Button
-                        className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-md text-base h-12"
-                        onClick={() => updateStatus(order.id, 'SERVED')}
-                        disabled={actionLoading === order.id}
-                      >
-                        <Tick02Icon size={20} className="mr-2" /> Mark as Served
-                      </Button>
-                    )}
+                    <Button
+                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-md text-base h-12"
+                      onClick={() => updateStatus(order.id, 'SERVED')}
+                      disabled={actionLoading === order.id}
+                    >
+                      <Tick02Icon size={20} className="mr-2" /> Mark as Served
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Pending Payment Queue */}
+        <div className={`flex-col h-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden transition-all hover:shadow-xl ${activeTab === 'COLLECT' ? 'flex' : 'hidden lg:flex'}`}>
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-4 py-4 border-b border-blue-200 dark:border-blue-800/50 flex justify-between items-center">
+            <div>
+              <h2 className="font-semibold text-blue-800 dark:text-blue-400 text-lg">Pending Payment</h2>
+              <p className="text-xs text-blue-600 dark:text-blue-500">Collect payment from served tables</p>
+            </div>
+            <span className="bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300 text-sm px-3 py-1.5 rounded-full font-bold shadow-sm">
+              {servedOrders.length}
+            </span>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {loading ? (
+              <OrderSkeleton />
+            ) : servedOrders.length === 0 ? (
+              <EmptyState title="No Pending Payments" description="All tables settled!" />
+            ) : (
+              servedOrders.map(order => (
+                <Card key={order.id} className="border-blue-200 dark:border-blue-900/30 shadow-sm hover:shadow-lg transition-all duration-200 bg-blue-50/30 dark:bg-blue-900/10">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="font-bold text-2xl text-blue-900 dark:text-blue-100 mb-1">
+                          Table {order.table?.tableNumber || 'N/A'}
+                        </div>
+                        <div className="text-xs text-blue-600 dark:text-blue-500 flex items-center gap-1">
+                          <Clock01Icon size={12} /> Served at {new Date(order.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100">₹{order.totalAmount}</div>
+                        <div className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full inline-block mt-1">
+                          TO COLLECT
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="mb-4 bg-white/50 dark:bg-zinc-950/50 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 space-y-1">
+                       {order.items.map(item => (
+                         <div key={item.id} className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
+                           <span><span className="font-semibold mr-1">{item.quantity}x</span> {item.menuItem?.name}</span>
+                         </div>
+                       ))}
+                    </div>
+
+                    <Button
+                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md text-base h-12"
+                      onClick={() => { setPaymentOrder(order); setQrUrl(null); }}
+                    >
+                      <Money01Icon size={20} className="mr-2" /> Collect Payment
+                    </Button>
                   </CardContent>
                 </Card>
               ))

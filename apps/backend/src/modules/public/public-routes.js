@@ -44,6 +44,10 @@ router.get("/resolve/:brandSlug/:storeSlug", asyncHandler(async (req, res) => {
             select: { merchantId: true, apiKey: true }
           }
         }
+      },
+      tables: {
+        where: { isActive: true },
+        select: { tableNumber: true }
       }
     }
   });
@@ -122,9 +126,124 @@ router.post("/stores/:storeId/orders", asyncHandler(async (req, res) => {
     return res.status(400).json(createApiResponse(null, "Invalid or missing table number"));
   }
 
+  // Attempt to decode Authorization header for pre-paid authenticated orders
+  let actor = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const { verifyJwt } = require("../../lib/jwt");
+      const token = authHeader.split(' ')[1];
+      const decoded = verifyJwt(token);
+      if (decoded && decoded.sub) {
+        actor = await prisma.user.findUnique({ where: { id: decoded.sub } });
+      }
+    } catch (err) {
+      console.error("Failed to decode optional public auth token:", err.message);
+    }
+  }
+
   const payload = { ...req.body, tableId };
-  const result = await createOrder(req.params.storeId, null, 'QR_MENU', payload);
+  const result = await createOrder(req.params.storeId, actor, 'QR_MENU', payload);
   res.status(201).json(createApiResponse(result));
+}));
+
+// GET /api/public/stores/:storeId/orders/me
+router.get("/stores/:storeId/orders/me", asyncHandler(async (req, res) => {
+  let actor = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const { verifyJwt } = require("../../lib/jwt");
+      const token = authHeader.split(' ')[1];
+      const decoded = verifyJwt(token);
+      if (decoded && decoded.sub) {
+        const prisma = getPrismaClient();
+        actor = await prisma.user.findUnique({ where: { id: decoded.sub } });
+      }
+    } catch (err) {}
+  }
+  
+  const sessionId = req.query.sessionId;
+  
+  if ((!actor || actor.role !== 'CUSTOMER') && !sessionId) {
+    return res.status(401).json(createApiResponse(null, "Unauthorized"));
+  }
+  
+  const prisma = getPrismaClient();
+  const whereClause = {
+    storeId: req.params.storeId,
+    status: { in: ['PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED'] }
+  };
+  
+  if (actor) {
+    whereClause.customerId = actor.id;
+  } else {
+    whereClause.sessionId = sessionId;
+  }
+  
+  const orders = await prisma.order.findMany({
+    where: whereClause,
+    orderBy: { createdAt: 'desc' }
+  });
+  
+  res.json(createApiResponse(orders));
+}));
+
+// GET /api/public/customer/stream
+router.get("/customer/stream", (req, res) => {
+  const token = req.query.token;
+  const sessionId = req.query.sessionId;
+  
+  if (!token && !sessionId) {
+    return res.status(401).json(createApiResponse(null, "Missing token or sessionId"));
+  }
+  
+  const { subscribeToCustomer } = require("../orders/sse-service");
+  
+  if (token) {
+    try {
+      const { verifyJwt } = require("../../lib/jwt");
+      const decoded = verifyJwt(token);
+      if (!decoded || !decoded.sub) {
+        return res.status(401).json(createApiResponse(null, "Invalid token"));
+      }
+      subscribeToCustomer(decoded.sub, req, res);
+    } catch (err) {
+      return res.status(401).json(createApiResponse(null, "Invalid token"));
+    }
+  } else if (sessionId) {
+    subscribeToCustomer(sessionId, req, res);
+  }
+});
+
+// POST /api/public/stores/:storeId/orders/:id/verify-payment
+router.post("/stores/:storeId/orders/:id/verify-payment", asyncHandler(async (req, res) => {
+  // Try to decode optional JWT to get customer actor
+  let actor = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const { verifyJwt } = require("../../lib/jwt");
+      const token = authHeader.split(' ')[1];
+      const decoded = verifyJwt(token);
+      if (decoded && decoded.sub) {
+        const prisma = getPrismaClient();
+        actor = await prisma.user.findUnique({ where: { id: decoded.sub } });
+      }
+    } catch (err) {}
+  }
+  
+  const { verifyRazorpayPayment } = require("../orders/order-service");
+  const result = await verifyRazorpayPayment(actor, req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/public/stores/:storeId/orders/:id
+router.get("/stores/:storeId/orders/:id", asyncHandler(async (req, res) => {
+  // We can fetch order details publicly if they know the ID, but no sensitive data is returned
+  const { getOrderById } = require("../orders/order-service");
+  const result = await getOrderById(req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
 }));
 
 // POST /api/public/stores/:storeId/calls

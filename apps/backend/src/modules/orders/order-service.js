@@ -4,7 +4,7 @@ const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
 const { decrypt } = require("../../lib/encryption");
-const { broadcastToStore } = require("./sse-service");
+const { broadcastToStore, broadcastToCustomer } = require("./sse-service");
 const { evaluateMenuItemAvailability } = require("../inventory/inventory-service");
 
 // Helper to deduce price from menu and calculate totals
@@ -126,7 +126,9 @@ async function createOrder(storeId, actor, origin, input) {
       origin,
       type,
       tableId: tableId || null,
-      staffId: origin === 'POS' ? actor.id : null,
+      staffId: origin === 'POS' && actor ? actor.id : null,
+      customerId: origin === 'QR_MENU' && actor ? actor.id : null,
+      sessionId: input.sessionId || null,
       paymentModel,
       status,
       subTotal,
@@ -154,9 +156,13 @@ async function createOrder(storeId, actor, origin, input) {
   // Broadcast if it needs verification or went to processing
   if (status === 'PENDING_VERIFICATION') {
     broadcastToStore(storeId, 'ORDER_PENDING_VERIFICATION', order);
+    if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PENDING_VERIFICATION', order);
+    if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_PENDING_VERIFICATION', order);
   } else if (status === 'PROCESSING') {
     await deductInventory(prisma, order);
     broadcastToStore(storeId, 'ORDER_PROCESSING', order);
+    if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PROCESSING', order);
+    if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_PROCESSING', order);
   }
   
   // If prepaid, we need to generate a Razorpay order
@@ -333,11 +339,20 @@ async function handleRazorpayWebhook(tenantId, payload, signature, rawBody) {
 }
 
 async function verifyRazorpayPayment(actor, storeId, orderId) {
-  if (actor) await verifyStoreAccess(actor, storeId);
   const prisma = getPrismaClient();
-  
   const order = await prisma.order.findUnique({ where: { id: orderId } });
+  
   if (!order || order.storeId !== storeId) throw createHttpError(404, "Order not found");
+
+  if (actor) {
+    if (actor.role === 'CUSTOMER') {
+      if (order.customerId !== actor.id) {
+        throw createHttpError(403, "Forbidden");
+      }
+    } else {
+      await verifyStoreAccess(actor, storeId);
+    }
+  }
   
   if (['PROCESSING', 'SETTLED', 'READY', 'SERVED'].includes(order.status)) {
     return { success: true, status: order.status, message: "Order is already paid/processed." };
@@ -468,6 +483,10 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
     await deductInventory(prisma, order);
   }
   
+  if (newStatus === 'SERVED' && order.paymentModel === 'PREPAID') {
+    newStatus = 'SETTLED';
+  }
+  
   const updatedOrder = await prisma.order.update({
     where: { id: orderId },
     data: { status: newStatus }
@@ -475,6 +494,12 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
   
   // Broadcast
   broadcastToStore(storeId, `ORDER_${newStatus}`, updatedOrder);
+  if (updatedOrder.customerId) {
+    broadcastToCustomer(updatedOrder.customerId, `ORDER_${newStatus}`, updatedOrder);
+  }
+  if (updatedOrder.sessionId) {
+    broadcastToCustomer(updatedOrder.sessionId, `ORDER_${newStatus}`, updatedOrder);
+  }
   
   return updatedOrder;
 }
