@@ -8,6 +8,8 @@ import { Dashboard } from './pages/dashboard';
 import { POS } from './pages/pos';
 import { KDS } from './pages/kds';
 import { Waiter } from './pages/waiter';
+import { WaiterTasks } from './pages/waiter-tasks';
+import { WaiterPOS } from './pages/waiter-pos';
 import { Orders } from './pages/orders';
 import { Inventory } from './pages/inventory';
 import { Settings } from './pages/settings';
@@ -42,7 +44,10 @@ function App() {
 
           {/* Waiter (Waiter + Manager/Admin) */}
           <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'WAITER']} />}>
-            <Route path="/dashboard/waiter" element={<Waiter />} />
+            <Route path="/dashboard/waiter" element={<Waiter />}>
+              <Route index element={<WaiterTasks />} />
+              <Route path="pos" element={<WaiterPOS />} />
+            </Route>
           </Route>
 
           {/* Inventory (Manager/Admin) */}
