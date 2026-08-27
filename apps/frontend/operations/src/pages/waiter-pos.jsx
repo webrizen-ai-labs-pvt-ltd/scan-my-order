@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
-import { POSTerminal } from '../components/pos-terminal';
+import { WaiterPOSTerminal } from '../components/waiter-pos-terminal';
 
 export const WaiterPOS = () => {
   const { user, token } = useAuthStore();
@@ -23,7 +23,7 @@ export const WaiterPOS = () => {
 
   return (
     <div className="h-full">
-      <POSTerminal selectedStoreId={selectedStoreId} token={token} />
+      <WaiterPOSTerminal selectedStoreId={selectedStoreId} token={token} />
     </div>
   );
 };
