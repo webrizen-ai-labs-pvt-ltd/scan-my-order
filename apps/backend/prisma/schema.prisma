@@ -429,6 +429,9 @@ model Order {
   promoCode       PromoCode?     @relation(fields: [promoCodeId], references: [id])
   totalAmount     Int            @default(0) 
   
+  paymentLinkId   String?
+  paymentLinkUrl  String?
+  
   items           OrderItem[]
   feedbacks       Feedback[]
 

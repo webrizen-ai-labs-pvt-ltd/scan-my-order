@@ -708,7 +708,9 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
              {/* Hidden Printable Receipt */}
              <div style={{ display: 'none' }}>
                <div ref={receiptRef}>
-                 <Receipt order={receiptOrder} store={storeData} />
+                 {receiptOrder && storeData && (
+                   <Receipt order={receiptOrder} storeData={storeData} />
+                 )}
                </div>
              </div>
 

@@ -277,8 +277,8 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
   const verifyOrder = async () => {
     setIsVerifying(true);
     try {
-      const res = await api.post(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/verify-payment`);
-      if (res.data.success && res.data.data.success) {
+      const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
+      if (res.data.success && res.data.data.status === 'success') {
          setQrModal({ isOpen: false, url: '', orderId: '' });
          setCart([]);
          setSelectedTableId('');
@@ -300,12 +300,23 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
   };
 
   useEffect(() => {
-    let interval;
+    let intervalId;
+    let attempts = 0;
+    
     if (qrModal.isOpen && qrModal.orderId) {
-      interval = setInterval(async () => {
+      intervalId = setInterval(async () => {
+        attempts++;
+        if (attempts > 100) {
+          clearInterval(intervalId);
+          alert('Payment QR Expired (timeout). Please generate again.');
+          setQrModal({ isOpen: false, url: '', orderId: '' });
+          return;
+        }
+
         try {
-          const res = await api.post(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/verify-payment`);
-          if (res.data.success && res.data.data.success) {
+          const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
+          if (res.data.success && res.data.data.status === 'success') {
+             clearInterval(intervalId);
              setQrModal({ isOpen: false, url: '', orderId: '' });
              setCart([]);
              setSelectedTableId('');
@@ -319,9 +330,11 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         } catch (err) {
           // Silent failure for polling
         }
-      }, 5000); // Poll every 5 seconds
+      }, 3000); // Poll every 3 seconds
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [qrModal.isOpen, qrModal.orderId, selectedStoreId]);
 
   if (loading) {

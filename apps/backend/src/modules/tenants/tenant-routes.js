@@ -39,4 +39,16 @@ router.delete("/:id", asyncHandler(async (req, res) => {
   res.json(createApiResponse(result));
 }));
 
+router.post("/:id/cleanup", asyncHandler(async (req, res) => {
+  const { runCleanup } = require("../../jobs/cleanup");
+  // Security check: Only Tenant Admin of this tenant or Super Admin can do this
+  if (req.user.role !== 'SUPER_ADMIN' && (req.user.role !== 'TENANT_ADMIN' || req.user.tenantId !== req.params.id)) {
+    const { createHttpError } = require("@smo/shared");
+    throw createHttpError(403, "You do not have permission to run cleanup for this tenant");
+  }
+  
+  const count = await runCleanup(req.params.id);
+  res.json(createApiResponse({ deletedCount: count, message: `Cleaned up ${count} cancelled orders.` }));
+}));
+
 module.exports = router;

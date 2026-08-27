@@ -28,6 +28,9 @@ export const Settings = () => {
   const [isLoadingPasskeys, setIsLoadingPasskeys] = useState(false);
   const [passkeyMsg, setPasskeyMsg] = useState({ text: '', error: false });
 
+  const [isCleaningUp, setIsCleaningUp] = useState(false);
+  const [cleanupMsg, setCleanupMsg] = useState({ text: '', error: false });
+
   const fetchPasskeys = async () => {
     setIsLoadingPasskeys(true);
     try {
@@ -116,6 +119,26 @@ export const Settings = () => {
     } catch (error) {
       setPasskeyMsg({ text: 'Failed to delete passkey.', error: true });
       console.error(error);
+    }
+  };
+
+  const handleManualCleanup = async () => {
+    if (!window.confirm('Are you sure you want to permanently delete all CANCELLED orders older than 30 days?')) return;
+    
+    setIsCleaningUp(true);
+    setCleanupMsg({ text: '', error: false });
+    try {
+      const response = await api.post(`/tenants/${user?.tenantId}/cleanup`);
+      if (response.data.success) {
+        setCleanupMsg({ text: response.data.data.message || 'Cleanup completed successfully.', error: false });
+      }
+    } catch (error) {
+      setCleanupMsg({
+        text: "Cleanup failed: " + (error.response?.data?.error?.message || error.message),
+        error: true
+      });
+    } finally {
+      setIsCleaningUp(false);
     }
   };
 
@@ -360,6 +383,54 @@ export const Settings = () => {
           </CardContent>
         </Card>
       </section>
+      
+      {/* Data Management (Tenant Admins Only) */}
+      {(user?.role === 'TENANT_ADMIN' || user?.role === 'SUPER_ADMIN') && (
+        <section className="mt-8">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+              <Delete01Icon className="text-red-500" />
+              Data Management
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+              Manage your store's storage and automated background jobs.
+            </p>
+          </div>
+
+          <Card className="border-red-200 dark:border-red-900/30 overflow-hidden shadow-sm">
+            <CardContent className="p-0">
+              <div className="p-6">
+                {cleanupMsg.text && (
+                  <div className={`mb-4 p-3 rounded-md text-sm flex items-center gap-2 ${cleanupMsg.error ? 'bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400' : 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'}`}>
+                    {cleanupMsg.error ? <AlertCircleIcon size={16} /> : <CheckmarkCircle02Icon size={16} />}
+                    {cleanupMsg.text}
+                  </div>
+                )}
+                
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-md font-semibold text-zinc-900 dark:text-white">Clean Old Cancelled Orders</h3>
+                    <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1 max-w-lg">
+                      Manually trigger the cron job to permanently delete all CANCELLED orders that are older than 30 days. This action cannot be undone.
+                    </p>
+                  </div>
+                  <Button 
+                    variant="destructive" 
+                    onClick={handleManualCleanup} 
+                    disabled={isCleaningUp}
+                  >
+                    {isCleaningUp ? (
+                      <><Loading03Icon className="animate-spin mr-2" size={16} /> Cleaning...</>
+                    ) : (
+                      'Run Cleanup Job'
+                    )}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+      )}
     </div>
   );
 };

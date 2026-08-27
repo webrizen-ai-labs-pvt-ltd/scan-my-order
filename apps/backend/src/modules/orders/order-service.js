@@ -221,6 +221,13 @@ async function generatePaymentLink(actor, storeId, orderId) {
   if (!order || order.storeId !== storeId) {
     throw createHttpError(404, "Order not found");
   }
+
+  if (order.paymentLinkId && order.paymentLinkUrl) {
+    return {
+      id: order.paymentLinkId,
+      short_url: order.paymentLinkUrl
+    };
+  }
   
   const store = await prisma.store.findUnique({
     where: { id: storeId },
@@ -267,10 +274,74 @@ async function generatePaymentLink(actor, storeId, orderId) {
   
   try {
     const paymentLink = await razorpay.paymentLink.create(options);
+    
+    await prisma.order.update({
+      where: { id: orderId },
+      data: {
+        paymentLinkId: paymentLink.id,
+        paymentLinkUrl: paymentLink.short_url
+      }
+    });
+    
     return paymentLink;
   } catch (error) {
     const errorMsg = error.error?.description || error.message || JSON.stringify(error);
     throw createHttpError(500, "Failed to create payment link: " + errorMsg);
+  }
+}
+
+async function checkPaymentStatus(storeId, orderId) {
+  const prisma = getPrismaClient();
+  
+  const order = await prisma.order.findUnique({ where: { id: orderId } });
+  if (!order || order.storeId !== storeId) {
+    throw createHttpError(404, "Order not found");
+  }
+  
+  if (order.status === 'SETTLED' || order.status === 'PROCESSING' && order.paymentModel === 'PREPAID') {
+    return { status: 'success' };
+  }
+  
+  if (!order.paymentLinkId) {
+    return { status: 'pending' };
+  }
+  
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { tenantId: true }
+  });
+  
+  const gateway = await prisma.tenantPaymentGateway.findUnique({
+    where: {
+      tenantId_provider: {
+        tenantId: store.tenantId,
+        provider: 'RAZORPAY'
+      }
+    }
+  });
+  
+  if (!gateway || !gateway.isActive) {
+    throw createHttpError(400, "Razorpay is not configured for this tenant");
+  }
+  
+  const razorpay = new Razorpay({
+    key_id: decrypt(gateway.apiKey),
+    key_secret: decrypt(gateway.secretKey)
+  });
+  
+  try {
+    const paymentLink = await razorpay.paymentLink.fetch(order.paymentLinkId);
+    
+    if (paymentLink.status === 'paid') {
+      const newStatus = order.paymentModel === 'PREPAID' ? 'PROCESSING' : 'SETTLED';
+      const updatedOrder = await updateOrderStatus(null, storeId, orderId, newStatus);
+      return { status: 'success' };
+    }
+    
+    return { status: 'pending' };
+  } catch (error) {
+    console.error("Error fetching payment link status:", error);
+    return { status: 'pending' };
   }
 }
 
@@ -661,6 +732,7 @@ module.exports = {
   getKdsOrders,
   getActiveOrders,
   generatePaymentLink,
+  checkPaymentStatus,
   verifyRazorpayPayment,
   getOrderById,
   getOrderHistory

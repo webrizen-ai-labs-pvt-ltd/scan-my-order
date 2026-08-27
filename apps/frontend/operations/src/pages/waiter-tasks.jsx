@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
-import { Tick02Icon, Cancel01Icon, Store01Icon, Clock01Icon, Money01Icon, QrCodeIcon, CheckmarkBadge01Icon } from 'hugeicons-react';
+import { Tick02Icon, Cancel01Icon, Store01Icon, Clock01Icon, Money01Icon, QrCodeIcon, CheckmarkBadge01Icon, PrinterIcon } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { Receipt } from '../components/receipt';
 
 // Toast component for notifications
 const Toast = ({ message, type, onClose }) => {
@@ -114,6 +115,10 @@ export const WaiterTasks = () => {
   const [qrUrl, setQrUrl] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('SERVE');
+  
+  const [storeData, setStoreData] = useState(null);
+  const [receiptOrder, setReceiptOrder] = useState(null);
+  const receiptRef = useRef();
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -164,6 +169,10 @@ export const WaiterTasks = () => {
   useEffect(() => {
     if (selectedStoreId) {
       fetchOrders(selectedStoreId);
+      
+      api.get(`/stores/${selectedStoreId}`).then(res => {
+        if (res.data.success) setStoreData(res.data.data);
+      }).catch(err => console.error("Failed to fetch store data", err));
 
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
       let eventSource;
@@ -190,10 +199,19 @@ export const WaiterTasks = () => {
                  setPaymentOrder(prev => {
                    if (prev && prev.id === data.data.id) {
                      showToast('Payment verified successfully!', 'success');
+                     
+                     // Show receipt
+                     api.get(`/stores/${selectedStoreId}/orders/${data.data.id}`).then(orderRes => {
+                       if (orderRes.data.success) {
+                         setReceiptOrder(orderRes.data.data);
+                       }
+                     });
+                     
                      return null;
                    }
                    return prev;
                  });
+                 setQrUrl(null);
               }
             }
           } catch (e) {
@@ -257,6 +275,48 @@ export const WaiterTasks = () => {
       setQrLoading(false);
     }
   };
+
+  // Payment Polling logic
+  useEffect(() => {
+    let intervalId;
+    let attempts = 0;
+    
+    if (qrUrl && paymentOrder && selectedStoreId) {
+      intervalId = setInterval(async () => {
+        attempts++;
+        // Timeout after 5 minutes (100 attempts * 3 seconds)
+        if (attempts > 100) {
+          clearInterval(intervalId);
+          showToast('Payment QR Expired (timeout). Please generate again.', 'error');
+          setQrUrl(null);
+          return;
+        }
+        
+        try {
+          const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
+          if (res.data.success && res.data.data.status === 'success') {
+            clearInterval(intervalId);
+            showToast('Payment verified successfully!', 'success');
+            
+            const orderId = paymentOrder.id;
+            setPaymentOrder(null);
+            setQrUrl(null);
+            
+            const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
+            if (orderRes.data.success) {
+              setReceiptOrder(orderRes.data.data);
+            }
+          }
+        } catch (err) {
+          console.error("Polling error:", err);
+        }
+      }, 3000); // Poll every 3 seconds
+    }
+    
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [qrUrl, paymentOrder, selectedStoreId]);
 
   const handleStoreChange = (storeId) => {
     setSelectedStoreId(storeId);
@@ -336,6 +396,77 @@ export const WaiterTasks = () => {
                >
                  Cancel
                </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal Overlay */}
+      {receiptOrder && (
+        <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center p-6 backdrop-blur-md">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl flex flex-col w-full max-w-md max-h-[90vh] overflow-hidden">
+            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400">
+              <h3 className="font-bold flex items-center gap-2"><Tick02Icon size={20}/> Payment Successful</h3>
+              <button onClick={() => setReceiptOrder(null)} className="p-1 hover:bg-green-100 dark:hover:bg-green-800 rounded-full">
+                <Cancel01Icon size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 bg-zinc-100 dark:bg-black">
+              {receiptOrder && storeData && (
+                <Receipt ref={receiptRef} order={receiptOrder} storeData={storeData} />
+              )}
+            </div>
+
+            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => setReceiptOrder(null)}
+              >
+                Close
+              </Button>
+              <Button 
+                className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-2"
+                onClick={() => {
+                  const printWindow = window.open('', '', 'width=400,height=600');
+                  printWindow.document.write(`
+                    <html>
+                      <head>
+                        <title>Receipt</title>
+                        <style>
+                          body { font-family: monospace; font-size: 14px; margin: 0; padding: 20px; }
+                          .flex { display: flex; }
+                          .justify-between { justify-content: space-between; }
+                          .text-center { text-align: center; }
+                          .text-right { text-align: right; }
+                          .font-bold { font-weight: bold; }
+                          .text-xl { font-size: 1.25rem; }
+                          .text-lg { font-size: 1.125rem; }
+                          .mb-4 { margin-bottom: 1rem; }
+                          .mb-2 { margin-bottom: 0.5rem; }
+                          .mb-1 { margin-bottom: 0.25rem; }
+                          .pb-2 { padding-bottom: 0.5rem; }
+                          .pl-2 { padding-left: 0.5rem; }
+                          .uppercase { text-transform: uppercase; }
+                          .border-b { border-bottom: 1px dashed black; }
+                          .flex-1 { flex: 1; }
+                          .w-10 { width: 2.5rem; }
+                          .w-16 { width: 4rem; }
+                          .text-xs { font-size: 0.75rem; }
+                          .pr-2 { padding-right: 0.5rem; }
+                        </style>
+                      </head>
+                      <body>${receiptRef.current.innerHTML}</body>
+                    </html>
+                  `);
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+                }}
+              >
+                <PrinterIcon size={18} /> Print Receipt
+              </Button>
             </div>
           </div>
         </div>

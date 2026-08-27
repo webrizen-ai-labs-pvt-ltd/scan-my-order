@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../lib/api';
 import { Card, CardContent, Button, Skeleton } from '@smo/ui';
-import { Money01Icon, QrCodeIcon, Search01Icon, Cancel01Icon, Tick02Icon } from 'hugeicons-react';
+import { Money01Icon, QrCodeIcon, Search01Icon, Cancel01Icon, Tick02Icon, PrinterIcon } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { Receipt } from './receipt';
 
 export const POSActiveOrders = ({ selectedStoreId, token }) => {
   const [orders, setOrders] = useState([]);
@@ -11,6 +12,10 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [qrModal, setQrModal] = useState({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
+
+  const [storeData, setStoreData] = useState(null);
+  const [receiptOrder, setReceiptOrder] = useState(null);
+  const receiptRef = useRef();
 
   const qrModalRef = useRef(qrModal);
   useEffect(() => {
@@ -36,6 +41,10 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
       setLoading(true);
       fetchOrders(selectedStoreId);
       
+      api.get(`/stores/${selectedStoreId}`).then(res => {
+        if (res.data.success) setStoreData(res.data.data);
+      }).catch(err => console.error("Failed to fetch store data", err));
+      
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
       const eventSource = new EventSource(`${baseUrl}/stores/${selectedStoreId}/orders/stream?token=${token}`);
       
@@ -59,6 +68,11 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
     try {
       await api.patch(`/stores/${selectedStoreId}/orders/${orderId}/status`, { status: 'SETTLED' });
       setOrders(prev => prev.filter(o => o.id !== orderId));
+      
+      const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
+      if (orderRes.data.success) {
+        setReceiptOrder(orderRes.data.data);
+      }
     } catch (err) {
       console.error(err);
       setError('Failed to settle order');
@@ -88,10 +102,16 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
   const verifyOrder = async () => {
     setIsVerifying(true);
     try {
-      const res = await api.post(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/verify-payment`);
-      if (res.data.success && res.data.data.success) {
+      const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
+      if (res.data.success && res.data.data.status === 'success') {
+         const orderId = qrModal.orderId;
          setQrModal({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
          fetchOrders(selectedStoreId);
+         
+         const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
+         if (orderRes.data.success) {
+           setReceiptOrder(orderRes.data.data);
+         }
       } else {
          alert(res.data.data?.message || `Payment not received yet.`);
       }
@@ -104,21 +124,40 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
   };
 
   useEffect(() => {
-    let interval;
+    let intervalId;
+    let attempts = 0;
+    
     if (qrModal.isOpen && qrModal.orderId) {
-      interval = setInterval(async () => {
+      intervalId = setInterval(async () => {
+        attempts++;
+        if (attempts > 100) {
+          clearInterval(intervalId);
+          alert('Payment QR Expired (timeout). Please generate again.');
+          setQrModal({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
+          return;
+        }
+
         try {
-          const res = await api.post(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/verify-payment`);
-          if (res.data.success && res.data.data.success) {
+          const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
+          if (res.data.success && res.data.data.status === 'success') {
+             clearInterval(intervalId);
+             const orderId = qrModal.orderId;
              setQrModal({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
              fetchOrders(selectedStoreId);
+             
+             const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
+             if (orderRes.data.success) {
+               setReceiptOrder(orderRes.data.data);
+             }
           }
         } catch (err) {
           // Silent failure for polling
         }
-      }, 5000); // Poll every 5 seconds
+      }, 3000); // Poll every 3 seconds
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [qrModal.isOpen, qrModal.orderId, selectedStoreId]);
 
   const getStatusDisplay = (status) => {
@@ -338,6 +377,77 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
                 onClick={verifyOrder}
               >
                 {isVerifying ? 'Verifying...' : 'Verify Payment'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receipt Modal Overlay */}
+      {receiptOrder && (
+        <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center p-6 backdrop-blur-md">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl flex flex-col w-full max-w-md max-h-[90vh] overflow-hidden">
+            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400">
+              <h3 className="font-bold flex items-center gap-2"><Tick02Icon size={20}/> Order Settled</h3>
+              <button onClick={() => setReceiptOrder(null)} className="p-1 hover:bg-green-100 dark:hover:bg-green-800 rounded-full">
+                <Cancel01Icon size={20} />
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 bg-zinc-100 dark:bg-black">
+              {receiptOrder && storeData && (
+                <Receipt ref={receiptRef} order={receiptOrder} storeData={storeData} />
+              )}
+            </div>
+
+            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
+              <Button 
+                variant="outline" 
+                className="flex-1"
+                onClick={() => setReceiptOrder(null)}
+              >
+                Close
+              </Button>
+              <Button 
+                className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-2"
+                onClick={() => {
+                  const printWindow = window.open('', '', 'width=400,height=600');
+                  printWindow.document.write(`
+                    <html>
+                      <head>
+                        <title>Receipt</title>
+                        <style>
+                          body { font-family: monospace; font-size: 14px; margin: 0; padding: 20px; }
+                          .flex { display: flex; }
+                          .justify-between { justify-content: space-between; }
+                          .text-center { text-align: center; }
+                          .text-right { text-align: right; }
+                          .font-bold { font-weight: bold; }
+                          .text-xl { font-size: 1.25rem; }
+                          .text-lg { font-size: 1.125rem; }
+                          .mb-4 { margin-bottom: 1rem; }
+                          .mb-2 { margin-bottom: 0.5rem; }
+                          .mb-1 { margin-bottom: 0.25rem; }
+                          .pb-2 { padding-bottom: 0.5rem; }
+                          .pl-2 { padding-left: 0.5rem; }
+                          .uppercase { text-transform: uppercase; }
+                          .border-b { border-bottom: 1px dashed black; }
+                          .flex-1 { flex: 1; }
+                          .w-10 { width: 2.5rem; }
+                          .w-16 { width: 4rem; }
+                          .text-xs { font-size: 0.75rem; }
+                          .pr-2 { padding-right: 0.5rem; }
+                        </style>
+                      </head>
+                      <body>${receiptRef.current.innerHTML}</body>
+                    </html>
+                  `);
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+                }}
+              >
+                <PrinterIcon size={18} /> Print Receipt
               </Button>
             </div>
           </div>

@@ -89,6 +89,13 @@ router.post("/:id/verify-payment", asyncHandler(async (req, res) => {
   res.json(createApiResponse(result));
 }));
 
+// GET /api/stores/:storeId/orders/:id/payment-status
+router.get("/:id/payment-status", asyncHandler(async (req, res) => {
+  const { checkPaymentStatus } = require("./order-service");
+  const result = await checkPaymentStatus(req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
+}));
+
 // GET /api/stores/:storeId/orders/:id
 router.get("/:id", asyncHandler(async (req, res) => {
   const result = await getOrderById(req.params.storeId, req.params.id);
