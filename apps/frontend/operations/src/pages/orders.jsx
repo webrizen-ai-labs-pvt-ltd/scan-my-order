@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
-import { useStoreStore } from '../store/storeStore';
 import { 
   Card, CardContent, CardHeader, CardTitle, 
   Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -9,19 +8,37 @@ import {
   Badge, Dialog, DialogContent, DialogHeader, DialogTitle,
   Skeleton
 } from '@smo/ui';
-import { Search01Icon, FilterIcon, PrinterIcon, Download01Icon, Money01Icon } from 'hugeicons-react';
+import { Search01Icon, FilterIcon, PrinterIcon, Download01Icon, Store01Icon } from 'hugeicons-react';
 
 const ORDER_STATUSES = ['DRAFT', 'PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED', 'SETTLED', 'CANCELLED'];
 const PAYMENT_MODELS = ['PREPAID', 'POSTPAID'];
 const ORIGINS = ['POS', 'QR_MENU', 'KIOSK', 'AGGREGATOR'];
 
 export const Orders = () => {
-  const { currentStore } = useStoreStore();
-  const selectedStoreId = currentStore?.id;
+  const { user } = useAuthStore();
+  const [stores, setStores] = useState([]);
+  const [selectedStoreId, setSelectedStoreId] = useState(user?.store?.id || null);
+  const [currentStore, setCurrentStore] = useState(user?.store || null);
   
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ total: 0, pages: 1, current: 1, limit: 10 });
+
+  useEffect(() => {
+    if (!user?.store) {
+      api.get('/stores').then(res => {
+        if (res.data.success && res.data.data.length > 0) {
+          setStores(res.data.data);
+          if (!selectedStoreId) {
+            setSelectedStoreId(res.data.data[0].id);
+            setCurrentStore(res.data.data[0]);
+          }
+        }
+      });
+    } else {
+      setCurrentStore(user.store);
+    }
+  }, [user]);
   
   // Filters
   const [search, setSearch] = useState('');
