@@ -8,58 +8,111 @@ import { BorderBeam } from 'border-beam';
 
 export default function HomePage() {
     return (
-        <section className="w-full flex flex-col items-center justify-center md:p-8 p-2">
-            <BorderBeam size="md" colorVariant="colorful" strength={0.9} className="w-full relative">
-                <div className="absolute inset-0 z-0">
-                    <WebThreads
-                    color1="#FACC15"
-                    color2="#EAB308"
-                    color3="#FFFFFF"
-                    speed={2}
-                    threadCount={3}
-                    frequency={14}
-                    spread={0.21}
-                    taper={1}
-                    position={0.5}
-                    fanMode="center"
-                    glow={0.034}
-                    falloff={0.6}
-                    thickness={0.8}
-                    brightness={0.85}
-                    opacity={1}
-                    mirror
-                    shimmer={false}
-                    grain
-                    grainIntensity={0}
-                    mouseInteraction
-                    mouseStrength={0.3}
-                />
+        <section className="relative w-full flex flex-col items-center justify-center md:p-8 p-2 bg-gradient-to-br from-yellow-400 via-yellow-500 to-amber-500 text-yellow-50 min-h-[89vh] overflow-hidden">
+
+            <div className="container mx-auto px-4 md:px-8 py-12 flex flex-col w-full h-full gap-8 relative z-20">
+                {/* Badge */}
+                <div className="flex justify-center">
+                    <span className="inline-flex items-center gap-2 bg-yellow-100/20 backdrop-blur-sm border border-yellow-100/30 rounded-full px-4 py-2 text-sm font-medium">
+                        Now in Beta - Free for early adopters
+                    </span>
                 </div>
-                <div className="container mx-auto px-8 py-12 flex flex-col w-full h-full gap-8 relative z-20">
-                    <h1 className="text-4xl md:text-8xl font-bold max-w-7xl">The only OS you need for your restaurant.</h1>
-                    <p className="text-lg md:text-xl max-w-2xl">Streamline your restaurant operations with our all-in-one platform that connects your kitchen, bar, and front of house.</p>
-                    <div className="flex md:flex-row flex-col gap-4">
-                        <Button asChild size="lg">
-                            <Link to="/signup">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-6">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
-                                </svg>
 
-                                Get Started</Link>
-                        </Button>
-                        <Button asChild variant="link" size="lg">
-                            <Link to="/login">
-                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-6">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a7.464 7.464 0 0 1-1.15 3.993m1.989 3.559A11.209 11.209 0 0 0 8.25 10.5a3.75 3.75 0 1 1 7.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 0 1-3.6 9.75m6.633-4.596a18.666 18.666 0 0 1-2.485 5.33" />
-                                </svg>
+                <div className="text-center space-y-6">
+                    <h1 className="text-4xl md:text-7xl font-elsie leading-tight">
+                        Curated Restaurant Management{" "}
+                        <span className="relative inline-block">
+                            Platform
+                            <svg className="absolute -bottom-2 left-0 w-full" viewBox="0 0 200 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M2 15C50 5 150 5 198 15" stroke="currentColor" strokeWidth="3" strokeLinecap="round" className="text-yellow-200/60" />
+                            </svg>
+                        </span>{" "}
+                        that scales with you.
+                    </h1>
 
-                                Authenticate to your account
-                            </Link>
-                        </Button>
+                    <p className="text-lg md:text-xl max-w-2xl mx-auto text-yellow-50/90">
+                        Streamline your restaurant operations with our all-in-one platform that connects your kitchen, bar, and front of house.
+                    </p>
+                </div>
+
+                {/* Stats Section */}
+                <div className="grid grid-cols-3 gap-4 max-w-3xl mx-auto w-full">
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                        <div className="text-2xl md:text-3xl font-bold">500+</div>
+                        <div className="text-xs md:text-sm text-yellow-50/80">Restaurants</div>
                     </div>
-                    <img src="https://cdn.dribbble.com/userupload/48030667/file/9c355e5f3b4fbef2eb8365a750260275.png?resize=1024x768&vertical=center" alt="Restaurant Dashboard" className="w-full h-full" />
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                        <div className="text-2xl md:text-3xl font-bold">99.9%</div>
+                        <div className="text-xs md:text-sm text-yellow-50/80">Uptime</div>
+                    </div>
+                    <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
+                        <div className="text-2xl md:text-3xl font-bold">24/7</div>
+                        <div className="text-xs md:text-sm text-yellow-50/80">Support</div>
+                    </div>
                 </div>
-            </BorderBeam>
+
+                {/* Action Buttons */}
+                <div className="flex md:flex-row flex-col justify-center items-center">
+                    <Button asChild size="lg" variant="secondary" className="group relative overflow-hidden shadow-lg hover:shadow-xl transition-all">
+                        <Link to="/signup" className="relative z-10">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="size-6 inline-block mr-2 group-hover:translate-x-1 transition-transform">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18 9 11.25l4.306 4.306a11.95 11.95 0 0 1 5.814-5.518l2.74-1.22m0 0-5.94-2.281m5.94 2.28-2.28 5.941" />
+                            </svg>
+                            Get Started Free
+                        </Link>
+                    </Button>
+                    <Button asChild variant="link" size="lg" className="text-yellow-50 hover:text-white">
+                        <Link to="/pricing">
+                          Pricing
+                        </Link>
+                    </Button>
+                </div>
+
+                {/* Trust indicators */}
+                <div className="flex flex-wrap justify-center gap-4 md:gap-8 text-sm text-yellow-50/70">
+                    <span className="flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        No credit card required
+                    </span>
+                    <span className="flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Free 14-day trial
+                    </span>
+                    <span className="flex items-center gap-2">
+                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                        </svg>
+                        Cancel anytime
+                    </span>
+                </div>
+            </div>
+
+            {/* Leaf-shaped SVG Divider - Theme aware */}
+            <div className="absolute bottom-0 left-0 w-full overflow-hidden leading-none z-10">
+                <svg
+                    viewBox="0 0 1200 120"
+                    className="block w-full h-[60px] md:h-[120px]"
+                    preserveAspectRatio="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                >
+                    {/* Main leaf shapes - light mode */}
+                    <path
+                        className="fill-white dark:fill-zinc-900 transition-colors duration-300"
+                        d="M0,120 L0,80 Q100,20 200,80 Q300,20 400,80 Q500,20 600,80 Q700,20 800,80 Q900,20 1000,80 Q1100,20 1200,80 L1200,120 Z"
+                    ></path>
+
+                    {/* Overlapping leaf shapes with offset - light mode */}
+                    <path
+                        className="fill-yellow-50 dark:fill-zinc-800 transition-colors duration-300"
+                        fillOpacity="0.6"
+                        d="M0,120 L0,95 Q150,45 300,95 Q450,45 600,95 Q750,45 900,95 Q1050,45 1200,95 L1200,120 Z"
+                    ></path>
+                </svg>
+            </div>
         </section>
     );
 }

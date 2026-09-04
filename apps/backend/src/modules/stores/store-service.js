@@ -338,10 +338,96 @@ async function getStoreFloorStatus(actor, storeId) {
     }
   });
 
+  // Fetch all tables with their active orders and unresolved waiter calls
+  const rawTables = await prisma.table.findMany({
+    where: {
+      storeId,
+      isActive: true
+    },
+    orderBy: { tableNumber: 'asc' },
+    include: {
+      orders: {
+        where: {
+          status: {
+            in: ['DRAFT', 'PENDING_PAYMENT', 'PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED']
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: {
+          items: {
+            include: {
+              menuItem: { select: { name: true } }
+            }
+          }
+        }
+      },
+      waiterCalls: {
+        where: {
+          status: { in: ['PENDING', 'ACKNOWLEDGED'] }
+        },
+        orderBy: { createdAt: 'desc' }
+      }
+    }
+  });
+
+  const tables = rawTables.map((tbl) => {
+    const activeOrder = tbl.orders[0] || null;
+    const activeCalls = tbl.waiterCalls || [];
+    const hasWaiterCall = activeCalls.length > 0;
+    const billCall = activeCalls.find(c => c.type === 'BILL');
+
+    let status = 'AVAILABLE';
+    if (billCall) {
+      status = 'BILL_REQUESTED';
+    } else if (hasWaiterCall) {
+      status = 'ATTENTION';
+    } else if (activeOrder) {
+      if (activeOrder.status === 'READY') {
+        status = 'READY';
+      } else if (activeOrder.status === 'PROCESSING') {
+        status = 'PROCESSING';
+      } else if (activeOrder.status === 'SERVED') {
+        status = 'SERVED';
+      } else {
+        status = 'OCCUPIED'; // DRAFT, PENDING_PAYMENT, PENDING_VERIFICATION
+      }
+    }
+
+    return {
+      id: tbl.id,
+      tableNumber: tbl.tableNumber,
+      isActive: tbl.isActive,
+      status,
+      hasWaiterCall,
+      activeWaiterCalls: activeCalls.map(c => ({
+        id: c.id,
+        type: c.type,
+        status: c.status,
+        createdAt: c.createdAt
+      })),
+      currentOrder: activeOrder ? {
+        id: activeOrder.id,
+        status: activeOrder.status,
+        origin: activeOrder.origin,
+        paymentModel: activeOrder.paymentModel,
+        totalAmount: activeOrder.totalAmount,
+        createdAt: activeOrder.createdAt,
+        itemsCount: activeOrder.items.reduce((sum, item) => sum + item.quantity, 0),
+        items: activeOrder.items.map(i => ({
+          name: i.menuItem?.name || 'Item',
+          quantity: i.quantity,
+          priceAtOrder: i.priceAtOrder
+        }))
+      } : null
+    };
+  });
+
   return {
     orders,
     activeTables,
-    waiterCalls
+    waiterCalls,
+    tables
   };
 }
 

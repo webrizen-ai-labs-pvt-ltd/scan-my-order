@@ -1,6 +1,7 @@
 export * from "./components/theme-provider.jsx";
 export * from "./components/animated-theme-toggler.jsx";
 export * from "./components/floor-map.jsx";
+export * from "./components/live-table-floor-plan.jsx";
 
 // Components
 export * from "./components/ui/accordion.jsx";
