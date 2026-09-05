@@ -159,6 +159,7 @@ model Store {
   menuItems    MenuItem[]
   rawMaterials RawMaterial[]
   tables       Table[]
+  tableSessions TableSession[]
   orders       Order[]
   waiterCalls  WaiterCall[]
   feedbacks    Feedback[]
@@ -371,6 +372,7 @@ model Table {
   isActive    Boolean  @default(true)
   
   orders      Order[]
+  sessions    TableSession[]
   waiterCalls WaiterCall[]
 
   createdAt   DateTime @default(now())
@@ -413,6 +415,8 @@ model Order {
   type            OrderType
   tableId         String?        
   table           Table?         @relation(fields: [tableId], references: [id])
+  tableSessionId  String?
+  tableSession    TableSession?  @relation(fields: [tableSessionId], references: [id])
   staffId         String?        
   staff           User?          @relation("StaffOrders", fields: [staffId], references: [id])
   customerId      String?
@@ -491,4 +495,26 @@ model Feedback {
   comment     String?
   isPublic    Boolean  @default(false) 
   createdAt   DateTime @default(now())
+}
+
+enum TableSessionStatus {
+  ACTIVE
+  SETTLED
+  CANCELLED
+}
+
+model TableSession {
+  id         String             @id @default(cuid())
+  storeId    String
+  store      Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  tableId    String
+  table      Table              @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  pin        String             // 4-digit numeric PIN e.g. "4821"
+  status     TableSessionStatus @default(ACTIVE)
+  orders     Order[]
+
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+
+  @@index([storeId, tableId, status])
 }

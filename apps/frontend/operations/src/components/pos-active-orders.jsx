@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../lib/api';
 import { Card, CardContent, Button, Skeleton } from '@smo/ui';
-import { Money01Icon, QrCodeIcon, Search01Icon, Cancel01Icon, Tick02Icon, PrinterIcon } from 'hugeicons-react';
+import { Money01Icon, QrCodeIcon, Search01Icon, Cancel01Icon, Tick02Icon, PrinterIcon, UserGroupIcon } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from './receipt';
 
@@ -11,7 +11,7 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
-  const [qrModal, setQrModal] = useState({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
+  const [qrModal, setQrModal] = useState({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null });
 
   const [storeData, setStoreData] = useState(null);
   const [receiptOrder, setReceiptOrder] = useState(null);
@@ -54,8 +54,12 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
           fetchOrders(selectedStoreId);
           
           const currentModal = qrModalRef.current;
-          if ((message.type === 'ORDER_PROCESSING' || message.type === 'ORDER_SETTLED') && currentModal.isOpen && message.data?.id === currentModal.orderId) {
-             setQrModal({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
+          if (
+            (message.type === 'ORDER_PROCESSING' || message.type === 'ORDER_SETTLED' || message.type === 'TABLE_SESSION_SETTLED') &&
+            currentModal.isOpen &&
+            (message.data?.id === currentModal.orderId || message.data?.tableSessionId === currentModal.sessionId)
+          ) {
+            setQrModal({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null });
           }
         } catch(e) {}
       };
@@ -64,7 +68,42 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
     }
   }, [selectedStoreId, token]);
 
-  const settleOrder = async (orderId) => {
+  const settleSession = async (tableSessionId, fallbackOrder) => {
+    try {
+      if (tableSessionId) {
+        await api.post(`/stores/${selectedStoreId}/orders/sessions/${tableSessionId}/settle`);
+        const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${tableSessionId}`);
+        if (billRes.data.success) {
+          const b = billRes.data.data;
+          setReceiptOrder({
+            id: `TAB-${b.session.pin}`,
+            createdAt: b.session.createdAt,
+            type: 'DINE_IN',
+            paymentModel: 'POSTPAID',
+            table: { tableNumber: b.session.tableNumber },
+            subTotal: b.subTotal,
+            discountAmount: b.discountAmount,
+            taxAmount: b.taxAmount,
+            totalAmount: b.totalAmount,
+            items: b.aggregatedItems.map(i => ({
+              quantity: i.quantity,
+              priceAtOrder: i.price,
+              menuItem: { name: i.name },
+              modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
+            }))
+          });
+        }
+        fetchOrders(selectedStoreId);
+      } else if (fallbackOrder) {
+        await settleSingleOrder(fallbackOrder.id);
+      }
+    } catch (err) {
+      console.error(err);
+      setError('Failed to settle table');
+    }
+  };
+
+  const settleSingleOrder = async (orderId) => {
     try {
       await api.patch(`/stores/${selectedStoreId}/orders/${orderId}/status`, { status: 'SETTLED' });
       setOrders(prev => prev.filter(o => o.id !== orderId));
@@ -89,76 +128,162 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
     }
   };
 
-  const handleGenerateQR = async (order) => {
+  const handleGenerateQR = async (group) => {
     try {
-      const linkRes = await api.post(`/stores/${selectedStoreId}/orders/${order.id}/payment-link`);
-      setQrModal({ isOpen: true, url: linkRes.data.data.short_url, orderId: order.id, totalAmount: order.totalAmount });
+      if (group.tableSessionId) {
+        const linkRes = await api.post(`/stores/${selectedStoreId}/orders/sessions/${group.tableSessionId}/payment-link`);
+        setQrModal({
+          isOpen: true,
+          url: linkRes.data.data.short_url,
+          sessionId: group.tableSessionId,
+          orderId: group.orders[0]?.id,
+          totalAmount: linkRes.data.data.totalAmount,
+          tableNumber: group.table?.tableNumber
+        });
+      } else {
+        const order = group.orders[0];
+        const linkRes = await api.post(`/stores/${selectedStoreId}/orders/${order.id}/payment-link`);
+        setQrModal({
+          isOpen: true,
+          url: linkRes.data.data.short_url,
+          sessionId: null,
+          orderId: order.id,
+          totalAmount: order.totalAmount,
+          tableNumber: order.table?.tableNumber
+        });
+      }
     } catch (err) {
       console.error(err);
       alert("Failed to generate QR code");
     }
   };
 
-  const verifyOrder = async () => {
+  const verifyPayment = async () => {
     setIsVerifying(true);
     try {
-      const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
-      if (res.data.success && res.data.data.status === 'success') {
-         const orderId = qrModal.orderId;
-         setQrModal({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
-         fetchOrders(selectedStoreId);
-         
-         const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
-         if (orderRes.data.success) {
-           setReceiptOrder(orderRes.data.data);
-         }
-      } else {
-         alert(res.data.data?.message || `Payment not received yet.`);
+      if (qrModal.sessionId) {
+        const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${qrModal.sessionId}/verify-payment`);
+        if (res.data.success && res.data.data.status === 'SETTLED') {
+          const sessId = qrModal.sessionId;
+          setQrModal({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null });
+          fetchOrders(selectedStoreId);
+          
+          const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
+          if (billRes.data.success) {
+            const b = billRes.data.data;
+            setReceiptOrder({
+              id: `TAB-${b.session.pin}`,
+              createdAt: b.session.createdAt,
+              type: 'DINE_IN',
+              paymentModel: 'POSTPAID',
+              table: { tableNumber: b.session.tableNumber },
+              subTotal: b.subTotal,
+              discountAmount: b.discountAmount,
+              taxAmount: b.taxAmount,
+              totalAmount: b.totalAmount,
+              items: b.aggregatedItems.map(i => ({
+                quantity: i.quantity,
+                priceAtOrder: i.price,
+                menuItem: { name: i.name },
+                modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
+              }))
+            });
+          }
+        } else {
+          alert(res.data.data?.message || 'Payment not yet confirmed.');
+        }
+      } else if (qrModal.orderId) {
+        const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
+        if (res.data.success && res.data.data.status === 'success') {
+          const orderId = qrModal.orderId;
+          setQrModal({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null });
+          fetchOrders(selectedStoreId);
+          
+          const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
+          if (orderRes.data.success) {
+            setReceiptOrder(orderRes.data.data);
+          }
+        } else {
+          alert(res.data.data?.message || `Payment not received yet.`);
+        }
       }
     } catch (err) {
-       const msg = err.response?.data?.error?.message || "Failed to verify order.";
-       alert("Error: " + msg);
+      const msg = err.response?.data?.error?.message || "Failed to verify payment.";
+      alert("Error: " + msg);
     } finally {
-       setIsVerifying(false);
+      setIsVerifying(false);
     }
   };
 
+  // Payment Polling logic
   useEffect(() => {
     let intervalId;
     let attempts = 0;
     
-    if (qrModal.isOpen && qrModal.orderId) {
+    if (qrModal.isOpen && (qrModal.sessionId || qrModal.orderId)) {
       intervalId = setInterval(async () => {
         attempts++;
         if (attempts > 100) {
           clearInterval(intervalId);
           alert('Payment QR Expired (timeout). Please generate again.');
-          setQrModal({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
+          setQrModal({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null });
           return;
         }
 
         try {
-          const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
-          if (res.data.success && res.data.data.status === 'success') {
-             clearInterval(intervalId);
-             const orderId = qrModal.orderId;
-             setQrModal({ isOpen: false, url: '', orderId: '', totalAmount: 0 });
-             fetchOrders(selectedStoreId);
-             
-             const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
-             if (orderRes.data.success) {
-               setReceiptOrder(orderRes.data.data);
-             }
+          if (qrModal.sessionId) {
+            const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${qrModal.sessionId}/verify-payment`);
+            if (res.data.success && res.data.data.status === 'SETTLED') {
+              clearInterval(intervalId);
+              const sessId = qrModal.sessionId;
+              setQrModal({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null });
+              fetchOrders(selectedStoreId);
+              
+              const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
+              if (billRes.data.success) {
+                const b = billRes.data.data;
+                setReceiptOrder({
+                  id: `TAB-${b.session.pin}`,
+                  createdAt: b.session.createdAt,
+                  type: 'DINE_IN',
+                  paymentModel: 'POSTPAID',
+                  table: { tableNumber: b.session.tableNumber },
+                  subTotal: b.subTotal,
+                  discountAmount: b.discountAmount,
+                  taxAmount: b.taxAmount,
+                  totalAmount: b.totalAmount,
+                  items: b.aggregatedItems.map(i => ({
+                    quantity: i.quantity,
+                    priceAtOrder: i.price,
+                    menuItem: { name: i.name },
+                    modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
+                  }))
+                });
+              }
+            }
+          } else if (qrModal.orderId) {
+            const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
+            if (res.data.success && res.data.data.status === 'success') {
+              clearInterval(intervalId);
+              const orderId = qrModal.orderId;
+              setQrModal({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null });
+              fetchOrders(selectedStoreId);
+              
+              const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
+              if (orderRes.data.success) {
+                setReceiptOrder(orderRes.data.data);
+              }
+            }
           }
         } catch (err) {
-          // Silent failure for polling
+          // Silent polling failure
         }
-      }, 3000); // Poll every 3 seconds
+      }, 3000);
     }
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [qrModal.isOpen, qrModal.orderId, selectedStoreId]);
+  }, [qrModal.isOpen, qrModal.sessionId, qrModal.orderId, selectedStoreId]);
 
   const getStatusDisplay = (status) => {
     switch(status) {
@@ -170,6 +295,42 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
       default: return { label: status, color: 'bg-zinc-100 text-zinc-800 border-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700' };
     }
   };
+
+  const filteredOrders = orders.filter(o => {
+    if (!searchQuery) return true;
+    const term = searchQuery.toLowerCase();
+    if (o.table && String(o.table.tableNumber).toLowerCase().includes(term)) return true;
+    if (o.tableSession?.pin && String(o.tableSession.pin).includes(term)) return true;
+    if (o.id.toLowerCase().includes(term)) return true;
+    return false;
+  });
+
+  // Group active orders by table session or table
+  const groupedOrders = useMemo(() => {
+    const groups = [];
+    const sessionMap = new Map();
+
+    for (const order of filteredOrders) {
+      const key = order.tableSessionId || (order.table ? `tbl_${order.table.id}` : `ord_${order.id}`);
+      if (sessionMap.has(key)) {
+        sessionMap.get(key).orders.push(order);
+      } else {
+        const group = {
+          key,
+          tableSessionId: order.tableSessionId,
+          tableSession: order.tableSession,
+          table: order.table,
+          origin: order.origin,
+          paymentModel: order.paymentModel,
+          orders: [order]
+        };
+        sessionMap.set(key, group);
+        groups.push(group);
+      }
+    }
+
+    return groups;
+  }, [filteredOrders]);
 
   if (error) {
     return (
@@ -187,14 +348,6 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
     );
   }
 
-  const filteredOrders = orders.filter(o => {
-    if (!searchQuery) return true;
-    const term = searchQuery.toLowerCase();
-    if (o.table && String(o.table.tableNumber).toLowerCase().includes(term)) return true;
-    if (o.id.toLowerCase().includes(term)) return true;
-    return false;
-  });
-
   return (
     <div className="h-full flex flex-col overflow-hidden pb-4">
       {/* Search Bar */}
@@ -203,7 +356,7 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
           <Search01Icon className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
           <input 
             type="text" 
-            placeholder="Search by table number or Order ID..."
+            placeholder="Search by table number, Table PIN, or Order ID..."
             className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 shadow-sm"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -211,7 +364,7 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
         </div>
       </div>
 
-      {filteredOrders.length === 0 ? (
+      {groupedOrders.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 min-h-[400px]">
           <Money01Icon size={48} className="text-zinc-300 mb-4" />
           <h3 className="text-lg font-medium text-zinc-900 dark:text-zinc-100 mb-1">
@@ -223,107 +376,125 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 auto-rows-max flex-1 overflow-y-auto pr-2 pb-20">
-          {filteredOrders.map(order => {
-            const statusInfo = getStatusDisplay(order.status);
+          {groupedOrders.map(group => {
+            const groupTotal = group.orders.reduce((sum, o) => sum + o.totalAmount, 0);
+            const hasPendingVerification = group.orders.some(o => o.status === 'PENDING_VERIFICATION');
+            const allPrepaid = group.orders.every(o => o.paymentModel === 'PREPAID');
+            const primaryOrder = group.orders[0];
+            const statusInfo = getStatusDisplay(primaryOrder.status);
+
             return (
-              <Card key={order.id} className="border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-white dark:bg-zinc-900">
+              <Card key={group.key} className="border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-md transition-shadow flex flex-col h-full bg-white dark:bg-zinc-900">
                 <CardContent className="p-0 flex flex-col h-full">
                   
                   {/* Header */}
                   <div className="p-4 border-b border-zinc-100 dark:border-zinc-800/50 flex justify-between items-start bg-zinc-50/50 dark:bg-zinc-900/50 rounded-t-xl">
                     <div>
-                      <div className="flex items-center gap-2 mb-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
                         <span className="font-bold text-xl text-zinc-900 dark:text-zinc-100">
-                          {order.table ? `Table ${order.table.tableNumber}` : 'Takeaway'}
+                          {group.table ? `Table ${group.table.tableNumber}` : 'Takeaway'}
                         </span>
-                        <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md border font-semibold ${statusInfo.color}`}>
-                          {statusInfo.label}
-                        </span>
+
+                        {group.tableSession?.pin && (
+                          <span className="flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs px-2 py-0.5 rounded-md font-bold dark:bg-indigo-950/50 dark:border-indigo-800 dark:text-indigo-300">
+                            PIN: {group.tableSession.pin}
+                          </span>
+                        )}
+
+                        {group.orders.length > 1 && (
+                          <span className="bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[11px] px-2 py-0.5 rounded-md font-bold">
+                            {group.orders.length} Batches
+                          </span>
+                        )}
                       </div>
                       <div className="text-xs text-zinc-500 uppercase font-semibold tracking-wider flex gap-2">
-                        <span>{order.origin}</span>
+                        <span>{group.origin}</span>
                         <span>•</span>
-                        <span>{order.paymentModel}</span>
+                        <span>{allPrepaid ? 'PREPAID' : 'POSTPAID'}</span>
                       </div>
                     </div>
+
                     <div className="text-right flex flex-col items-end">
-                      <div className="font-bold text-xl text-zinc-900 dark:text-zinc-100">₹{order.totalAmount}</div>
-                      <span className="text-[10px] text-zinc-400 font-mono mt-1">#{order.id.slice(-6).toUpperCase()}</span>
+                      <div className="font-bold text-2xl text-zinc-900 dark:text-zinc-100">₹{groupTotal}</div>
+                      <span className={`text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md border font-semibold mt-1 ${statusInfo.color}`}>
+                        {hasPendingVerification ? 'Awaiting Approval' : statusInfo.label}
+                      </span>
                     </div>
                   </div>
                   
-                  {/* Items List */}
-                  <div className="p-4 flex-1 overflow-y-auto max-h-[200px]">
-                    {order.items.map((item, idx) => (
-                      <div key={idx} className="flex flex-col text-sm mb-3 last:mb-0">
-                        <div className="flex justify-between items-start">
-                          <span className="text-zinc-800 dark:text-zinc-200 leading-tight">
-                            <span className="font-semibold text-zinc-500 w-6 inline-block">{item.quantity}x</span> 
-                            <span className="font-medium">{item.menuItem?.name}</span>
-                          </span>
-                          <span className="text-zinc-500 font-medium">₹{item.priceAtOrder * item.quantity}</span>
-                        </div>
-                        {item.modifiers && item.modifiers.length > 0 && (
-                          <div className="text-xs text-zinc-500 pl-6 mt-1 flex flex-wrap gap-1">
-                            {item.modifiers.map(m => (
-                              <span key={m.id} className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">
-                                +{m.modifierOption?.name}
+                  {/* Items List across all grouped orders */}
+                  <div className="p-4 flex-1 overflow-y-auto max-h-[220px] space-y-3">
+                    {group.orders.map((order, ordIdx) => (
+                      <div key={order.id} className={group.orders.length > 1 ? "border-b pb-2 last:border-b-0 border-zinc-100 dark:border-zinc-800" : ""}>
+                        {group.orders.length > 1 && (
+                          <div className="text-[10px] uppercase font-bold text-zinc-400 mb-1 flex justify-between">
+                            <span>Batch #{ordIdx + 1}</span>
+                            <span>{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        )}
+                        {order.items.map((item, idx) => (
+                          <div key={idx} className="flex flex-col text-sm mb-1.5 last:mb-0">
+                            <div className="flex justify-between items-start">
+                              <span className="text-zinc-800 dark:text-zinc-200 leading-tight">
+                                <span className="font-semibold text-zinc-500 w-6 inline-block">{item.quantity}x</span> 
+                                <span className="font-medium">{item.menuItem?.name}</span>
                               </span>
-                            ))}
+                              <span className="text-zinc-500 font-medium">₹{item.priceAtOrder * item.quantity}</span>
+                            </div>
+                            {item.modifiers && item.modifiers.length > 0 && (
+                              <div className="text-xs text-zinc-500 pl-6 mt-0.5 flex flex-wrap gap-1">
+                                {item.modifiers.map(m => (
+                                  <span key={m.id} className="bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.2 rounded text-[11px]">
+                                    +{m.modifierOption?.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                        )}
-                        {item.kitchenNotes && (
-                          <div className="text-xs text-orange-500 pl-6 mt-1 italic flex items-center gap-1">
-                            📝 {item.kitchenNotes}
-                          </div>
-                        )}
+                        ))}
                       </div>
                     ))}
                   </div>
 
                   {/* Actions Footer */}
                   <div className="p-4 border-t border-zinc-100 dark:border-zinc-800/50 bg-zinc-50 dark:bg-zinc-950/50 rounded-b-xl mt-auto">
-                    {order.status === 'PENDING_VERIFICATION' ? (
-                      <Button 
-                        className="w-full h-11 font-semibold bg-amber-500 hover:bg-amber-600 text-white"
-                        onClick={() => approveOrder(order.id)}
-                      >
-                        <Tick02Icon size={18} className="mr-2" />
-                        Approve Order
-                      </Button>
-                    ) : order.status === 'PENDING_PAYMENT' ? (
-                      <Button 
-                        variant="outline"
-                        className="w-full h-11 font-semibold text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700"
-                        onClick={() => handleGenerateQR(order)}
-                      >
-                        <QrCodeIcon size={18} className="mr-2" />
-                        View QR & Verify
-                      </Button>
-                    ) : order.paymentModel === 'PREPAID' ? (
+                    {hasPendingVerification ? (
+                      <div className="space-y-2">
+                        {group.orders.filter(o => o.status === 'PENDING_VERIFICATION').map(pendingOrder => (
+                          <Button 
+                            key={pendingOrder.id}
+                            className="w-full h-11 font-semibold bg-amber-500 hover:bg-amber-600 text-white"
+                            onClick={() => approveOrder(pendingOrder.id)}
+                          >
+                            <Tick02Icon size={18} className="mr-2" />
+                            Approve Batch (#{pendingOrder.id.slice(-4).toUpperCase()})
+                          </Button>
+                        ))}
+                      </div>
+                    ) : allPrepaid ? (
                       <Button 
                         className="w-full h-11 font-semibold bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 text-white"
-                        onClick={() => settleOrder(order.id)}
+                        onClick={() => settleSession(group.tableSessionId, primaryOrder)}
                       >
                         <Tick02Icon size={18} className="mr-2" />
-                        Close Order (Paid)
+                        Close Table (Prepaid Settled)
                       </Button>
                     ) : (
                       <div className="grid grid-cols-2 gap-2">
                         <Button 
                           variant="outline"
                           className="w-full h-11 font-semibold text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700"
-                          onClick={() => handleGenerateQR(order)}
+                          onClick={() => handleGenerateQR(group)}
                         >
                           <QrCodeIcon size={18} className="mr-2" />
                           Generate QR
                         </Button>
                         <Button 
-                          className="w-full h-11 font-semibold bg-green-600 hover:bg-green-700 text-white border-0 shadow-sm"
-                          onClick={() => settleOrder(order.id)}
+                          className="w-full h-11 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-sm"
+                          onClick={() => settleSession(group.tableSessionId, primaryOrder)}
                         >
                           <Money01Icon size={18} className="mr-2" />
-                          Cash & Close
+                          Cash & Settle
                         </Button>
                       </div>
                     )}
@@ -336,7 +507,7 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
         </div>
       )}
 
-      {/* QR Payment Modal Overlay */}
+      {/* Dynamic QR Payment Modal */}
       {qrModal.isOpen && (
         <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center p-6 backdrop-blur-md">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl p-8 max-w-sm w-full flex flex-col items-center text-center">
@@ -344,51 +515,55 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
               <QrCodeIcon size={32} className="text-indigo-600 dark:text-indigo-400" />
             </div>
             <h3 className="font-bold text-xl mb-1">Scan to Pay</h3>
-            <p className="text-sm text-zinc-500 mb-4">Ask the customer to scan this QR code.</p>
+            <p className="text-sm text-zinc-500 mb-4">
+              {qrModal.tableNumber ? `Table ${qrModal.tableNumber} Total Due` : 'Scan QR to pay total bill'}
+            </p>
             
             <div className="bg-white p-4 rounded-xl shadow-inner border border-zinc-100 inline-block mb-4">
               <QRCodeSVG value={qrModal.url} size={200} level="M" includeMargin={false} />
             </div>
-            
-            <div className="font-bold text-2xl text-zinc-900 dark:text-zinc-100 mb-2">
+
+            <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mb-6">
               ₹{qrModal.totalAmount}
             </div>
 
-            <div className="flex items-center justify-center gap-2 text-indigo-600 dark:text-indigo-400 font-medium mb-6">
-               <span className="relative flex h-3 w-3">
-                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                 <span className="relative inline-flex rounded-full h-3 w-3 bg-indigo-500"></span>
-               </span>
-               Waiting for payment...
-            </div>
-            
-            <div className="w-full flex gap-3">
+            <div className="flex gap-3 w-full">
               <Button 
                 variant="outline" 
-                className="flex-1 h-11"
-                disabled={isVerifying}
-                onClick={() => setQrModal({ isOpen: false, url: '', orderId: '', totalAmount: 0 })}
+                className="flex-1"
+                onClick={() => setQrModal({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null })}
               >
-                Cancel
+                <Cancel01Icon size={16} className="mr-2" />
+                Close
               </Button>
               <Button 
-                className="flex-1 h-11 bg-amber-500 hover:bg-amber-600 text-white"
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                onClick={verifyPayment}
                 disabled={isVerifying}
-                onClick={verifyOrder}
               >
-                {isVerifying ? 'Verifying...' : 'Verify Payment'}
+                {isVerifying ? (
+                  <div className="flex items-center">
+                    <svg className="animate-spin h-4 w-4 mr-2" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+                    Verifying...
+                  </div>
+                ) : (
+                  <>
+                    <Tick02Icon size={16} className="mr-2" />
+                    Verify
+                  </>
+                )}
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Receipt Modal Overlay */}
+      {/* Printable Receipt Modal */}
       {receiptOrder && (
         <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center p-6 backdrop-blur-md">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl flex flex-col w-full max-w-md max-h-[90vh] overflow-hidden">
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400">
-              <h3 className="font-bold flex items-center gap-2"><Tick02Icon size={20}/> Order Settled</h3>
+              <h3 className="font-bold flex items-center gap-2"><Tick02Icon size={20}/> Payment Confirmed & Settled</h3>
               <button onClick={() => setReceiptOrder(null)} className="p-1 hover:bg-green-100 dark:hover:bg-green-800 rounded-full">
                 <Cancel01Icon size={20} />
               </button>
@@ -400,54 +575,20 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
               )}
             </div>
 
-            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
+            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex gap-2 bg-white dark:bg-zinc-900">
+              <Button 
+                className="flex-1 bg-zinc-900 hover:bg-zinc-800 text-white" 
+                onClick={() => {
+                  window.print();
+                }}
+              >
+                <PrinterIcon size={18} className="mr-2" /> Print Bill
+              </Button>
               <Button 
                 variant="outline" 
-                className="flex-1"
                 onClick={() => setReceiptOrder(null)}
               >
                 Close
-              </Button>
-              <Button 
-                className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-2"
-                onClick={() => {
-                  const printWindow = window.open('', '', 'width=400,height=600');
-                  printWindow.document.write(`
-                    <html>
-                      <head>
-                        <title>Receipt</title>
-                        <style>
-                          body { font-family: monospace; font-size: 14px; margin: 0; padding: 20px; }
-                          .flex { display: flex; }
-                          .justify-between { justify-content: space-between; }
-                          .text-center { text-align: center; }
-                          .text-right { text-align: right; }
-                          .font-bold { font-weight: bold; }
-                          .text-xl { font-size: 1.25rem; }
-                          .text-lg { font-size: 1.125rem; }
-                          .mb-4 { margin-bottom: 1rem; }
-                          .mb-2 { margin-bottom: 0.5rem; }
-                          .mb-1 { margin-bottom: 0.25rem; }
-                          .pb-2 { padding-bottom: 0.5rem; }
-                          .pl-2 { padding-left: 0.5rem; }
-                          .uppercase { text-transform: uppercase; }
-                          .border-b { border-bottom: 1px dashed black; }
-                          .flex-1 { flex: 1; }
-                          .w-10 { width: 2.5rem; }
-                          .w-16 { width: 4rem; }
-                          .text-xs { font-size: 0.75rem; }
-                          .pr-2 { padding-right: 0.5rem; }
-                        </style>
-                      </head>
-                      <body>${receiptRef.current.innerHTML}</body>
-                    </html>
-                  `);
-                  printWindow.document.close();
-                  printWindow.focus();
-                  setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
-                }}
-              >
-                <PrinterIcon size={18} /> Print Receipt
               </Button>
             </div>
           </div>

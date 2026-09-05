@@ -119,6 +119,39 @@ async function createOrder(storeId, actor, origin, input) {
     // A cashier punching a postpaid order can go straight to processing
     status = 'PROCESSING';
   }
+
+  // Handle Table Session Token / PIN Logic
+  let tableSession = null;
+  if (tableId) {
+    tableSession = await prisma.tableSession.findFirst({
+      where: {
+        storeId,
+        tableId,
+        status: 'ACTIVE'
+      }
+    });
+
+    if (!tableSession) {
+      // First order for this table dining session: generate 4-digit numeric PIN (1000 - 9999)
+      const generatedPin = String(Math.floor(1000 + Math.random() * 9000));
+      tableSession = await prisma.tableSession.create({
+        data: {
+          storeId,
+          tableId,
+          pin: generatedPin,
+          status: 'ACTIVE'
+        }
+      });
+    } else {
+      // Table has an active session in progress
+      if (origin === 'QR_MENU') {
+        const providedPin = input.pin ? String(input.pin).trim() : null;
+        if (!providedPin || providedPin !== tableSession.pin) {
+          throw createHttpError(403, "Invalid Table PIN. An active dining session is already in progress for this table. Please enter the 4-digit table PIN.");
+        }
+      }
+    }
+  }
   
   const order = await prisma.order.create({
     data: {
@@ -126,6 +159,7 @@ async function createOrder(storeId, actor, origin, input) {
       origin,
       type,
       tableId: tableId || null,
+      tableSessionId: tableSession ? tableSession.id : null,
       staffId: origin === 'POS' && actor ? actor.id : null,
       customerId: origin === 'QR_MENU' && actor ? actor.id : null,
       sessionId: input.sessionId || null,
@@ -142,6 +176,7 @@ async function createOrder(storeId, actor, origin, input) {
     },
     include: {
       table: true,
+      tableSession: true,
       items: {
         include: {
           menuItem: true,
@@ -171,7 +206,12 @@ async function createOrder(storeId, actor, origin, input) {
     paymentIntent = await generateRazorpayOrder(prisma, storeId, order);
   }
   
-  return { order, paymentIntent };
+  return { 
+    order, 
+    paymentIntent,
+    tableSessionId: tableSession ? tableSession.id : null,
+    sessionPin: tableSession ? tableSession.pin : null
+  };
 }
 
 async function generateRazorpayOrder(prisma, storeId, order) {
@@ -384,6 +424,14 @@ async function handleRazorpayWebhook(tenantId, payload, signature, rawBody) {
   } 
   // Handle payment link paid
   else if (payload.event === 'payment_link.paid') {
+    const tableSessionId = payload.payload.payment_link.entity.notes?.tableSessionId ||
+      (payload.payload.payment_link.entity.reference_id?.startsWith('sess_') ? payload.payload.payment_link.entity.reference_id.split('_')[1] : null);
+
+    if (tableSessionId) {
+      await settleTableSession(null, null, tableSessionId, true);
+      return { success: true };
+    }
+
     orderId = payload.payload.payment_link.entity.notes?.order_id;
     if (!orderId && payload.payload.payment_link.entity.reference_id) {
        orderId = payload.payload.payment_link.entity.reference_id.split('_')[0];
@@ -625,6 +673,7 @@ async function getActiveOrders(actor, storeId, statuses = []) {
     where,
     include: {
       table: true,
+      tableSession: true,
       items: {
         include: {
           menuItem: true,
@@ -725,6 +774,331 @@ async function getOrderById(storeId, orderId) {
   return order;
 }
 
+// 6. TABLE SESSION SETTLEMENT & BILLING
+async function settleTableSession(actor, storeId, tableSessionId, isSystem = false) {
+  const prisma = getPrismaClient();
+  const session = await prisma.tableSession.findUnique({
+    where: { id: tableSessionId },
+    include: { table: true }
+  });
+
+  if (!session) throw createHttpError(404, "Table session not found");
+  const actualStoreId = storeId || session.storeId;
+  if (!isSystem && actor) {
+    await verifyStoreAccess(actor, actualStoreId);
+  }
+
+  const activeOrders = await prisma.order.findMany({
+    where: {
+      tableSessionId,
+      status: { notIn: ['SETTLED', 'CANCELLED'] }
+    },
+    include: {
+      items: { include: { menuItem: true, modifiers: { include: { modifierOption: true } } } },
+      table: true
+    }
+  });
+
+  if (activeOrders.length > 0) {
+    await prisma.order.updateMany({
+      where: {
+        tableSessionId,
+        status: { notIn: ['SETTLED', 'CANCELLED'] }
+      },
+      data: { status: 'SETTLED' }
+    });
+  }
+
+  const updatedSession = await prisma.tableSession.update({
+    where: { id: tableSessionId },
+    data: { status: 'SETTLED' }
+  });
+
+  for (const order of activeOrders) {
+    const settledOrder = { ...order, status: 'SETTLED' };
+    broadcastToStore(actualStoreId, 'ORDER_SETTLED', settledOrder);
+    if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_SETTLED', settledOrder);
+    if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_SETTLED', settledOrder);
+  }
+  broadcastToStore(actualStoreId, 'TABLE_SESSION_SETTLED', { tableSessionId, tableId: session.tableId });
+
+  return { success: true, tableSessionId, settledOrdersCount: activeOrders.length, session: updatedSession };
+}
+
+async function generateSessionPaymentLink(actor, storeId, tableSessionId) {
+  if (actor) await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+
+  const session = await prisma.tableSession.findUnique({
+    where: { id: tableSessionId },
+    include: {
+      table: true,
+      orders: {
+        where: { status: { notIn: ['SETTLED', 'CANCELLED'] } }
+      }
+    }
+  });
+
+  if (!session || session.storeId !== storeId) {
+    throw createHttpError(404, "Table session not found");
+  }
+
+  if (session.orders.length === 0) {
+    throw createHttpError(400, "No unsettled orders in this session");
+  }
+
+  // Check if any order already has an active paymentLinkUrl
+  const existingLink = session.orders.find(o => o.paymentLinkUrl && o.paymentLinkId);
+  if (existingLink) {
+    return {
+      id: existingLink.paymentLinkId,
+      short_url: existingLink.paymentLinkUrl,
+      totalAmount: session.orders.reduce((sum, o) => sum + o.totalAmount, 0)
+    };
+  }
+
+  const totalAmount = session.orders.reduce((sum, o) => sum + o.totalAmount, 0);
+  if (totalAmount <= 0) {
+    throw createHttpError(400, "Total amount must be greater than 0");
+  }
+
+  const store = await prisma.store.findUnique({
+    where: { id: storeId },
+    select: { tenantId: true }
+  });
+
+  const gateway = await prisma.tenantPaymentGateway.findUnique({
+    where: {
+      tenantId_provider: {
+        tenantId: store.tenantId,
+        provider: 'RAZORPAY'
+      }
+    }
+  });
+
+  if (!gateway || !gateway.isActive) {
+    throw createHttpError(400, "Razorpay is not configured for this tenant");
+  }
+
+  const razorpay = new Razorpay({
+    key_id: decrypt(gateway.apiKey),
+    key_secret: decrypt(gateway.secretKey)
+  });
+
+  const options = {
+    amount: Math.round(totalAmount * 100),
+    currency: "INR",
+    accept_partial: false,
+    reference_id: `sess_${tableSessionId}_${Date.now()}`,
+    description: `Bill for Table ${session.table.tableNumber}`,
+    customer: {
+      name: `Table ${session.table.tableNumber}`,
+      contact: "+919876543210"
+    },
+    notify: { sms: false, email: false },
+    notes: {
+      tableSessionId
+    }
+  };
+
+  try {
+    const paymentLink = await razorpay.paymentLink.create(options);
+
+    await prisma.order.updateMany({
+      where: {
+        tableSessionId,
+        status: { notIn: ['SETTLED', 'CANCELLED'] }
+      },
+      data: {
+        paymentLinkId: paymentLink.id,
+        paymentLinkUrl: paymentLink.short_url
+      }
+    });
+
+    return {
+      id: paymentLink.id,
+      short_url: paymentLink.short_url,
+      totalAmount
+    };
+  } catch (error) {
+    const errorMsg = error.error?.description || error.message || JSON.stringify(error);
+    throw createHttpError(500, "Failed to create payment link: " + errorMsg);
+  }
+}
+
+async function verifySessionPayment(actor, storeId, tableSessionId) {
+  const prisma = getPrismaClient();
+  const session = await prisma.tableSession.findUnique({
+    where: { id: tableSessionId },
+    include: {
+      orders: {
+        where: { status: { notIn: ['SETTLED', 'CANCELLED'] } }
+      }
+    }
+  });
+
+  if (!session || session.storeId !== storeId) throw createHttpError(404, "Session not found");
+  if (actor) await verifyStoreAccess(actor, storeId);
+
+  if (session.status === 'SETTLED' || session.orders.length === 0) {
+    return { success: true, status: 'SETTLED', message: "Session already settled." };
+  }
+
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
+  const gateway = await prisma.tenantPaymentGateway.findUnique({
+    where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
+  });
+
+  if (!gateway || !gateway.isActive) throw createHttpError(400, "Razorpay is not configured");
+
+  const razorpay = new Razorpay({
+    key_id: decrypt(gateway.apiKey),
+    key_secret: decrypt(gateway.secretKey)
+  });
+
+  try {
+    const links = await razorpay.paymentLink.all({ count: 50 });
+    const items = links?.payment_links || links?.items || [];
+    const match = items.find(l => 
+      l.notes?.tableSessionId === tableSessionId || 
+      (l.reference_id && l.reference_id.startsWith(`sess_${tableSessionId}`))
+    );
+
+    if (match && match.status === 'paid') {
+      await settleTableSession(actor, storeId, tableSessionId, true);
+      return { success: true, status: 'SETTLED', message: "Payment confirmed and table session settled!" };
+    }
+
+    return { success: false, status: 'PENDING', message: "Payment not yet received or verified." };
+  } catch (err) {
+    console.error("Session payment verification error:", err);
+    return { success: false, status: 'ERROR', message: err.message };
+  }
+}
+
+async function getTableSessionBill(storeId, tableSessionId) {
+  const prisma = getPrismaClient();
+  const session = await prisma.tableSession.findUnique({
+    where: { id: tableSessionId },
+    include: {
+      table: true,
+      store: {
+        include: {
+          tenant: true
+        }
+      },
+      orders: {
+        include: {
+          items: {
+            include: {
+              menuItem: true,
+              modifiers: {
+                include: { modifierOption: true }
+              }
+            }
+          }
+        },
+        orderBy: { createdAt: 'asc' }
+      }
+    }
+  });
+
+  if (!session || session.storeId !== storeId) {
+    throw createHttpError(404, "Table session not found");
+  }
+
+  const validOrders = session.orders.filter(o => o.status !== 'CANCELLED');
+  const itemsMap = new Map();
+
+  let subTotal = 0;
+  let totalTax = 0;
+  let totalDiscount = 0;
+  let grandTotal = 0;
+
+  for (const order of validOrders) {
+    subTotal += order.subTotal;
+    totalTax += order.taxAmount;
+    totalDiscount += order.discountAmount;
+    grandTotal += order.totalAmount;
+
+    for (const item of order.items) {
+      const key = `${item.menuItemId}_${item.priceAtOrder}`;
+      if (itemsMap.has(key)) {
+        const existing = itemsMap.get(key);
+        existing.quantity += item.quantity;
+      } else {
+        itemsMap.set(key, {
+          name: item.menuItem?.name || 'Item',
+          price: item.priceAtOrder,
+          quantity: item.quantity,
+          dietary: item.menuItem?.dietary || 'VEG',
+          modifiers: item.modifiers.map(m => m.modifierOption?.name).filter(Boolean)
+        });
+      }
+    }
+  }
+
+  return {
+    session: {
+      id: session.id,
+      pin: session.pin,
+      status: session.status,
+      tableNumber: session.table.tableNumber,
+      createdAt: session.createdAt
+    },
+    store: {
+      name: session.store.name,
+      address: session.store.address,
+      contactPhone: session.store.contactPhone,
+      gstin: session.store.tenant?.gstin,
+      companyLegalName: session.store.tenant?.companyLegalName || session.store.tenant?.name,
+      taxRules: session.store.taxRules || []
+    },
+    ordersCount: validOrders.length,
+    orders: validOrders.map(o => ({
+      id: o.id,
+      paymentModel: o.paymentModel,
+      status: o.status,
+      totalAmount: o.totalAmount,
+      createdAt: o.createdAt
+    })),
+    aggregatedItems: Array.from(itemsMap.values()),
+    subTotal,
+    discountAmount: totalDiscount,
+    taxAmount: totalTax,
+    totalAmount: grandTotal
+  };
+}
+
+async function getTableSessionStatus(storeId, tableNumber) {
+  const prisma = getPrismaClient();
+  const table = await prisma.table.findUnique({
+    where: {
+      storeId_tableNumber: {
+        storeId,
+        tableNumber: parseInt(tableNumber, 10)
+      }
+    }
+  });
+
+  if (!table) throw createHttpError(404, "Table not found");
+
+  const activeSession = await prisma.tableSession.findFirst({
+    where: {
+      storeId,
+      tableId: table.id,
+      status: 'ACTIVE'
+    }
+  });
+
+  return {
+    tableNumber: table.tableNumber,
+    tableId: table.id,
+    hasActiveSession: !!activeSession,
+    tableSessionId: activeSession?.id || null
+  };
+}
+
 module.exports = {
   createOrder,
   handleRazorpayWebhook,
@@ -735,5 +1109,10 @@ module.exports = {
   checkPaymentStatus,
   verifyRazorpayPayment,
   getOrderById,
-  getOrderHistory
+  getOrderHistory,
+  settleTableSession,
+  generateSessionPaymentLink,
+  verifySessionPayment,
+  getTableSessionBill,
+  getTableSessionStatus
 };

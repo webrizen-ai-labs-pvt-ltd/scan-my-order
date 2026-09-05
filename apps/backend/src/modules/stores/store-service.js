@@ -367,12 +367,17 @@ async function getStoreFloorStatus(actor, storeId) {
           status: { in: ['PENDING', 'ACKNOWLEDGED'] }
         },
         orderBy: { createdAt: 'desc' }
+      },
+      sessions: {
+        where: { status: 'ACTIVE' },
+        take: 1
       }
     }
   });
 
   const tables = rawTables.map((tbl) => {
     const activeOrder = tbl.orders[0] || null;
+    const activeSession = tbl.sessions?.[0] || null;
     const activeCalls = tbl.waiterCalls || [];
     const hasWaiterCall = activeCalls.length > 0;
     const billCall = activeCalls.find(c => c.type === 'BILL');
@@ -399,6 +404,8 @@ async function getStoreFloorStatus(actor, storeId) {
       tableNumber: tbl.tableNumber,
       isActive: tbl.isActive,
       status,
+      activePin: activeSession?.pin || null,
+      activeSessionId: activeSession?.id || null,
       hasWaiterCall,
       activeWaiterCalls: activeCalls.map(c => ({
         id: c.id,

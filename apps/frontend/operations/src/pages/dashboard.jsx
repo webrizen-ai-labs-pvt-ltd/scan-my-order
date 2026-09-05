@@ -177,7 +177,7 @@ export const Dashboard = () => {
             </span>
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Real-time operations & live architectural table floor overview.
+            Real-time operations & live table status overview.
           </p>
         </div>
 
@@ -187,7 +187,7 @@ export const Dashboard = () => {
             <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
               <SelectTrigger className="w-[220px] h-9 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-xs font-medium">
                 <Store01Icon size={16} className="mr-1.5 text-zinc-400" />
-                <SelectValue placeholder="Select a location" />
+                <SelectValue placeholder="Select a store" />
               </SelectTrigger>
               <SelectContent>
                 {stores.map((s) => (
@@ -278,14 +278,14 @@ export const Dashboard = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2">
         <div>
           <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            Live Floor Plan
+            Live Table Floor
           </h2>
           <p className="text-xs text-zinc-500">
-            Interactive visual map with live table color transitions & guest status.
+            Live SVG tables changing colors based on guest and order status.
           </p>
         </div>
 
-        {/* Switcher: Architectural Live Floor vs Flow Pipeline */}
+        {/* Switcher: Table Floor Canvas vs Flow Pipeline */}
         <div className="flex bg-zinc-200/80 dark:bg-zinc-800/80 rounded-xl p-1 border border-zinc-300/50 dark:border-zinc-700/50">
           <button
             onClick={() => setActiveFloorView('live_floor')}
@@ -296,7 +296,7 @@ export const Dashboard = () => {
             }`}
           >
             <Layers01Icon size={15} />
-            Interactive SVG Floor
+            SVG Table Floor
           </button>
           <button
             onClick={() => setActiveFloorView('pipeline')}

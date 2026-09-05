@@ -284,6 +284,20 @@ router.post("/stores/:storeId/validate-promo", asyncHandler(async (req, res) => 
   }));
 }));
 
+// GET /api/public/stores/:storeId/tables/:tableNumber/session
+router.get("/stores/:storeId/tables/:tableNumber/session", asyncHandler(async (req, res) => {
+  const { getTableSessionStatus } = require("../orders/order-service");
+  const result = await getTableSessionStatus(req.params.storeId, req.params.tableNumber);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/public/stores/:storeId/sessions/:sessionId/bill
+router.get("/stores/:storeId/sessions/:sessionId/bill", asyncHandler(async (req, res) => {
+  const { getTableSessionBill } = require("../orders/order-service");
+  const result = await getTableSessionBill(req.params.storeId, req.params.sessionId);
+  res.json(createApiResponse(result));
+}));
+
 // POST /api/public/webhooks/razorpay/:tenantId
 router.post("/webhooks/razorpay/:tenantId", express.json(), asyncHandler(async (req, res) => {
   const signature = req.headers['x-razorpay-signature'];

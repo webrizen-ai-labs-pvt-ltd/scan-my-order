@@ -258,11 +258,17 @@ export const WaiterTasks = () => {
     }
   };
 
-  const generatePaymentQr = async (orderId) => {
+  const generatePaymentQr = async (orderOrGroup) => {
     setQrLoading(true);
     setQrUrl(null);
     try {
-      const res = await api.post(`/stores/${selectedStoreId}/orders/${orderId}/payment-link`);
+      let res;
+      if (orderOrGroup?.tableSessionId) {
+        res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${orderOrGroup.tableSessionId}/payment-link`);
+      } else {
+        const orderId = orderOrGroup?.id || orderOrGroup;
+        res = await api.post(`/stores/${selectedStoreId}/orders/${orderId}/payment-link`);
+      }
       if (res.data.success && res.data.data.short_url) {
         setQrUrl(res.data.data.short_url);
       } else {
@@ -276,6 +282,47 @@ export const WaiterTasks = () => {
     }
   };
 
+  const handleSettlePayment = async (orderOrGroup) => {
+    setActionLoading('settle');
+    try {
+      if (orderOrGroup?.tableSessionId) {
+        const sessId = orderOrGroup.tableSessionId;
+        await api.post(`/stores/${selectedStoreId}/orders/sessions/${sessId}/settle`);
+        const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
+        if (billRes.data.success) {
+          const b = billRes.data.data;
+          setReceiptOrder({
+            id: `TAB-${b.session.pin}`,
+            createdAt: b.session.createdAt,
+            type: 'DINE_IN',
+            paymentModel: 'POSTPAID',
+            table: { tableNumber: b.session.tableNumber },
+            subTotal: b.subTotal,
+            discountAmount: b.discountAmount,
+            taxAmount: b.taxAmount,
+            totalAmount: b.totalAmount,
+            items: b.aggregatedItems.map(i => ({
+              quantity: i.quantity,
+              priceAtOrder: i.price,
+              menuItem: { name: i.name },
+              modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
+            }))
+          });
+        }
+        setPaymentOrder(null);
+        setQrUrl(null);
+        showToast('Table settled successfully!', 'success');
+        fetchOrders(selectedStoreId, true);
+      } else {
+        await updateStatus(orderOrGroup.id, 'SETTLED');
+      }
+    } catch (err) {
+      showToast('Failed to settle table', 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   // Payment Polling logic
   useEffect(() => {
     let intervalId;
@@ -284,7 +331,6 @@ export const WaiterTasks = () => {
     if (qrUrl && paymentOrder && selectedStoreId) {
       intervalId = setInterval(async () => {
         attempts++;
-        // Timeout after 5 minutes (100 attempts * 3 seconds)
         if (attempts > 100) {
           clearInterval(intervalId);
           showToast('Payment QR Expired (timeout). Please generate again.', 'error');
@@ -293,18 +339,53 @@ export const WaiterTasks = () => {
         }
         
         try {
-          const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
-          if (res.data.success && res.data.data.status === 'success') {
-            clearInterval(intervalId);
-            showToast('Payment verified successfully!', 'success');
-            
-            const orderId = paymentOrder.id;
-            setPaymentOrder(null);
-            setQrUrl(null);
-            
-            const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
-            if (orderRes.data.success) {
-              setReceiptOrder(orderRes.data.data);
+          if (paymentOrder.tableSessionId) {
+            const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/verify-payment`);
+            if (res.data.success && res.data.data.status === 'SETTLED') {
+              clearInterval(intervalId);
+              showToast('Payment verified successfully!', 'success');
+              const sessId = paymentOrder.tableSessionId;
+              setPaymentOrder(null);
+              setQrUrl(null);
+              
+              const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
+              if (billRes.data.success) {
+                const b = billRes.data.data;
+                setReceiptOrder({
+                  id: `TAB-${b.session.pin}`,
+                  createdAt: b.session.createdAt,
+                  type: 'DINE_IN',
+                  paymentModel: 'POSTPAID',
+                  table: { tableNumber: b.session.tableNumber },
+                  subTotal: b.subTotal,
+                  discountAmount: b.discountAmount,
+                  taxAmount: b.taxAmount,
+                  totalAmount: b.totalAmount,
+                  items: b.aggregatedItems.map(i => ({
+                    quantity: i.quantity,
+                    priceAtOrder: i.price,
+                    menuItem: { name: i.name },
+                    modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
+                  }))
+                });
+              }
+              fetchOrders(selectedStoreId, true);
+            }
+          } else {
+            const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
+            if (res.data.success && res.data.data.status === 'success') {
+              clearInterval(intervalId);
+              showToast('Payment verified successfully!', 'success');
+              
+              const orderId = paymentOrder.id;
+              setPaymentOrder(null);
+              setQrUrl(null);
+              
+              const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
+              if (orderRes.data.success) {
+                setReceiptOrder(orderRes.data.data);
+              }
+              fetchOrders(selectedStoreId, true);
             }
           }
         } catch (err) {
@@ -316,7 +397,7 @@ export const WaiterTasks = () => {
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
-  }, [qrUrl, paymentOrder, selectedStoreId]);
+  }, [qrUrl, paymentOrder, selectedStoreId, fetchOrders]);
 
   const handleStoreChange = (storeId) => {
     setSelectedStoreId(storeId);
@@ -325,7 +406,30 @@ export const WaiterTasks = () => {
 
   const pendingOrders = orders.filter(o => o.status === 'PENDING_VERIFICATION');
   const readyOrders = orders.filter(o => o.status === 'READY');
-  const servedOrders = orders.filter(o => o.status === 'SERVED');
+  
+  // Group served postpaid orders by table session or table
+  const servedGroups = useMemo(() => {
+    const postPaidServed = orders.filter(o => o.status === 'SERVED' && o.paymentModel === 'POSTPAID');
+    const groups = [];
+    const map = new Map();
+    for (const ord of postPaidServed) {
+      const key = ord.tableSessionId || (ord.table ? `tbl_${ord.table.id}` : `ord_${ord.id}`);
+      if (map.has(key)) {
+        map.get(key).orders.push(ord);
+      } else {
+        const grp = {
+          key,
+          tableSessionId: ord.tableSessionId,
+          tableSession: ord.tableSession,
+          table: ord.table,
+          orders: [ord]
+        };
+        map.set(key, grp);
+        groups.push(grp);
+      }
+    }
+    return groups;
+  }, [orders]);
 
   return (
     <div className="flex flex-col h-full relative">
@@ -384,8 +488,8 @@ export const WaiterTasks = () => {
               
               <Button 
                  className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg"
-                 onClick={() => updateStatus(paymentOrder.id, 'SETTLED')}
-                 disabled={actionLoading === paymentOrder.id}
+                 onClick={() => handleSettlePayment(paymentOrder)}
+                 disabled={actionLoading === 'settle'}
                >
                  <Money01Icon size={24} className="mr-2" /> Collect Cash & Settle
                </Button>
@@ -682,52 +786,72 @@ export const WaiterTasks = () => {
               <p className="text-xs text-blue-600 dark:text-blue-500">Collect payment from served tables</p>
             </div>
             <span className="bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300 text-sm px-3 py-1.5 rounded-full font-bold shadow-sm">
-              {servedOrders.length}
+              {servedGroups.length}
             </span>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {loading ? (
               <OrderSkeleton />
-            ) : servedOrders.length === 0 ? (
+            ) : servedGroups.length === 0 ? (
               <EmptyState title="No Pending Payments" description="All tables settled!" />
             ) : (
-              servedOrders.map(order => (
-                <Card key={order.id} className="border-blue-200 dark:border-blue-900/30 shadow-sm hover:shadow-lg transition-all duration-200 bg-blue-50/30 dark:bg-blue-900/10">
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <div className="font-bold text-2xl text-blue-900 dark:text-blue-100 mb-1">
-                          Table {order.table?.tableNumber || 'N/A'}
+              servedGroups.map(group => {
+                const groupTotal = group.orders.reduce((sum, o) => sum + o.totalAmount, 0);
+                return (
+                  <Card key={group.key} className="border-blue-200 dark:border-blue-900/30 shadow-sm hover:shadow-lg transition-all duration-200 bg-blue-50/30 dark:bg-blue-900/10">
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <div className="font-bold text-2xl text-blue-900 dark:text-blue-100 mb-1 flex items-center gap-2">
+                            Table {group.table?.tableNumber || 'N/A'}
+                            {group.tableSession?.pin && (
+                              <span className="text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 px-2 py-0.5 rounded-md font-bold">
+                                PIN: {group.tableSession.pin}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-blue-600 dark:text-blue-500 flex items-center gap-2">
+                            <span>{group.orders.length} Batch{group.orders.length > 1 ? 'es' : ''}</span>
+                            <span>•</span>
+                            <span>Last served {new Date(group.orders[group.orders.length - 1].updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
                         </div>
-                        <div className="text-xs text-blue-600 dark:text-blue-500 flex items-center gap-1">
-                          <Clock01Icon size={12} /> Served at {new Date(order.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">₹{groupTotal}</div>
+                          <div className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full inline-block mt-1">
+                            TOTAL DUE
+                          </div>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100">₹{order.totalAmount}</div>
-                        <div className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full inline-block mt-1">
-                          TO COLLECT
-                        </div>
+                      
+                      <div className="mb-4 bg-white/60 dark:bg-zinc-950/50 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 max-h-32 overflow-y-auto space-y-1">
+                        {group.orders.map(order => order.items.map(item => (
+                          <div key={item.id} className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
+                            <span><span className="font-semibold mr-1">{item.quantity}x</span> {item.menuItem?.name}</span>
+                            <span className="text-zinc-400 text-xs">₹{item.priceAtOrder * item.quantity}</span>
+                          </div>
+                        )))}
                       </div>
-                    </div>
-                    
-                    <div className="mb-4 bg-white/50 dark:bg-zinc-950/50 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 space-y-1">
-                       {order.items.map(item => (
-                         <div key={item.id} className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
-                           <span><span className="font-semibold mr-1">{item.quantity}x</span> {item.menuItem?.name}</span>
-                         </div>
-                       ))}
-                    </div>
 
-                    <Button
-                      className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md text-base h-12"
-                      onClick={() => { setPaymentOrder(order); setQrUrl(null); }}
-                    >
-                      <Money01Icon size={20} className="mr-2" /> Collect Payment
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))
+                      <Button
+                        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md text-base h-12 font-bold"
+                        onClick={() => {
+                          setPaymentOrder({
+                            id: group.orders[0].id,
+                            tableSessionId: group.tableSessionId,
+                            table: group.table,
+                            totalAmount: groupTotal,
+                            orders: group.orders
+                          });
+                          setQrUrl(null);
+                        }}
+                      >
+                        <Money01Icon size={20} className="mr-2" /> Collect Payment (₹{groupTotal})
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </div>
         </div>

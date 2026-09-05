@@ -66,6 +66,14 @@ export const StoreMenuPage = () => {
   const [paymentModel, setPaymentModel] = useState('POSTPAID');
   const [showAuthModal, setShowAuthModal] = useState(false);
   
+  // Table Session / PIN State
+  const [tableSessionInfo, setTableSessionInfo] = useState(null);
+  const [activeTablePin, setActiveTablePin] = useState('');
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+  const [sessionPinBanner, setSessionPinBanner] = useState('');
+
   const { token, setAuth } = useAuthStore();
 
   const categoryRefs = useRef({});
@@ -89,6 +97,17 @@ export const StoreMenuPage = () => {
           showToast(`Table ${tableNumber} is invalid or inactive. Removing from session.`, 'error');
           searchParams.delete('table');
           setSearchParams(searchParams);
+        } else {
+          try {
+            const sessRes = await api.get(`/public/stores/${resolvedStore.id}/tables/${tableNumInt}/session`);
+            if (sessRes.data.success) {
+              setTableSessionInfo(sessRes.data.data);
+              const savedPin = localStorage.getItem(`smo_table_pin_${resolvedStore.id}_${tableNumInt}`);
+              if (savedPin) {
+                setActiveTablePin(savedPin);
+              }
+            }
+          } catch (e) {}
         }
       }
 
@@ -157,8 +176,9 @@ export const StoreMenuPage = () => {
       .filter((cat) => cat.items.length > 0);
   }, [categories, searchQuery]);
 
-  const submitOrder = async () => {
+  const submitOrder = async (overridePin) => {
     setIsPlacingOrder(true);
+    const pinToUse = overridePin || activeTablePin || undefined;
     try {
       const payload = {
         tableNumber: parseInt(tableNumber, 10),
@@ -171,10 +191,27 @@ export const StoreMenuPage = () => {
           kitchenNotes: '',
         })),
         sessionId: getSessionId(),
+        pin: pinToUse
       };
 
       const res = await api.post(`/public/stores/${store.id}/orders`, payload);
-      const { paymentIntent } = res.data.data;
+      const { paymentIntent, tableSessionId, sessionPin } = res.data.data;
+
+      if (sessionPin) {
+        setActiveTablePin(sessionPin);
+        localStorage.setItem(`smo_table_pin_${store.id}_${tableNumber}`, sessionPin);
+        if (tableSessionId) {
+          localStorage.setItem(`smo_table_session_${store.id}_${tableNumber}`, tableSessionId);
+        }
+        setSessionPinBanner(sessionPin);
+        setTableSessionInfo(prev => ({ ...prev, hasActiveSession: true, tableSessionId }));
+      }
+
+      if (paymentModel === 'PREPAID' && res.data.data.order?.id) {
+        const pKey = `smo_prepaid_orders_${store.id}_${tableNumber}`;
+        const existingPaid = JSON.parse(localStorage.getItem(pKey) || '[]');
+        localStorage.setItem(pKey, JSON.stringify([...existingPaid, res.data.data.order.id]));
+      }
 
       if (paymentModel === 'PREPAID' && paymentIntent) {
         const options = {
@@ -209,7 +246,12 @@ export const StoreMenuPage = () => {
         setIsCheckoutOpen(false);
       }
     } catch (err) {
-      showToast(err.response?.data?.message || 'Order failed. Please call a waiter.', 'error');
+      if (err.response?.status === 403 && err.response?.data?.message?.includes('Table PIN')) {
+        setPinError(err.response?.data?.message || 'Invalid Table PIN');
+        setShowPinModal(true);
+      } else {
+        showToast(err.response?.data?.message || 'Order failed. Please call a waiter.', 'error');
+      }
     } finally {
       setIsPlacingOrder(false);
     }
@@ -224,6 +266,11 @@ export const StoreMenuPage = () => {
 
     if (paymentModel === 'PREPAID' && !token) {
       setShowAuthModal(true);
+      return;
+    }
+
+    if (tableSessionInfo?.hasActiveSession && !activeTablePin) {
+      setShowPinModal(true);
       return;
     }
 
@@ -420,9 +467,16 @@ export const StoreMenuPage = () => {
               </div>
 
               {tableNumber ? (
-                <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 shadow-sm backdrop-blur-md dark:border-emerald-400/30 dark:bg-emerald-500/20 dark:text-emerald-300">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400" />
-                  Table {tableNumber}
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 shadow-sm backdrop-blur-md dark:border-emerald-400/30 dark:bg-emerald-500/20 dark:text-emerald-300">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400" />
+                    Table {tableNumber}
+                  </div>
+                  {activeTablePin && (
+                    <div className="flex items-center gap-1 rounded-full border border-indigo-500/30 bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 backdrop-blur-md dark:border-indigo-400/30 dark:bg-indigo-500/20 dark:text-indigo-300" title="Table Session PIN">
+                      PIN: {activeTablePin}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="shrink-0 rounded-full border border-amber-500/30 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 backdrop-blur-md dark:border-amber-400/30 dark:bg-amber-500/20 dark:text-amber-300">
@@ -807,8 +861,88 @@ export const StoreMenuPage = () => {
           </div>
         )}
         
+        {/* Active Session PIN Banner */}
+        {sessionPinBanner && (
+          <div className="mx-4 mt-3 flex items-center justify-between rounded-xl border border-indigo-200 bg-indigo-50/90 p-3 text-xs text-indigo-950 shadow-xs dark:border-indigo-900/50 dark:bg-indigo-950/40 dark:text-indigo-200">
+            <div>
+              <p className="font-bold">Table {tableNumber} Dining PIN: {sessionPinBanner}</p>
+              <p className="text-[11px] opacity-80">Share this 4-digit PIN with anyone at your table to add more dishes.</p>
+            </div>
+            <button onClick={() => setSessionPinBanner('')} className="p-1 text-indigo-500 hover:text-indigo-700">
+              <Cancel01Icon size={16} />
+            </button>
+          </div>
+        )}
+
+        {/* PIN Entry Modal for Adding to Table Session */}
+        {showPinModal && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl text-center dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+                <UserGroupIcon size={24} />
+              </div>
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Table {tableNumber} Dining PIN</h3>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                An active order already exists on Table {tableNumber}. Enter the 4-digit Table PIN to add your dishes.
+              </p>
+
+              <div className="my-5">
+                <input
+                  type="text"
+                  maxLength={4}
+                  autoFocus
+                  placeholder="••••"
+                  value={pinInput}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                    setPinInput(val);
+                    setPinError('');
+                  }}
+                  className="w-36 text-center text-2xl font-bold tracking-[0.4em] py-2.5 rounded-xl border border-zinc-200 bg-zinc-50 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
+                />
+                {pinError && (
+                  <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{pinError}</p>
+                )}
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPinModal(false);
+                    setPinError('');
+                  }}
+                  className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={pinInput.length !== 4 || isPlacingOrder}
+                  onClick={async () => {
+                    setActiveTablePin(pinInput);
+                    localStorage.setItem(`smo_table_pin_${store.id}_${tableNumber}`, pinInput);
+                    setShowPinModal(false);
+                    await submitOrder(pinInput);
+                  }}
+                  className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white shadow-md transition disabled:opacity-50 dark:bg-white dark:text-zinc-900"
+                >
+                  {isPlacingOrder ? 'Checking...' : 'Submit PIN'}
+                </button>
+              </div>
+              <p className="mt-4 text-[11px] text-zinc-400">
+                Ask your companions at the table or call a waiter for the PIN.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Live Orders Floating Button & Panel */}
-        <LiveOrders storeId={store.id} />
+        <LiveOrders 
+          storeId={store.id} 
+          tableNumber={tableNumber} 
+          activeSessionId={tableSessionInfo?.tableSessionId || localStorage.getItem(`smo_table_session_${store.id}_${tableNumber}`)} 
+        />
       </div>
     </>
   );

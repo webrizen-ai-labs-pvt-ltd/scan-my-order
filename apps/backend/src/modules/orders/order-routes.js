@@ -102,4 +102,33 @@ router.get("/:id", asyncHandler(async (req, res) => {
   res.json(createApiResponse(result));
 }));
 
+// === TABLE SESSION ROUTES ===
+// POST /api/stores/:storeId/orders/sessions/:sessionId/settle
+router.post("/sessions/:sessionId/settle", asyncHandler(async (req, res) => {
+  const { settleTableSession } = require("./order-service");
+  const result = await settleTableSession(req.user, req.params.storeId, req.params.sessionId);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/sessions/:sessionId/payment-link
+router.post("/sessions/:sessionId/payment-link", asyncHandler(async (req, res) => {
+  const { generateSessionPaymentLink } = require("./order-service");
+  const result = await generateSessionPaymentLink(req.user, req.params.storeId, req.params.sessionId);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/sessions/:sessionId/verify-payment
+router.post("/sessions/:sessionId/verify-payment", asyncHandler(async (req, res) => {
+  const { verifySessionPayment } = require("./order-service");
+  const result = await verifySessionPayment(req.user, req.params.storeId, req.params.sessionId);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/orders/sessions/:sessionId
+router.get("/sessions/:sessionId", asyncHandler(async (req, res) => {
+  const { getTableSessionBill } = require("./order-service");
+  const result = await getTableSessionBill(req.params.storeId, req.params.sessionId);
+  res.json(createApiResponse(result));
+}));
+
 module.exports = router;

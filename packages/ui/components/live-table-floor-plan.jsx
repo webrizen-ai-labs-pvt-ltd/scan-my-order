@@ -74,69 +74,31 @@ export const TABLE_STATUS_CONFIG = {
   }
 };
 
-// Computes geometric positions for restaurant tables
+// Computes geometric positions for restaurant tables evenly across the canvas
 function computeFloorLayout(tables = []) {
   if (!tables || tables.length === 0) return [];
 
-  // Floor layout zones
-  const positions = [
-    // Left Window Booths
-    { x: 120, y: 120, shape: 'booth', capacity: 4, zone: 'Window Booths' },
-    { x: 120, y: 250, shape: 'booth', capacity: 4, zone: 'Window Booths' },
-    { x: 120, y: 380, shape: 'booth', capacity: 4, zone: 'Window Booths' },
-    { x: 120, y: 510, shape: 'booth', capacity: 4, zone: 'Window Booths' },
-
-    // Main Dining Hall - Row 1
-    { x: 310, y: 130, shape: 'round-4', capacity: 4, zone: 'Main Dining' },
-    { x: 470, y: 130, shape: 'square-4', capacity: 4, zone: 'Main Dining' },
-    { x: 630, y: 130, shape: 'round-4', capacity: 4, zone: 'Main Dining' },
-
-    // Main Dining Hall - Row 2
-    { x: 310, y: 280, shape: 'square-4', capacity: 4, zone: 'Main Dining' },
-    { x: 470, y: 280, shape: 'round-4', capacity: 4, zone: 'Main Dining' },
-    { x: 630, y: 280, shape: 'square-4', capacity: 4, zone: 'Main Dining' },
-
-    // Main Dining Hall - Row 3
-    { x: 310, y: 430, shape: 'round-2', capacity: 2, zone: 'Main Dining' },
-    { x: 470, y: 430, shape: 'square-4', capacity: 4, zone: 'Main Dining' },
-    { x: 630, y: 430, shape: 'round-2', capacity: 2, zone: 'Main Dining' },
-
-    // Right Banquet & VIP Suites
-    { x: 860, y: 140, shape: 'rectangle-6', capacity: 6, zone: 'VIP Banquet' },
-    { x: 860, y: 280, shape: 'rectangle-6', capacity: 6, zone: 'VIP Banquet' },
-
-    // Right Bar Lounge High-Tops
-    { x: 830, y: 440, shape: 'round-2', capacity: 2, zone: 'Bar Lounge' },
-    { x: 940, y: 440, shape: 'round-2', capacity: 2, zone: 'Bar Lounge' },
-    { x: 830, y: 530, shape: 'round-2', capacity: 2, zone: 'Bar Lounge' },
-    { x: 940, y: 530, shape: 'round-2', capacity: 2, zone: 'Bar Lounge' }
-  ];
+  const n = tables.length;
+  // Calculate columns to arrange cleanly (e.g. 3 to 6 columns)
+  const cols = n <= 4 ? Math.max(n, 2) : n <= 8 ? 4 : n <= 15 ? 5 : 6;
+  const colWidth = 960 / cols;
+  const rowHeight = 135;
+  const startX = 70 + colWidth / 2;
+  const startY = 100;
 
   return tables.map((tbl, index) => {
-    let layout;
-    if (index < positions.length) {
-      layout = positions[index];
-    } else {
-      // Dynamic fallback grid for stores with > 19 tables
-      const extraIdx = index - positions.length;
-      const col = extraIdx % 4;
-      const row = Math.floor(extraIdx / 4);
-      layout = {
-        x: 260 + col * 150,
-        y: 110 + (row % 3) * 140,
-        shape: col % 2 === 0 ? 'square-4' : 'round-4',
-        capacity: 4,
-        zone: 'Dining Extension'
-      };
-    }
+    const col = index % cols;
+    const row = Math.floor(index / cols);
+    const x = startX + col * colWidth;
+    const y = startY + row * rowHeight;
+    const shape = index % 3 === 0 ? 'round-4' : index % 3 === 1 ? 'square-4' : 'rectangle-6';
 
     return {
       ...tbl,
-      x: layout.x,
-      y: layout.y,
-      shape: layout.shape,
-      capacity: layout.capacity,
-      zone: layout.zone
+      x,
+      y,
+      shape: tbl.shape || shape,
+      capacity: tbl.capacity || 4
     };
   });
 }
@@ -485,7 +447,7 @@ export const LiveTableFloorPlan = ({
               </span>
             </h3>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Real-time architectural view of {tables.length} tables & customer activity.
+              Live status overview of {tables.length} tables & customer activity.
             </p>
           </div>
         </div>
@@ -696,82 +658,19 @@ export const LiveTableFloorPlan = ({
                 </defs>
 
                 {/* Floor Tile Canvas */}
-                <rect x="0" y="0" width="1100" height="660" fill="url(#floor-tile-pattern)" rx="16" />
+                <rect x="0" y="0" width="1100" height={Math.max(480, Math.ceil(displayedTables.length / (displayedTables.length <= 4 ? Math.max(displayedTables.length, 2) : displayedTables.length <= 8 ? 4 : displayedTables.length <= 15 ? 5 : 6)) * 135 + 70)} fill="url(#floor-tile-pattern)" rx="16" />
 
-                {/* Outer Architectural Walls & Perimeter */}
+                {/* Outer Floor Perimeter */}
                 <rect
                   x="12"
                   y="12"
                   width="1076"
-                  height="636"
+                  height={Math.max(480, Math.ceil(displayedTables.length / (displayedTables.length <= 4 ? Math.max(displayedTables.length, 2) : displayedTables.length <= 8 ? 4 : displayedTables.length <= 15 ? 5 : 6)) * 135 + 70) - 24}
                   rx="14"
                   fill="none"
                   stroke="#27272a"
-                  strokeWidth="3"
+                  strokeWidth="2"
                 />
-
-                {/* Corner Architectural Accents */}
-                <path d="M 12 40 L 40 12 M 1060 12 L 1088 40 M 12 620 L 40 648 M 1060 648 L 1088 620" stroke="#3f3f46" strokeWidth="2" />
-
-                {/* Zone 1: Window / Terrace Booths (Left) */}
-                <g id="zone-window">
-                  <rect x="24" y="24" width="180" height="570" rx="10" fill="#18181b" fillOpacity="0.4" stroke="#27272a" strokeDasharray="3 3" strokeWidth="1" />
-                  <text x="36" y="52" fill="#71717a" fontSize="11" fontWeight="700" letterSpacing="1.2">
-                    WINDOW BOOTHS
-                  </text>
-                  {/* Decorative window glass slats */}
-                  <line x1="24" y1="180" x2="24" y2="210" stroke="#38bdf8" strokeWidth="4" strokeLinecap="round" />
-                  <line x1="24" y1="310" x2="24" y2="340" stroke="#38bdf8" strokeWidth="4" strokeLinecap="round" />
-                  <line x1="24" y1="440" x2="24" y2="470" stroke="#38bdf8" strokeWidth="4" strokeLinecap="round" />
-                </g>
-
-                {/* Zone 2: Main Dining Room (Center) */}
-                <g id="zone-main">
-                  <text x="470" y="52" textAnchor="middle" fill="#71717a" fontSize="12" fontWeight="800" letterSpacing="2">
-                    MAIN DINING HALL
-                  </text>
-                </g>
-
-                {/* Zone 3: VIP / Banquet Suite (Top Right) */}
-                <g id="zone-vip">
-                  <rect x="760" y="24" width="316" height="350" rx="10" fill="#18181b" fillOpacity="0.3" stroke="#27272a" strokeDasharray="4 4" strokeWidth="1" />
-                  <text x="778" y="52" fill="#71717a" fontSize="11" fontWeight="700" letterSpacing="1.2">
-                    EXECUTIVE BANQUET
-                  </text>
-                </g>
-
-                {/* Zone 4: Kitchen Pass & Pickup Counter (Bottom Right) */}
-                <g id="zone-kitchen">
-                  <rect x="760" y="560" width="316" height="74" rx="8" fill="#18181b" stroke="#3f3f46" strokeWidth="2" />
-                  <rect x="766" y="566" width="304" height="24" rx="4" fill="#27272a" stroke="#3f3f46" strokeWidth="1" />
-                  <text x="918" y="582" textAnchor="middle" fill="#f59e0b" fontSize="10" fontWeight="bold" letterSpacing="1">
-                    KITCHEN PASS & DISPATCH
-                  </text>
-                  {/* Heat lamp warm indicators */}
-                  <circle cx="830" cy="610" r="8" fill="#f59e0b" fillOpacity="0.3" stroke="#f59e0b" strokeWidth="1" />
-                  <circle cx="918" cy="610" r="8" fill="#f59e0b" fillOpacity="0.3" stroke="#f59e0b" strokeWidth="1" />
-                  <circle cx="1006" cy="610" r="8" fill="#f59e0b" fillOpacity="0.3" stroke="#f59e0b" strokeWidth="1" />
-                </g>
-
-                {/* Zone 5: Cocktail & Beverage Bar (Bottom Left) */}
-                <g id="zone-bar">
-                  <path d="M 230 634 L 230 580 Q 230 560 250 560 L 380 560" fill="none" stroke="#52525b" strokeWidth="6" strokeLinecap="round" />
-                  <text x="305" y="594" textAnchor="middle" fill="#71717a" fontSize="10" fontWeight="700" letterSpacing="1">
-                    BEVERAGE BAR
-                  </text>
-                </g>
-
-                {/* Zone 6: Main Entrance & Welcome Area (Bottom Center) */}
-                <g id="zone-entrance" transform="translate(500, 620)">
-                  {/* Welcome mat */}
-                  <rect x="-45" y="-12" width="90" height="26" rx="4" fill="#18181b" stroke="#27272a" strokeWidth="1" />
-                  {/* Double Swing Doors Arc */}
-                  <path d="M -40 14 A 20 20 0 0 1 -20 -6" fill="none" stroke="#71717a" strokeWidth="1.5" strokeDasharray="2 2" />
-                  <path d="M 40 14 A 20 20 0 0 0 20 -6" fill="none" stroke="#71717a" strokeWidth="1.5" strokeDasharray="2 2" />
-                  <text x="0" y="4" textAnchor="middle" fill="#a1a1aa" fontSize="9" fontWeight="bold" letterSpacing="1">
-                    ENTRANCE
-                  </text>
-                </g>
 
                 {/* Render the Table SVGs */}
                 {displayedTables.map((tbl) => (
@@ -795,31 +694,42 @@ export const LiveTableFloorPlan = ({
                 <div
                   key={tbl.id || tbl.tableNumber}
                   onClick={() => handleTableClick(tbl)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col justify-between gap-3 bg-white dark:bg-zinc-900 ${
+                  className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-between gap-2 bg-white dark:bg-zinc-900 ${
                     isSelected
                       ? 'ring-2 ring-primary border-transparent shadow-md'
                       : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-base text-zinc-900 dark:text-zinc-100">
-                      T-{tbl.tableNumber}
+                  <div className="w-full flex items-center justify-between">
+                    <span className="font-extrabold text-sm text-zinc-900 dark:text-zinc-100">
+                      Table {tbl.tableNumber}
                     </span>
                     <span className={`w-2.5 h-2.5 rounded-full ${cfg.dotColor} ${tbl.status === 'ATTENTION' ? 'animate-ping' : ''}`} />
                   </div>
 
-                  <div>
-                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-semibold border ${cfg.bgColor}`}>
-                      {cfg.label}
-                    </span>
+                  {/* SVG Table graphic inside card */}
+                  <div className="w-20 h-20 my-1 flex items-center justify-center pointer-events-none">
+                    <svg viewBox="-55 -55 110 110" className="w-full h-full overflow-visible">
+                      <SvgTableElement
+                        table={{ ...tbl, x: 0, y: 0 }}
+                        isSelected={isSelected}
+                        onSelect={() => {}}
+                      />
+                    </svg>
                   </div>
 
-                  <div className="text-xs text-zinc-500 pt-2 border-t border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+                  <span className={`inline-block px-2.5 py-0.5 rounded text-[10px] font-semibold border ${cfg.bgColor}`}>
+                    {cfg.label}
+                  </span>
+
+                  <div className="w-full text-xs text-zinc-500 pt-2 border-t border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
                     <span>{tbl.capacity} seats</span>
-                    {tbl.currentOrder && (
+                    {tbl.currentOrder ? (
                       <span className="font-bold text-zinc-900 dark:text-zinc-200">
                         ₹{Math.round(tbl.currentOrder.totalAmount / 100)}
                       </span>
+                    ) : (
+                      <span className="text-zinc-400">Available</span>
                     )}
                   </div>
                 </div>
@@ -844,10 +754,15 @@ export const LiveTableFloorPlan = ({
               </div>
 
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h4 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
                     Table {selectedTable.tableNumber}
                   </h4>
+                  {selectedTable.activePin && (
+                    <span className="text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 px-2.5 py-0.5 rounded-full font-bold">
+                      PIN: {selectedTable.activePin}
+                    </span>
+                  )}
                   <span
                     className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
                       TABLE_STATUS_CONFIG[selectedTable.status]?.bgColor
@@ -857,7 +772,7 @@ export const LiveTableFloorPlan = ({
                   </span>
                 </div>
                 <p className="text-xs text-zinc-500 mt-0.5">
-                  {selectedTable.zone || 'Dining Area'} · Capacity: {selectedTable.capacity || 4} seats ·{' '}
+                  Capacity: {selectedTable.capacity || 4} seats ·{' '}
                   {TABLE_STATUS_CONFIG[selectedTable.status]?.description}
                 </p>
               </div>
