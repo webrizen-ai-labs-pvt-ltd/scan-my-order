@@ -261,8 +261,8 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
                       src: '/logo.png',
                       x: undefined,
                       y: undefined,
-                      height: 40,
-                      width: 40,
+                      height: 20,
+                      width: 20,
                       opacity: 1,
                       excavate: true,
                     }}
