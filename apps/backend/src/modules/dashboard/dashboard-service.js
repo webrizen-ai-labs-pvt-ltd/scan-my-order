@@ -7,47 +7,47 @@ async function getDashboardMetrics(user) {
     throw new AppError("Unauthorized access to dashboard metrics", 403);
   }
 
-  let storesCount = 0;
-  let usersCount = 0;
-  let recentOrders = [];
-  
-  if (user.role === 'SUPER_ADMIN') {
-    storesCount = await prisma.store.count();
-    usersCount = await prisma.user.count();
-    recentOrders = await prisma.order.findMany({
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: { store: true }
-    });
-  } else {
-    storesCount = await prisma.store.count({
-      where: { tenantId: user.tenantId }
-    });
-    usersCount = await prisma.user.count({
-      where: { tenantId: user.tenantId }
-    });
-    recentOrders = await prisma.order.findMany({
-      where: { store: { tenantId: user.tenantId } },
-      take: 5,
-      orderBy: { createdAt: 'desc' },
-      include: { store: true }
-    });
-  }
-
+  let storesCount;
+  let usersCount;
+  let recentOrders;
   let revenueAggregate;
+
   if (user.role === 'SUPER_ADMIN') {
-      revenueAggregate = await prisma.order.aggregate({
+    [storesCount, usersCount, recentOrders, revenueAggregate] = await Promise.all([
+      prisma.store.count(),
+      prisma.user.count(),
+      prisma.order.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { store: true }
+      }),
+      prisma.order.aggregate({
         _sum: { totalAmount: true },
         where: { status: 'SETTLED' }
-      });
+      })
+    ]);
   } else {
-      revenueAggregate = await prisma.order.aggregate({
+    [storesCount, usersCount, recentOrders, revenueAggregate] = await Promise.all([
+      prisma.store.count({
+        where: { tenantId: user.tenantId }
+      }),
+      prisma.user.count({
+        where: { tenantId: user.tenantId }
+      }),
+      prisma.order.findMany({
+        where: { store: { tenantId: user.tenantId } },
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { store: true }
+      }),
+      prisma.order.aggregate({
         _sum: { totalAmount: true },
         where: { 
-            status: 'SETTLED',
-            store: { tenantId: user.tenantId }
+          status: 'SETTLED',
+          store: { tenantId: user.tenantId }
         }
-      });
+      })
+    ]);
   }
 
   const totalRevenue = (revenueAggregate._sum.totalAmount || 0) / 100;

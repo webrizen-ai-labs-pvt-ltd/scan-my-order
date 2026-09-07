@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const compression = require("compression");
 const { ASSET_ROUTES, createApiResponse } = require("@smo/shared");
 const { sharedAssetsPath } = require("@smo/shared/node");
 const apiRoutes = require("./routes/api-routes");
@@ -7,6 +8,14 @@ const { errorHandler, notFoundHandler } = require("./middleware/error-handler");
 
 const app = express();
 
+app.use(compression({
+  filter: (req, res) => {
+    if (req.headers["accept"] === "text/event-stream" || req.path.includes("/stream")) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
 app.use(cors());
 app.use(express.json({
   verify: (req, res, buf) => {

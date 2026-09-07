@@ -4,6 +4,7 @@ const { asyncHandler } = require("../../middleware/async-handler");
 const { getPrismaClient } = require("../../lib/prisma");
 const { decrypt } = require("../../lib/encryption");
 const { billingGuard } = require("../../middleware/billing-guard");
+const { publicMenuCache } = require("../../lib/cache");
 const { createOrder, handleRazorpayWebhook } = require("../orders/order-service");
 const { createWaiterCall } = require("../waiter-calls/waiter-call-service");
 const { createFeedback } = require("../feedback/feedback-service");
@@ -26,6 +27,7 @@ router.get("/resolve/:brandSlug", asyncHandler(async (req, res) => {
   });
 
   if (!tenant) return res.status(404).json(createApiResponse(null, "Brand not found"));
+  res.set("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
   res.json(createApiResponse(tenant));
 }));
 
@@ -62,6 +64,7 @@ router.get("/resolve/:brandSlug/:storeSlug", asyncHandler(async (req, res) => {
   };
   delete responseData.tenant.paymentGateways; // Clean up response
 
+  res.set("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
   res.json(createApiResponse(responseData));
 }));
 
@@ -73,8 +76,15 @@ router.all("/stores/:storeId/*", billingGuard);
 
 // GET /api/public/stores/:storeId/menu
 router.get("/stores/:storeId/menu", asyncHandler(async (req, res) => {
-  const prisma = getPrismaClient();
   const { storeId } = req.params;
+
+  const cachedMenu = publicMenuCache.get(storeId);
+  if (cachedMenu) {
+    res.set("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
+    return res.json(createApiResponse(cachedMenu));
+  }
+
+  const prisma = getPrismaClient();
 
   // Retrieve categories and items where BOTH isManuallyDisabled and isSystemDisabled are false
   const categories = await prisma.menuCategory.findMany({
@@ -100,6 +110,8 @@ router.get("/stores/:storeId/menu", asyncHandler(async (req, res) => {
   // Filter out categories that end up with no items after filtering
   const populatedCategories = categories.filter(category => category.items.length > 0);
 
+  publicMenuCache.set(storeId, populatedCategories);
+  res.set("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
   res.json(createApiResponse(populatedCategories));
 }));
 

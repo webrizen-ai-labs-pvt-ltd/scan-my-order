@@ -1,5 +1,6 @@
 const { createHttpError } = require("./error-handler");
 const { getPrismaClient } = require("../lib/prisma");
+const { storeTenantCache, tenantSubscriptionCache } = require("../lib/cache");
 
 /**
  * Middleware that intercepts requests if a Tenant's SaaS subscription is PAST_DUE
@@ -20,14 +21,20 @@ async function billingGuard(req, res, next) {
     const prisma = getPrismaClient();
 
     if (!tenantId && req.params.storeId) {
-      const store = await prisma.store.findUnique({
-        where: { id: req.params.storeId },
-        select: { tenantId: true }
-      });
-      if (!store) {
-        throw createHttpError(404, "Store not found");
+      const cachedTenantId = storeTenantCache.get(req.params.storeId);
+      if (cachedTenantId) {
+        tenantId = cachedTenantId;
+      } else {
+        const store = await prisma.store.findUnique({
+          where: { id: req.params.storeId },
+          select: { tenantId: true }
+        });
+        if (!store) {
+          throw createHttpError(404, "Store not found");
+        }
+        tenantId = store.tenantId;
+        storeTenantCache.set(req.params.storeId, tenantId);
       }
-      tenantId = store.tenantId;
     }
 
     if (!tenantId) {
@@ -35,13 +42,16 @@ async function billingGuard(req, res, next) {
       return next();
     }
 
-    const subscription = await prisma.tenantSubscription.findUnique({
-      where: { tenantId }
-    });
+    let subscription = tenantSubscriptionCache.get(tenantId);
+    if (subscription === undefined || subscription === null) {
+      subscription = await prisma.tenantSubscription.findUnique({
+        where: { tenantId }
+      });
+      tenantSubscriptionCache.set(tenantId, subscription || { status: 'NOT_FOUND' });
+    }
 
-    // If no subscription, technically they shouldn't exist, but we let them pass 
-    // or fail downstream if they have no active plan.
-    if (!subscription) {
+    // If no subscription, let them pass or fail downstream if they have no active plan.
+    if (!subscription || subscription.status === 'NOT_FOUND') {
       return next();
     }
 

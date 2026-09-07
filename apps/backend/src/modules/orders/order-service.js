@@ -11,11 +11,30 @@ const { evaluateMenuItemAvailability } = require("../inventory/inventory-service
 async function buildCartItems(prisma, storeId, itemsInput) {
   let totalAmount = 0;
   const items = [];
+
+  // Batch fetch all required menu items and modifier options in 1 round trip
+  const menuItemIds = [...new Set(itemsInput.map(i => i.menuItemId).filter(Boolean))];
+  const allModIds = [...new Set(itemsInput.flatMap(i => i.modifiers || []).filter(Boolean))];
+
+  const [menuItemsList, modifierOptionsList] = await Promise.all([
+    menuItemIds.length > 0
+      ? prisma.menuItem.findMany({
+          where: { id: { in: menuItemIds } }
+        })
+      : [],
+    allModIds.length > 0
+      ? prisma.menuModifierOption.findMany({
+          where: { id: { in: allModIds } },
+          include: { group: true }
+        })
+      : []
+  ]);
+
+  const menuItemsMap = new Map(menuItemsList.map(m => [m.id, m]));
+  const modifierOptionsMap = new Map(modifierOptionsList.map(o => [o.id, o]));
   
   for (const item of itemsInput) {
-    const menuItem = await prisma.menuItem.findUnique({
-      where: { id: item.menuItemId }
-    });
+    const menuItem = menuItemsMap.get(item.menuItemId);
     
     if (!menuItem || menuItem.storeId !== storeId || menuItem.isManuallyDisabled || menuItem.isSystemDisabled) {
       throw createHttpError(400, `MenuItem ${item.menuItemId} is not available`);
@@ -26,10 +45,7 @@ async function buildCartItems(prisma, storeId, itemsInput) {
     
     if (item.modifiers && item.modifiers.length > 0) {
       for (const modId of item.modifiers) {
-        const option = await prisma.menuModifierOption.findUnique({
-          where: { id: modId },
-          include: { group: true }
-        });
+        const option = modifierOptionsMap.get(modId);
         
         if (!option || option.group.menuItemId !== menuItem.id) {
           throw createHttpError(400, `Invalid modifier ${modId} for item ${menuItem.id}`);

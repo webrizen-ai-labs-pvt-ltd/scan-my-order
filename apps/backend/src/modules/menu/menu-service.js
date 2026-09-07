@@ -1,18 +1,28 @@
 const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { userRoles } = require("../../constants/roles");
+const { storeTenantCache, publicMenuCache } = require("../../lib/cache");
 
 // Helper to check if actor has access to modify a store's data
 async function verifyStoreAccess(actor, storeId) {
   if (actor.role === userRoles.superAdmin) return;
   
   if (actor.role === userRoles.tenantAdmin) {
-    const prisma = getPrismaClient();
-    const store = await prisma.store.findUnique({
-      where: { id: storeId },
-      select: { tenantId: true }
-    });
-    if (!store || store.tenantId !== actor.tenantId) {
+    let tenantId = storeTenantCache.get(storeId);
+    if (!tenantId) {
+      const prisma = getPrismaClient();
+      const store = await prisma.store.findUnique({
+        where: { id: storeId },
+        select: { tenantId: true }
+      });
+      if (!store) {
+        throw createHttpError(404, "Store not found");
+      }
+      tenantId = store.tenantId;
+      storeTenantCache.set(storeId, tenantId);
+    }
+
+    if (tenantId !== actor.tenantId) {
       throw createHttpError(403, "Forbidden");
     }
     return;
@@ -26,6 +36,12 @@ async function verifyStoreAccess(actor, storeId) {
   }
   
   throw createHttpError(403, "Forbidden");
+}
+
+function invalidateMenuCache(storeId) {
+  if (storeId) {
+    publicMenuCache.del(storeId);
+  }
 }
 
 async function getFullMenu(actor, storeId) {
@@ -63,9 +79,11 @@ async function createCategory(actor, storeId, input) {
   
   if (!name) throw createHttpError(400, "Category name is required");
   
-  return await prisma.menuCategory.create({
+  const created = await prisma.menuCategory.create({
     data: { storeId, name, description, sortOrder }
   });
+  invalidateMenuCache(storeId);
+  return created;
 }
 
 async function updateCategory(actor, storeId, id, input) {
@@ -76,10 +94,12 @@ async function updateCategory(actor, storeId, id, input) {
   const category = await prisma.menuCategory.findUnique({ where: { id } });
   if (!category || category.storeId !== storeId) throw createHttpError(404, "Category not found");
   
-  return await prisma.menuCategory.update({
+  const updated = await prisma.menuCategory.update({
     where: { id },
     data: { name, description, sortOrder }
   });
+  invalidateMenuCache(storeId);
+  return updated;
 }
 
 async function deleteCategory(actor, storeId, id) {
@@ -89,7 +109,9 @@ async function deleteCategory(actor, storeId, id) {
   const category = await prisma.menuCategory.findUnique({ where: { id } });
   if (!category || category.storeId !== storeId) throw createHttpError(404, "Category not found");
   
-  return await prisma.menuCategory.delete({ where: { id } });
+  const deleted = await prisma.menuCategory.delete({ where: { id } });
+  invalidateMenuCache(storeId);
+  return deleted;
 }
 
 // Menu Items
@@ -108,7 +130,7 @@ async function createMenuItem(actor, storeId, input) {
     throw createHttpError(404, "MenuCategory not found for this store");
   }
   
-  return await prisma.menuItem.create({
+  const created = await prisma.menuItem.create({
     data: {
       storeId,
       categoryId,
@@ -120,6 +142,8 @@ async function createMenuItem(actor, storeId, input) {
       spiceLevel
     }
   });
+  invalidateMenuCache(storeId);
+  return created;
 }
 
 async function updateMenuItem(actor, storeId, id, input) {
@@ -135,10 +159,12 @@ async function updateMenuItem(actor, storeId, id, input) {
     if (!category || category.storeId !== storeId) throw createHttpError(404, "MenuCategory not found");
   }
   
-  return await prisma.menuItem.update({
+  const updated = await prisma.menuItem.update({
     where: { id },
     data: { categoryId, name, description, price, image, dietary, spiceLevel, isManuallyDisabled }
   });
+  invalidateMenuCache(storeId);
+  return updated;
 }
 
 async function deleteMenuItem(actor, storeId, id) {
@@ -148,7 +174,9 @@ async function deleteMenuItem(actor, storeId, id) {
   const item = await prisma.menuItem.findUnique({ where: { id } });
   if (!item || item.storeId !== storeId) throw createHttpError(404, "MenuItem not found");
   
-  return await prisma.menuItem.delete({ where: { id } });
+  const deleted = await prisma.menuItem.delete({ where: { id } });
+  invalidateMenuCache(storeId);
+  return deleted;
 }
 
 // Modifier Groups
@@ -166,7 +194,7 @@ async function createModifierGroup(actor, storeId, itemId, input) {
   
   if (!name) throw createHttpError(400, "Group name is required");
   
-  return await prisma.menuModifierGroup.create({
+  const created = await prisma.menuModifierGroup.create({
     data: {
       menuItemId: itemId,
       name,
@@ -175,6 +203,8 @@ async function createModifierGroup(actor, storeId, itemId, input) {
       maxSelections
     }
   });
+  invalidateMenuCache(storeId);
+  return created;
 }
 
 async function updateModifierGroup(actor, storeId, id, input) {
@@ -187,10 +217,12 @@ async function updateModifierGroup(actor, storeId, id, input) {
   if (!group || group.menuItem.storeId !== storeId) throw createHttpError(404, "Modifier group not found");
   
   const { name, isRequired, minSelections, maxSelections } = input;
-  return await prisma.menuModifierGroup.update({
+  const updated = await prisma.menuModifierGroup.update({
     where: { id },
     data: { name, isRequired, minSelections, maxSelections }
   });
+  invalidateMenuCache(storeId);
+  return updated;
 }
 
 async function deleteModifierGroup(actor, storeId, id) {
@@ -202,7 +234,9 @@ async function deleteModifierGroup(actor, storeId, id) {
   });
   if (!group || group.menuItem.storeId !== storeId) throw createHttpError(404, "Modifier group not found");
   
-  return await prisma.menuModifierGroup.delete({ where: { id } });
+  const deleted = await prisma.menuModifierGroup.delete({ where: { id } });
+  invalidateMenuCache(storeId);
+  return deleted;
 }
 
 // Modifier Options
@@ -224,13 +258,15 @@ async function createModifierOption(actor, storeId, groupId, input) {
   
   if (!name) throw createHttpError(400, "Option name is required");
   
-  return await prisma.menuModifierOption.create({
+  const created = await prisma.menuModifierOption.create({
     data: {
       groupId,
       name,
       price
     }
   });
+  invalidateMenuCache(storeId);
+  return created;
 }
 
 async function updateModifierOption(actor, storeId, id, input) {
@@ -243,10 +279,12 @@ async function updateModifierOption(actor, storeId, id, input) {
   if (!option || option.group.menuItem.storeId !== storeId) throw createHttpError(404, "Modifier option not found");
   
   const { name, price } = input;
-  return await prisma.menuModifierOption.update({
+  const updated = await prisma.menuModifierOption.update({
     where: { id },
     data: { name, price }
   });
+  invalidateMenuCache(storeId);
+  return updated;
 }
 
 async function deleteModifierOption(actor, storeId, id) {
@@ -258,7 +296,9 @@ async function deleteModifierOption(actor, storeId, id) {
   });
   if (!option || option.group.menuItem.storeId !== storeId) throw createHttpError(404, "Modifier option not found");
   
-  return await prisma.menuModifierOption.delete({ where: { id } });
+  const deleted = await prisma.menuModifierOption.delete({ where: { id } });
+  invalidateMenuCache(storeId);
+  return deleted;
 }
 
 module.exports = {

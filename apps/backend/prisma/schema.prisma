@@ -295,6 +295,8 @@ model MenuItem {
   orderItems         OrderItem[]
 
   @@index([storeId])
+  @@index([categoryId])
+  @@index([storeId, categoryId])
 }
 
 model MenuModifierGroup {
@@ -306,6 +308,8 @@ model MenuModifierGroup {
   minSelections Int                  @default(0)
   maxSelections Int                  @default(1)
   options       MenuModifierOption[]
+
+  @@index([menuItemId])
 }
 
 model MenuModifierOption {
@@ -316,6 +320,8 @@ model MenuModifierOption {
   price         Int               @default(0) 
   recipe        RecipeIngredient[]
   orderItemModifiers OrderItemModifier[]
+
+  @@index([groupId])
 }
 
 model RawMaterial {
@@ -362,6 +368,9 @@ model RecipeIngredient {
   // To ensure we don't have duplicates of the same raw material on the same item or option
   @@unique([menuItemId, rawMaterialId])
   @@unique([modifierOptionId, rawMaterialId])
+  @@index([rawMaterialId])
+  @@index([menuItemId])
+  @@index([modifierOptionId])
 }
 
 model Table {
@@ -443,6 +452,10 @@ model Order {
   updatedAt       DateTime       @updatedAt
 
   @@index([storeId, status])
+  @@index([customerId])
+  @@index([sessionId])
+  @@index([tableSessionId])
+  @@index([tableId])
 }
 
 model OrderItem {
@@ -457,6 +470,9 @@ model OrderItem {
   priceAtOrder    Int                  
   
   modifiers       OrderItemModifier[]
+
+  @@index([orderId])
+  @@index([menuItemId])
 }
 
 model OrderItemModifier {
@@ -467,6 +483,9 @@ model OrderItemModifier {
   modifierOption   MenuModifierOption @relation(fields: [modifierOptionId], references: [id])
   
   priceAtOrder     Int                
+
+  @@index([orderItemId])
+  @@index([modifierOptionId])
 }
 
 model WaiterCall {
@@ -495,6 +514,9 @@ model Feedback {
   comment     String?
   isPublic    Boolean  @default(false) 
   createdAt   DateTime @default(now())
+
+  @@index([storeId])
+  @@index([orderId])
 }
 
 enum TableSessionStatus {

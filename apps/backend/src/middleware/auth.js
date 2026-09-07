@@ -2,6 +2,7 @@ const { getPrismaClient } = require("../lib/prisma");
 const { verifyJwt } = require("../lib/jwt");
 const { userStatuses } = require("../constants/roles");
 const { createHttpError } = require("./error-handler");
+const { authUserCache } = require("../lib/cache");
 
 function readBearerToken(req) {
   const header = req.headers.authorization || "";
@@ -26,15 +27,23 @@ async function authenticate(req, _res, next) {
     }
 
     const payload = verifyJwt(token);
-    const user = await getPrismaClient().user.findUnique({
-      where: {
-        id: payload.sub
-      },
-      include: {
-        tenant: true,
-        store: true
+    let user = authUserCache.get(payload.sub);
+
+    if (!user) {
+      user = await getPrismaClient().user.findUnique({
+        where: {
+          id: payload.sub
+        },
+        include: {
+          tenant: true,
+          store: true
+        }
+      });
+
+      if (user && user.status === userStatuses.active) {
+        authUserCache.set(payload.sub, user);
       }
-    });
+    }
 
     if (!user || user.status !== userStatuses.active) {
       throw createHttpError(401, "Invalid or inactive user");
