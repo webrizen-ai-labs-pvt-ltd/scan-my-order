@@ -70,15 +70,20 @@ router.patch("/:id/verify", asyncHandler(async (req, res) => {
 
 // PATCH /api/stores/:storeId/orders/:id/status
 router.patch("/:id/status", asyncHandler(async (req, res) => {
-  const { status } = req.body;
-  const result = await updateOrderStatus(req.user, req.params.storeId, req.params.id, status);
+  const { status, paymentMethod, cashAmount, onlineAmount } = req.body;
+  const result = await updateOrderStatus(req.user, req.params.storeId, req.params.id, status, false, {
+    paymentMethod,
+    cashAmount,
+    onlineAmount
+  });
   res.json(createApiResponse(result));
 }));
 
 // POST /api/stores/:storeId/orders/:id/payment-link
 router.post("/:id/payment-link", asyncHandler(async (req, res) => {
   const { generatePaymentLink } = require("./order-service");
-  const result = await generatePaymentLink(req.user, req.params.storeId, req.params.id);
+  const { onlineAmount } = req.body || {};
+  const result = await generatePaymentLink(req.user, req.params.storeId, req.params.id, onlineAmount);
   res.json(createApiResponse(result));
 }));
 
@@ -106,14 +111,15 @@ router.get("/:id", asyncHandler(async (req, res) => {
 // POST /api/stores/:storeId/orders/sessions/:sessionId/settle
 router.post("/sessions/:sessionId/settle", asyncHandler(async (req, res) => {
   const { settleTableSession } = require("./order-service");
-  const result = await settleTableSession(req.user, req.params.storeId, req.params.sessionId);
+  const result = await settleTableSession(req.user, req.params.storeId, req.params.sessionId, false, req.body);
   res.json(createApiResponse(result));
 }));
 
 // POST /api/stores/:storeId/orders/sessions/:sessionId/payment-link
 router.post("/sessions/:sessionId/payment-link", asyncHandler(async (req, res) => {
   const { generateSessionPaymentLink } = require("./order-service");
-  const result = await generateSessionPaymentLink(req.user, req.params.storeId, req.params.sessionId);
+  const { onlineAmount } = req.body || {};
+  const result = await generateSessionPaymentLink(req.user, req.params.storeId, req.params.sessionId, onlineAmount);
   res.json(createApiResponse(result));
 }));
 

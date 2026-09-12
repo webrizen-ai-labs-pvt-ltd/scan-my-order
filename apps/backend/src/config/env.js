@@ -1,5 +1,11 @@
 const path = require("node:path");
+const dns = require("node:dns");
 const dotenv = require("dotenv");
+
+// Prioritize IPv4 DNS resolution to avoid flaky NAT64/IPv6 tunnels to cloud databases
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder("ipv4first");
+}
 
 dotenv.config({
   path: path.resolve(__dirname, "..", "..", ".env"),

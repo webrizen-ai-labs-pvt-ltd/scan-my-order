@@ -19,7 +19,8 @@ import {
   AlertCircleIcon,
   Layers01Icon,
   DashboardSquare01Icon,
-  Tick02Icon
+  Tick02Icon,
+  Calendar01Icon
 } from 'hugeicons-react';
 
 export const Dashboard = () => {
@@ -143,6 +144,19 @@ export const Dashboard = () => {
     navigate(`/dashboard/pos?table=${tableNumber}`);
   };
 
+  // Seat a pre-booked reservation directly from floor plan
+  const handleSeatReservation = async (reservationId) => {
+    if (!selectedStoreId || !reservationId) return;
+    try {
+      await api.patch(`/stores/${selectedStoreId}/reservations/${reservationId}`, {
+        status: 'SEATED'
+      });
+      fetchFloorStatus(selectedStoreId, true);
+    } catch (err) {
+      console.error('Failed to seat reservation:', err);
+    }
+  };
+
   // Derived metrics
   const tables = floorStatus?.tables || [];
   const totalTables = tables.length;
@@ -151,6 +165,7 @@ export const Dashboard = () => {
   const kitchenOrders = floorStatus?.orders?.filter((o) => o.status === 'PROCESSING').length || 0;
   const readyOrders = floorStatus?.orders?.filter((o) => o.status === 'READY').length || 0;
   const waiterCallsCount = floorStatus?.waiterCalls || 0;
+  const activeReservationsCount = floorStatus?.activeReservations || 0;
 
   return (
     <div className="space-y-6 pb-12">
@@ -202,7 +217,7 @@ export const Dashboard = () => {
       </div>
 
       {/* Real-Time Operational KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Metric 1: Table Occupancy */}
         <div className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm flex flex-col justify-between">
           <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
@@ -272,6 +287,28 @@ export const Dashboard = () => {
             </p>
           </div>
         </div>
+
+        {/* Metric 5: Today's Reservations */}
+        <div
+          onClick={() => navigate('/dashboard/reservations')}
+          className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm flex flex-col justify-between cursor-pointer hover:border-pink-300 dark:hover:border-pink-800 transition-colors"
+        >
+          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
+            <span className="text-xs font-semibold uppercase tracking-wider">Bookings Today</span>
+            <div className="p-1.5 rounded-lg bg-pink-500/10 text-pink-500">
+              <Calendar01Icon size={16} />
+            </div>
+          </div>
+          <div className="mt-2">
+            <div className="text-3xl font-black text-pink-600 dark:text-pink-400">
+              {activeReservationsCount}
+            </div>
+            <p className="text-xs text-zinc-400 mt-1 flex items-center justify-between">
+              <span>Confirmed / Seated</span>
+              <span className="text-pink-600 dark:text-pink-400 font-semibold hover:underline">View →</span>
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Floor Plan Header & View Switcher */}
@@ -318,6 +355,14 @@ export const Dashboard = () => {
           floorStatus={floorStatus}
           onResolveWaiterCall={handleResolveWaiterCall}
           onOpenPOS={handleOpenPOS}
+          onSeatReservation={handleSeatReservation}
+          onBookTable={(table) => {
+            if (table) {
+              navigate(`/dashboard/reservations?tableId=${table.id}&tableNumber=${table.tableNumber}`);
+            } else {
+              navigate('/dashboard/reservations?new=true');
+            }
+          }}
         />
       ) : (
         <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm">

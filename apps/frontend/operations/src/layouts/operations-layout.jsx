@@ -36,7 +36,8 @@ import {
   Settings01Icon,
   Store02Icon,
   CreditCardIcon,
-  Building02Icon
+  Building02Icon,
+  Calendar01Icon
 } from 'hugeicons-react';
 
 export const OperationsLayout = () => {
@@ -60,6 +61,7 @@ export const OperationsLayout = () => {
     const items = [
       { name: 'Dashboard', path: '/dashboard', icon: DashboardSquare01Icon, show: true },
       { name: 'POS (Point of Sale)', path: '/dashboard/pos', icon: Store01Icon, show: isCashier },
+      { name: 'Reservations', path: '/dashboard/reservations', icon: Calendar01Icon, show: isCashier || isWaiter },
       { name: 'KDS (Kitchen)', path: '/dashboard/kds', icon: Pot02Icon, show: isKitchen },
       { name: 'Waiter Panel', path: '/dashboard/waiter', icon: Dish01Icon, show: isWaiter },
       { name: 'Orders History', path: '/dashboard/orders', icon: Invoice01Icon, show: isCashier },
@@ -76,6 +78,7 @@ export const OperationsLayout = () => {
   const routeConfig = {
     "dashboard": { label: "Dashboard", icon: DashboardSquare01Icon },
     "pos": { label: "Point of Sale", icon: Store01Icon },
+    "reservations": { label: "Table Reservations", icon: Calendar01Icon },
     "kds": { label: "Kitchen Display", icon: Pot02Icon },
     "waiter": { label: "Waiter View", icon: Dish01Icon },
     "orders": { label: "Orders", icon: Invoice01Icon },

@@ -80,10 +80,38 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
         )}
       </div>
 
-      <div className="flex justify-between font-bold text-base mb-4">
+      <div className="flex justify-between font-bold text-base mb-2">
         <span>Total</span>
         <span>₹{order.totalAmount.toFixed(2)}</span>
       </div>
+
+      {order.paymentMethod === 'SPLIT' ? (
+        <div className="border-t border-dashed border-black pt-2 pb-2 mb-2 text-xs">
+          <div className="font-bold mb-1 uppercase tracking-wider">Payment Breakdown:</div>
+          <div className="flex justify-between">
+            <span>Cash Tendered:</span>
+            <span>₹{(order.cashAmount || 0).toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Online (UPI):</span>
+            <span>₹{(order.onlineAmount || 0).toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between font-bold pt-1 border-t border-dotted border-zinc-400">
+            <span>Total Settled:</span>
+            <span>₹{((order.cashAmount || 0) + (order.onlineAmount || 0)).toFixed(2)}</span>
+          </div>
+        </div>
+      ) : order.paymentMethod === 'CASH' ? (
+        <div className="flex justify-between text-xs mb-2 pb-2 border-b border-dashed border-black">
+          <span>Payment Method:</span>
+          <span className="font-semibold">Cash (₹{(order.cashAmount || order.totalAmount).toFixed(2)})</span>
+        </div>
+      ) : order.paymentMethod === 'ONLINE' ? (
+        <div className="flex justify-between text-xs mb-2 pb-2 border-b border-dashed border-black">
+          <span>Payment Method:</span>
+          <span className="font-semibold">Online / UPI (₹{(order.onlineAmount || order.totalAmount).toFixed(2)})</span>
+        </div>
+      ) : null}
 
       <div className="text-center">
         <p>Thank you for visiting!</p>

@@ -53,6 +53,9 @@ async function authenticate(req, _res, next) {
     req.auth = payload;
     next();
   } catch (error) {
+    if (!error.statusCode) {
+      console.error("[Auth Middleware Unexpected Error]:", error.message);
+    }
     next(error.statusCode ? error : createHttpError(401, "Invalid bearer token"));
   }
 }

@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
 import { Tick02Icon, Cancel01Icon, Store01Icon, Clock01Icon, Money01Icon, QrCodeIcon, CheckmarkBadge01Icon, PrinterIcon } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from '../components/receipt';
+import { PaymentBifurcationModal } from '../components/payment-bifurcation-modal';
 
 // Toast component for notifications
 const Toast = ({ message, type, onClose }) => {
@@ -114,6 +115,7 @@ export const WaiterTasks = () => {
   const [paymentOrder, setPaymentOrder] = useState(null);
   const [qrUrl, setQrUrl] = useState(null);
   const [qrLoading, setQrLoading] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
   const [activeTab, setActiveTab] = useState('SERVE');
   
   const [storeData, setStoreData] = useState(null);
@@ -323,6 +325,157 @@ export const WaiterTasks = () => {
     }
   };
 
+  /* ─── Waiter Payment Bifurcation Handlers ───────────────────────── */
+  const handleWaiterGenerateQR = async (onlineAmount) => {
+    if (!paymentOrder) return;
+    try {
+      let res;
+      if (paymentOrder.tableSessionId) {
+        res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/payment-link`, {
+          onlineAmount
+        });
+      } else {
+        res = await api.post(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-link`, {
+          onlineAmount
+        });
+      }
+      if (res.data.success && res.data.data.short_url) {
+        setQrUrl(res.data.data.short_url);
+        return { url: res.data.data.short_url };
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(err.response?.data?.message || 'Failed to generate QR', 'error');
+    }
+  };
+
+  const handleWaiterModalSettle = async (tenderDetails) => {
+    if (!paymentOrder) return;
+    setActionLoading('settle');
+    try {
+      if (paymentOrder.tableSessionId) {
+        const sessId = paymentOrder.tableSessionId;
+        await api.post(`/stores/${selectedStoreId}/orders/sessions/${sessId}/settle`, {
+          paymentMethod: tenderDetails.paymentMethod,
+          cashAmount: tenderDetails.cashAmount,
+          onlineAmount: tenderDetails.onlineAmount,
+        });
+        const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
+        if (billRes.data.success) {
+          const b = billRes.data.data;
+          setReceiptOrder({
+            id: `TAB-${b.session.pin}`,
+            createdAt: b.session.createdAt,
+            type: 'DINE_IN',
+            paymentModel: 'POSTPAID',
+            paymentMethod: tenderDetails.paymentMethod,
+            cashAmount: tenderDetails.cashAmount,
+            onlineAmount: tenderDetails.onlineAmount,
+            table: { tableNumber: b.session.tableNumber },
+            subTotal: b.subTotal,
+            discountAmount: b.discountAmount,
+            taxAmount: b.taxAmount,
+            totalAmount: b.totalAmount,
+            items: b.aggregatedItems.map(i => ({
+              quantity: i.quantity,
+              priceAtOrder: i.price,
+              menuItem: { name: i.name },
+              modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
+            }))
+          });
+        }
+        setPaymentOrder(null);
+        setQrUrl(null);
+        showToast('Table settled successfully!', 'success');
+        fetchOrders(selectedStoreId, true);
+      } else {
+        await api.patch(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/status`, {
+          status: 'SETTLED',
+          paymentMethod: tenderDetails.paymentMethod,
+          cashAmount: tenderDetails.cashAmount,
+          onlineAmount: tenderDetails.onlineAmount,
+        });
+        const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}`);
+        if (orderRes.data.success) {
+          setReceiptOrder(orderRes.data.data);
+        }
+        setPaymentOrder(null);
+        setQrUrl(null);
+        showToast('Order settled successfully!', 'success');
+        fetchOrders(selectedStoreId, true);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast('Failed to settle: ' + (err.response?.data?.message || err.message), 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleWaiterModalVerify = async () => {
+    if (!paymentOrder) return { success: false, message: 'No active payment' };
+    setIsVerifying(true);
+    try {
+      if (paymentOrder.tableSessionId) {
+        const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/verify-payment`);
+        if (res.data.success && res.data.data.status === 'SETTLED') {
+          const sessId = paymentOrder.tableSessionId;
+          const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
+          if (billRes.data.success) {
+            const b = billRes.data.data;
+            setReceiptOrder({
+              id: `TAB-${b.session.pin}`,
+              createdAt: b.session.createdAt,
+              type: 'DINE_IN',
+              paymentModel: 'POSTPAID',
+              paymentMethod: b.session.paymentMethod || 'ONLINE',
+              cashAmount: b.session.cashAmount || 0,
+              onlineAmount: b.session.onlineAmount || b.totalAmount,
+              table: { tableNumber: b.session.tableNumber },
+              subTotal: b.subTotal,
+              discountAmount: b.discountAmount,
+              taxAmount: b.taxAmount,
+              totalAmount: b.totalAmount,
+              items: b.aggregatedItems.map(i => ({
+                quantity: i.quantity,
+                priceAtOrder: i.price,
+                menuItem: { name: i.name },
+                modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
+              }))
+            });
+          }
+          setPaymentOrder(null);
+          setQrUrl(null);
+          showToast('Payment verified successfully!', 'success');
+          fetchOrders(selectedStoreId, true);
+          return { success: true };
+        } else {
+          return { success: false, message: res.data.data?.message || 'Payment not yet confirmed.' };
+        }
+      } else {
+        const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
+        if (res.data.success && res.data.data.status === 'success') {
+          const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}`);
+          if (orderRes.data.success) {
+            setReceiptOrder(orderRes.data.data);
+          }
+          setPaymentOrder(null);
+          setQrUrl(null);
+          showToast('Payment verified successfully!', 'success');
+          fetchOrders(selectedStoreId, true);
+          return { success: true };
+        } else {
+          return { success: false, message: res.data.data?.message || 'Payment not received yet.' };
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      return { success: false, message: 'Verification error' };
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
   // Payment Polling logic
   useEffect(() => {
     let intervalId;
@@ -441,69 +594,23 @@ export const WaiterTasks = () => {
         />
       )}
 
-      {/* Payment Modal overlay */}
-      {paymentOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden flex flex-col max-h-full animate-slide-in">
-            <div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-zinc-50 dark:bg-zinc-950">
-              <div>
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">Collect Payment</h2>
-                <p className="text-zinc-500 text-sm">Table {paymentOrder.table?.tableNumber}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-zinc-500 uppercase tracking-wider font-bold mb-1">Total Due</p>
-                <h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">₹{paymentOrder.totalAmount}</h2>
-              </div>
-            </div>
-            
-            <div className="p-6 flex flex-col items-center gap-6 overflow-y-auto">
-              {!qrUrl ? (
-                 <Button 
-                   className="w-full h-14 text-lg bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
-                   onClick={() => generatePaymentQr(paymentOrder.id)}
-                   disabled={qrLoading}
-                 >
-                   {qrLoading ? (
-                     <div className="flex items-center">
-                       <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
-                       Generating...
-                     </div>
-                   ) : (
-                     <><QrCodeIcon size={24} className="mr-2" /> Generate Razorpay QR</>
-                   )}
-                 </Button>
-              ) : (
-                 <div className="flex flex-col items-center gap-4 p-4 bg-white rounded-xl shadow-inner border border-zinc-200 w-full">
-                    <QRCodeSVG value={qrUrl} size={200} />
-                    <p className="text-sm text-zinc-500 font-medium text-center">Scan to pay via UPI or Cards</p>
-                    <p className="text-xs text-zinc-400 text-center">Waiting for payment confirmation...</p>
-                 </div>
-              )}
-              
-              <div className="w-full flex items-center justify-between text-zinc-400 text-sm">
-                <div className="h-px bg-zinc-200 dark:bg-zinc-800 flex-1"></div>
-                <span className="px-3">OR</span>
-                <div className="h-px bg-zinc-200 dark:bg-zinc-800 flex-1"></div>
-              </div>
-              
-              <Button 
-                 className="w-full h-14 text-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg"
-                 onClick={() => handleSettlePayment(paymentOrder)}
-                 disabled={actionLoading === 'settle'}
-               >
-                 <Money01Icon size={24} className="mr-2" /> Collect Cash & Settle
-               </Button>
-               
-               <Button 
-                 className="w-full" variant="ghost"
-                 onClick={() => { setPaymentOrder(null); setQrUrl(null); }}
-               >
-                 Cancel
-               </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Payment Bifurcation Modal */}
+      <PaymentBifurcationModal
+        isOpen={Boolean(paymentOrder)}
+        onClose={() => {
+          setPaymentOrder(null);
+          setQrUrl(null);
+        }}
+        totalAmount={paymentOrder?.totalAmount || 0}
+        title="Collect Payment"
+        subtitle={paymentOrder?.table ? `Table ${paymentOrder.table.tableNumber}` : 'Takeaway'}
+        onSettle={handleWaiterModalSettle}
+        onGenerateQR={handleWaiterGenerateQR}
+        isSubmitting={actionLoading === 'settle'}
+        isVerifying={isVerifying}
+        onVerifyPayment={handleWaiterModalVerify}
+        externalQrUrl={qrUrl}
+      />
 
       {/* Receipt Modal Overlay */}
       {receiptOrder && (
@@ -645,7 +752,7 @@ export const WaiterTasks = () => {
               : 'text-zinc-500 hover:text-zinc-700'
           }`}
         >
-          Collect <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 px-1.5 py-0.5 rounded-full text-xs ml-1">{servedOrders.length}</span>
+          Collect <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 px-1.5 py-0.5 rounded-full text-xs ml-1">{servedGroups.length}</span>
         </button>
       </div>
 

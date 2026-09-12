@@ -338,7 +338,22 @@ async function getStoreFloorStatus(actor, storeId) {
     }
   });
 
-  // Fetch all tables with their active orders and unresolved waiter calls
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(now);
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const activeReservations = await prisma.tableReservation.count({
+    where: {
+      storeId,
+      status: { in: ['CONFIRMED', 'SEATED'] },
+      startsAt: { lte: todayEnd },
+      endsAt: { gte: todayStart }
+    }
+  });
+
+  // Fetch all tables with their active orders, unresolved waiter calls, and upcoming reservations
   const rawTables = await prisma.table.findMany({
     where: {
       storeId,
@@ -371,6 +386,14 @@ async function getStoreFloorStatus(actor, storeId) {
       sessions: {
         where: { status: 'ACTIVE' },
         take: 1
+      },
+      reservations: {
+        where: {
+          status: { in: ['CONFIRMED', 'SEATED'] },
+          startsAt: { lte: todayEnd },
+          endsAt: { gte: todayStart }
+        },
+        orderBy: { startsAt: 'asc' }
       }
     }
   });
@@ -381,6 +404,24 @@ async function getStoreFloorStatus(actor, storeId) {
     const activeCalls = tbl.waiterCalls || [];
     const hasWaiterCall = activeCalls.length > 0;
     const billCall = activeCalls.find(c => c.type === 'BILL');
+
+    const allTodayReservations = (tbl.reservations || []).map(r => ({
+      id: r.id,
+      guestName: r.guestName,
+      guestPhone: r.guestPhone,
+      partySize: r.partySize || tbl.capacity || 2,
+      startsAt: r.startsAt,
+      endsAt: r.endsAt,
+      status: r.status,
+      notes: r.notes
+    }));
+
+    // Current or next upcoming reservation (ends in future)
+    const currentOrNextReservation = allTodayReservations.find(r => new Date(r.endsAt).getTime() >= now.getTime()) || null;
+
+    const isReservedNow = currentOrNextReservation &&
+      new Date(currentOrNextReservation.startsAt).getTime() <= (now.getTime() + 45 * 60 * 1000) &&
+      new Date(currentOrNextReservation.endsAt).getTime() >= now.getTime();
 
     let status = 'AVAILABLE';
     if (billCall) {
@@ -397,15 +438,21 @@ async function getStoreFloorStatus(actor, storeId) {
       } else {
         status = 'OCCUPIED'; // DRAFT, PENDING_PAYMENT, PENDING_VERIFICATION
       }
+    } else if (isReservedNow) {
+      status = 'RESERVED';
     }
 
     return {
       id: tbl.id,
       tableNumber: tbl.tableNumber,
+      capacity: tbl.capacity || 4,
       isActive: tbl.isActive,
       status,
       activePin: activeSession?.pin || null,
       activeSessionId: activeSession?.id || null,
+      activeReservation: isReservedNow ? currentOrNextReservation : null,
+      nextReservation: currentOrNextReservation,
+      upcomingReservations: allTodayReservations,
       hasWaiterCall,
       activeWaiterCalls: activeCalls.map(c => ({
         id: c.id,
@@ -434,6 +481,7 @@ async function getStoreFloorStatus(actor, storeId) {
     orders,
     activeTables,
     waiterCalls,
+    activeReservations,
     tables
   };
 }

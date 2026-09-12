@@ -34,9 +34,10 @@ export const StoreMenuBuilder = ({ storeId }) => {
       setLoading(true);
       const res = await api.get(`/stores/${storeId}/menu`);
       if (res.data.success) {
-        setCategories(res.data.data.categories || []);
+        const catList = Array.isArray(res.data.data) ? res.data.data : (res.data.data?.categories || []);
+        setCategories(catList);
         // Flat list of all items for preview
-        const items = res.data.data.categories.flatMap(c => c.items || []);
+        const items = catList.flatMap(c => c.items || []);
         setMenuItems(items);
       }
     } catch (err) {
@@ -115,7 +116,7 @@ export const StoreMenuBuilder = ({ storeId }) => {
         categoryId: selectedCategoryId,
         name: selectedItem.name,
         description: selectedItem.description,
-        price: parseInt(parseFloat(price) * 100), // convert to cents
+        price: Math.round(parseFloat(price)), // Store direct integer rupee value (e.g. 250 for ₹250)
         image: selectedItem.image,
         dietary: selectedItem.dietary,
         spiceLevel: 'NONE'
@@ -193,7 +194,7 @@ export const StoreMenuBuilder = ({ storeId }) => {
                         )}
                         <div className="flex-1 overflow-hidden">
                           <p className="text-sm font-semibold truncate text-zinc-900 dark:text-zinc-100">{item.name}</p>
-                          <p className="text-xs text-zinc-500">{(item.price / 100).toFixed(2)}</p>
+                          <p className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">₹{item.price}</p>
                         </div>
                       </div>
                     ))}

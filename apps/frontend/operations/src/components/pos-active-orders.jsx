@@ -4,6 +4,7 @@ import { Card, CardContent, Button, Skeleton } from '@smo/ui';
 import { Money01Icon, QrCodeIcon, Search01Icon, Cancel01Icon, Tick02Icon, PrinterIcon, UserGroupIcon } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from './receipt';
+import { PaymentBifurcationModal } from './payment-bifurcation-modal';
 
 export const POSActiveOrders = ({ selectedStoreId, token }) => {
   const [orders, setOrders] = useState([]);
@@ -12,6 +13,9 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [qrModal, setQrModal] = useState({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null });
+  const [activePaymentGroup, setActivePaymentGroup] = useState(null);
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
   const [storeData, setStoreData] = useState(null);
   const [receiptOrder, setReceiptOrder] = useState(null);
@@ -21,6 +25,16 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
   useEffect(() => {
     qrModalRef.current = qrModal;
   }, [qrModal]);
+
+  const activePaymentGroupRef = useRef(activePaymentGroup);
+  useEffect(() => {
+    activePaymentGroupRef.current = activePaymentGroup;
+  }, [activePaymentGroup]);
+
+  const paymentModalOpenRef = useRef(paymentModalOpen);
+  useEffect(() => {
+    paymentModalOpenRef.current = paymentModalOpen;
+  }, [paymentModalOpen]);
 
   const fetchOrders = async (storeIdToFetch) => {
     if (!storeIdToFetch) return;
@@ -54,12 +68,18 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
           fetchOrders(selectedStoreId);
           
           const currentModal = qrModalRef.current;
+          const activeGroup = activePaymentGroupRef.current;
           if (
             (message.type === 'ORDER_PROCESSING' || message.type === 'ORDER_SETTLED' || message.type === 'TABLE_SESSION_SETTLED') &&
-            currentModal.isOpen &&
-            (message.data?.id === currentModal.orderId || message.data?.tableSessionId === currentModal.sessionId)
+            ((currentModal.isOpen && (message.data?.id === currentModal.orderId || message.data?.tableSessionId === currentModal.sessionId)) ||
+             (paymentModalOpenRef.current && activeGroup && (
+               (activeGroup.tableSessionId && message.data?.tableSessionId === activeGroup.tableSessionId) ||
+               (activeGroup.orders?.some(o => o.id === message.data?.id))
+             )))
           ) {
             setQrModal({ isOpen: false, url: '', orderId: '', sessionId: null, totalAmount: 0, tableNumber: null });
+            setPaymentModalOpen(false);
+            setActivePaymentGroup(null);
           }
         } catch(e) {}
       };
@@ -67,6 +87,151 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
       return () => eventSource.close();
     }
   }, [selectedStoreId, token]);
+
+  /* ─── Payment Bifurcation Modal Handlers ────────────────────────── */
+  const handleOpenPaymentModal = (group) => {
+    setActivePaymentGroup(group);
+    setPaymentModalOpen(true);
+  };
+
+  const handleGenerateModalQR = async (onlineAmount) => {
+    if (!activePaymentGroup) return;
+    if (activePaymentGroup.tableSessionId) {
+      const linkRes = await api.post(`/stores/${selectedStoreId}/orders/sessions/${activePaymentGroup.tableSessionId}/payment-link`, {
+        onlineAmount
+      });
+      return { url: linkRes.data.data.short_url };
+    } else {
+      const order = activePaymentGroup.orders[0];
+      const linkRes = await api.post(`/stores/${selectedStoreId}/orders/${order.id}/payment-link`, {
+        onlineAmount
+      });
+      return { url: linkRes.data.data.short_url };
+    }
+  };
+
+  const handleModalSettle = async (tenderDetails) => {
+    if (!activePaymentGroup) return;
+    setIsSubmittingPayment(true);
+    try {
+      if (activePaymentGroup.tableSessionId) {
+        const sessId = activePaymentGroup.tableSessionId;
+        await api.post(`/stores/${selectedStoreId}/orders/sessions/${sessId}/settle`, {
+          paymentMethod: tenderDetails.paymentMethod,
+          cashAmount: tenderDetails.cashAmount,
+          onlineAmount: tenderDetails.onlineAmount,
+        });
+        const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
+        if (billRes.data.success) {
+          const b = billRes.data.data;
+          setReceiptOrder({
+            id: `TAB-${b.session.pin}`,
+            createdAt: b.session.createdAt,
+            type: 'DINE_IN',
+            paymentModel: 'POSTPAID',
+            paymentMethod: tenderDetails.paymentMethod,
+            cashAmount: tenderDetails.cashAmount,
+            onlineAmount: tenderDetails.onlineAmount,
+            table: { tableNumber: b.session.tableNumber },
+            subTotal: b.subTotal,
+            discountAmount: b.discountAmount,
+            taxAmount: b.taxAmount,
+            totalAmount: b.totalAmount,
+            items: b.aggregatedItems.map(i => ({
+              quantity: i.quantity,
+              priceAtOrder: i.price,
+              menuItem: { name: i.name },
+              modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
+            }))
+          });
+        }
+      } else {
+        const order = activePaymentGroup.orders[0];
+        await api.patch(`/stores/${selectedStoreId}/orders/${order.id}/status`, {
+          status: 'SETTLED',
+          paymentMethod: tenderDetails.paymentMethod,
+          cashAmount: tenderDetails.cashAmount,
+          onlineAmount: tenderDetails.onlineAmount,
+        });
+        const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${order.id}`);
+        if (orderRes.data.success) {
+          setReceiptOrder(orderRes.data.data);
+        }
+      }
+
+      setPaymentModalOpen(false);
+      setActivePaymentGroup(null);
+      fetchOrders(selectedStoreId);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to settle bill: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  };
+
+  const handleModalVerifyPayment = async () => {
+    if (!activePaymentGroup) return { success: false, message: 'No active table selected' };
+    setIsVerifying(true);
+    try {
+      if (activePaymentGroup.tableSessionId) {
+        const sessId = activePaymentGroup.tableSessionId;
+        const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${sessId}/verify-payment`);
+        if (res.data.success && res.data.data.status === 'SETTLED') {
+          const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
+          if (billRes.data.success) {
+            const b = billRes.data.data;
+            setReceiptOrder({
+              id: `TAB-${b.session.pin}`,
+              createdAt: b.session.createdAt,
+              type: 'DINE_IN',
+              paymentModel: 'POSTPAID',
+              paymentMethod: b.session.paymentMethod || 'ONLINE',
+              cashAmount: b.session.cashAmount || 0,
+              onlineAmount: b.session.onlineAmount || b.totalAmount,
+              table: { tableNumber: b.session.tableNumber },
+              subTotal: b.subTotal,
+              discountAmount: b.discountAmount,
+              taxAmount: b.taxAmount,
+              totalAmount: b.totalAmount,
+              items: b.aggregatedItems.map(i => ({
+                quantity: i.quantity,
+                priceAtOrder: i.price,
+                menuItem: { name: i.name },
+                modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
+              }))
+            });
+          }
+          setPaymentModalOpen(false);
+          setActivePaymentGroup(null);
+          fetchOrders(selectedStoreId);
+          return { success: true };
+        } else {
+          return { success: false, message: res.data.data?.message || 'Payment not yet confirmed.' };
+        }
+      } else {
+        const order = activePaymentGroup.orders[0];
+        const res = await api.get(`/stores/${selectedStoreId}/orders/${order.id}/payment-status`);
+        if (res.data.success && res.data.data.status === 'success') {
+          const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${order.id}`);
+          if (orderRes.data.success) {
+            setReceiptOrder(orderRes.data.data);
+          }
+          setPaymentModalOpen(false);
+          setActivePaymentGroup(null);
+          fetchOrders(selectedStoreId);
+          return { success: true };
+        } else {
+          return { success: false, message: res.data.data?.message || 'Payment not received yet.' };
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      return { success: false, message: 'Verification error' };
+    } finally {
+      setIsVerifying(false);
+    }
+  };
 
   const settleSession = async (tableSessionId, fallbackOrder) => {
     try {
@@ -480,21 +645,13 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
                         Close Table (Prepaid Settled)
                       </Button>
                     ) : (
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="flex flex-col gap-2">
                         <Button 
-                          variant="outline"
-                          className="w-full h-11 font-semibold text-zinc-700 dark:text-zinc-300 border-zinc-300 dark:border-zinc-700"
-                          onClick={() => handleGenerateQR(group)}
+                          className="w-full h-11 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-sm flex items-center justify-center gap-2"
+                          onClick={() => handleOpenPaymentModal(group)}
                         >
-                          <QrCodeIcon size={18} className="mr-2" />
-                          Generate QR
-                        </Button>
-                        <Button 
-                          className="w-full h-11 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white border-0 shadow-sm"
-                          onClick={() => settleSession(group.tableSessionId, primaryOrder)}
-                        >
-                          <Money01Icon size={18} className="mr-2" />
-                          Cash & Settle
+                          <Money01Icon size={18} />
+                          <span>Collect Payment / Settle Tab (₹{groupTotal})</span>
                         </Button>
                       </div>
                     )}
@@ -594,6 +751,23 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
           </div>
         </div>
       )}
+
+      {/* ─── PAYMENT BIFURCATION MODAL (CASH, ONLINE QR, SPLIT) ─── */}
+      <PaymentBifurcationModal
+        isOpen={paymentModalOpen}
+        onClose={() => {
+          setPaymentModalOpen(false);
+          setActivePaymentGroup(null);
+        }}
+        totalAmount={activePaymentGroup ? activePaymentGroup.orders.reduce((sum, o) => sum + o.totalAmount, 0) : 0}
+        title="Collect Payment & Settle"
+        subtitle={activePaymentGroup?.table ? `Table ${activePaymentGroup.table.tableNumber}${activePaymentGroup.tableSession?.pin ? ` • PIN: ${activePaymentGroup.tableSession.pin}` : ''}` : 'Takeaway Order'}
+        onSettle={handleModalSettle}
+        onGenerateQR={handleGenerateModalQR}
+        isSubmitting={isSubmittingPayment}
+        isVerifying={isVerifying}
+        onVerifyPayment={handleModalVerifyPayment}
+      />
     </div>
   );
 };

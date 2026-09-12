@@ -18,6 +18,7 @@ import { StoreCreate } from './pages/store-create';
 import { StoreEdit } from './pages/store-edit';
 import { BrandSetup } from './pages/brand-setup';
 import { Subscriptions } from './pages/subscriptions';
+import { Reservations } from './pages/reservations';
 
 function App() {
   return (
@@ -30,6 +31,11 @@ function App() {
           {/* Universal Dashboard Routes */}
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/settings" element={<Settings />} />
+
+          {/* Reservations (Cashier + Waiter + Manager/Admin) */}
+          <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'CASHIER', 'WAITER']} />}>
+            <Route path="/dashboard/reservations" element={<Reservations />} />
+          </Route>
 
           {/* POS & Orders (Cashier + Manager/Admin) */}
           <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'CASHIER']} />}>

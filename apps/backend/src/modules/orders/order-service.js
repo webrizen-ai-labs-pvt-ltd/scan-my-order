@@ -126,11 +126,42 @@ async function createOrder(storeId, actor, origin, input) {
 
   const totalAmount = subTotal - discountAmount + taxAmount;
   
+  const { paymentMethod, cashAmount, onlineAmount } = input;
+  let resolvedPaymentMethod = null;
+  let resolvedCashAmount = 0;
+  let resolvedOnlineAmount = 0;
+
+  if (paymentMethod) {
+    if (!['CASH', 'ONLINE', 'SPLIT'].includes(paymentMethod)) {
+      throw createHttpError(400, "Invalid paymentMethod. Must be CASH, ONLINE, or SPLIT");
+    }
+    resolvedPaymentMethod = paymentMethod;
+    if (paymentMethod === 'CASH') {
+      resolvedCashAmount = totalAmount;
+      resolvedOnlineAmount = 0;
+    } else if (paymentMethod === 'ONLINE') {
+      resolvedCashAmount = 0;
+      resolvedOnlineAmount = totalAmount;
+    } else if (paymentMethod === 'SPLIT') {
+      const cAmt = Number(cashAmount) || 0;
+      const oAmt = Number(onlineAmount) || 0;
+      if (cAmt + oAmt !== totalAmount) {
+        throw createHttpError(400, `Split payment amounts (Cash ₹${cAmt} + Online ₹${oAmt}) must equal total amount ₹${totalAmount}`);
+      }
+      resolvedCashAmount = cAmt;
+      resolvedOnlineAmount = oAmt;
+    }
+  }
+
   let status = 'DRAFT';
   if (origin === 'QR_MENU' && paymentModel === 'POSTPAID') {
     status = 'PENDING_VERIFICATION';
   } else if (paymentModel === 'PREPAID') {
-    status = 'PENDING_PAYMENT';
+    if (origin === 'POS' && resolvedPaymentMethod === 'CASH') {
+      status = 'SETTLED';
+    } else {
+      status = 'PENDING_PAYMENT';
+    }
   } else if (origin === 'POS' && paymentModel === 'POSTPAID') {
     // A cashier punching a postpaid order can go straight to processing
     status = 'PROCESSING';
@@ -180,6 +211,9 @@ async function createOrder(storeId, actor, origin, input) {
       customerId: origin === 'QR_MENU' && actor ? actor.id : null,
       sessionId: input.sessionId || null,
       paymentModel,
+      paymentMethod: resolvedPaymentMethod,
+      cashAmount: resolvedCashAmount,
+      onlineAmount: resolvedOnlineAmount,
       status,
       subTotal,
       discountAmount,
@@ -269,7 +303,7 @@ async function generateRazorpayOrder(prisma, storeId, order) {
   }
 }
 
-async function generatePaymentLink(actor, storeId, orderId) {
+async function generatePaymentLink(actor, storeId, orderId, customOnlineAmount = null) {
   await verifyStoreAccess(actor, storeId);
   const prisma = getPrismaClient();
   
@@ -278,10 +312,18 @@ async function generatePaymentLink(actor, storeId, orderId) {
     throw createHttpError(404, "Order not found");
   }
 
-  if (order.paymentLinkId && order.paymentLinkUrl) {
+  let payableAmount = order.totalAmount;
+  if (customOnlineAmount && Number(customOnlineAmount) > 0) {
+    payableAmount = Number(customOnlineAmount);
+  } else if (order.paymentMethod === 'SPLIT' && order.onlineAmount > 0) {
+    payableAmount = order.onlineAmount;
+  }
+
+  if (order.paymentLinkId && order.paymentLinkUrl && !customOnlineAmount) {
     return {
       id: order.paymentLinkId,
-      short_url: order.paymentLinkUrl
+      short_url: order.paymentLinkUrl,
+      totalAmount: payableAmount
     };
   }
   
@@ -309,11 +351,13 @@ async function generatePaymentLink(actor, storeId, orderId) {
   });
   
   const options = {
-    amount: Math.round(order.totalAmount * 100), // Amount in paise
+    amount: Math.round(payableAmount * 100), // Amount in paise
     currency: "INR",
     accept_partial: false,
     reference_id: `${order.id}_${Date.now()}`,
-    description: `Payment for Order ${order.id}`,
+    description: payableAmount < order.totalAmount
+      ? `Online portion (₹${payableAmount}) for Order #${order.id.slice(-6).toUpperCase()}`
+      : `Payment for Order #${order.id.slice(-6).toUpperCase()}`,
     customer: {
       name: "Customer",
       contact: "+919876543210"
@@ -324,7 +368,8 @@ async function generatePaymentLink(actor, storeId, orderId) {
     },
     reminder_enable: false,
     notes: {
-      order_id: order.id
+      order_id: order.id,
+      payable_amount: String(payableAmount)
     }
   };
   
@@ -335,11 +380,17 @@ async function generatePaymentLink(actor, storeId, orderId) {
       where: { id: orderId },
       data: {
         paymentLinkId: paymentLink.id,
-        paymentLinkUrl: paymentLink.short_url
+        paymentLinkUrl: paymentLink.short_url,
+        onlineAmount: payableAmount,
+        paymentMethod: payableAmount < order.totalAmount ? 'SPLIT' : (order.paymentMethod || 'ONLINE'),
+        cashAmount: payableAmount < order.totalAmount ? (order.totalAmount - payableAmount) : order.cashAmount
       }
     });
     
-    return paymentLink;
+    return {
+      ...paymentLink,
+      totalAmount: payableAmount
+    };
   } catch (error) {
     const errorMsg = error.error?.description || error.message || JSON.stringify(error);
     throw createHttpError(500, "Failed to create payment link: " + errorMsg);
@@ -600,7 +651,7 @@ async function deductInventory(prisma, order) {
   }
 }
 
-async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = false) {
+async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = false, tenderDetails = null) {
   if (!isSystem && actor) {
     await verifyStoreAccess(actor, storeId);
   }
@@ -622,9 +673,20 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
     newStatus = 'SETTLED';
   }
   
+  const updateData = { status: newStatus };
+  if (tenderDetails) {
+    if (tenderDetails.paymentMethod) updateData.paymentMethod = tenderDetails.paymentMethod;
+    if (tenderDetails.cashAmount !== undefined) updateData.cashAmount = Number(tenderDetails.cashAmount);
+    if (tenderDetails.onlineAmount !== undefined) updateData.onlineAmount = Number(tenderDetails.onlineAmount);
+  } else if (newStatus === 'SETTLED' && !order.paymentMethod) {
+    updateData.paymentMethod = 'CASH';
+    updateData.cashAmount = order.totalAmount;
+    updateData.onlineAmount = 0;
+  }
+  
   const updatedOrder = await prisma.order.update({
     where: { id: orderId },
-    data: { status: newStatus }
+    data: updateData
   });
   
   // Broadcast
@@ -791,7 +853,7 @@ async function getOrderById(storeId, orderId) {
 }
 
 // 6. TABLE SESSION SETTLEMENT & BILLING
-async function settleTableSession(actor, storeId, tableSessionId, isSystem = false) {
+async function settleTableSession(actor, storeId, tableSessionId, isSystem = false, tenderDetails = null) {
   const prisma = getPrismaClient();
   const session = await prisma.tableSession.findUnique({
     where: { id: tableSessionId },
@@ -815,23 +877,55 @@ async function settleTableSession(actor, storeId, tableSessionId, isSystem = fal
     }
   });
 
+  const totalSessionAmount = activeOrders.reduce((sum, o) => sum + o.totalAmount, 0);
+
+  let paymentMethod = tenderDetails?.paymentMethod || null;
+  let cashAmount = tenderDetails?.cashAmount !== undefined ? Number(tenderDetails.cashAmount) : 0;
+  let onlineAmount = tenderDetails?.onlineAmount !== undefined ? Number(tenderDetails.onlineAmount) : 0;
+
+  if (paymentMethod === 'CASH') {
+    cashAmount = totalSessionAmount;
+    onlineAmount = 0;
+  } else if (paymentMethod === 'ONLINE') {
+    cashAmount = 0;
+    onlineAmount = totalSessionAmount;
+  } else if (!paymentMethod && isSystem) {
+    paymentMethod = 'ONLINE';
+    cashAmount = 0;
+    onlineAmount = totalSessionAmount;
+  } else if (!paymentMethod) {
+    paymentMethod = 'CASH';
+    cashAmount = totalSessionAmount;
+    onlineAmount = 0;
+  }
+
   if (activeOrders.length > 0) {
     await prisma.order.updateMany({
       where: {
         tableSessionId,
         status: { notIn: ['SETTLED', 'CANCELLED'] }
       },
-      data: { status: 'SETTLED' }
+      data: {
+        status: 'SETTLED',
+        paymentMethod,
+        cashAmount: activeOrders.length === 1 ? cashAmount : Math.round(cashAmount / activeOrders.length),
+        onlineAmount: activeOrders.length === 1 ? onlineAmount : Math.round(onlineAmount / activeOrders.length)
+      }
     });
   }
 
   const updatedSession = await prisma.tableSession.update({
     where: { id: tableSessionId },
-    data: { status: 'SETTLED' }
+    data: {
+      status: 'SETTLED',
+      paymentMethod,
+      cashAmount,
+      onlineAmount
+    }
   });
 
   for (const order of activeOrders) {
-    const settledOrder = { ...order, status: 'SETTLED' };
+    const settledOrder = { ...order, status: 'SETTLED', paymentMethod, cashAmount, onlineAmount };
     broadcastToStore(actualStoreId, 'ORDER_SETTLED', settledOrder);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_SETTLED', settledOrder);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_SETTLED', settledOrder);
@@ -841,7 +935,7 @@ async function settleTableSession(actor, storeId, tableSessionId, isSystem = fal
   return { success: true, tableSessionId, settledOrdersCount: activeOrders.length, session: updatedSession };
 }
 
-async function generateSessionPaymentLink(actor, storeId, tableSessionId) {
+async function generateSessionPaymentLink(actor, storeId, tableSessionId, customOnlineAmount = null) {
   if (actor) await verifyStoreAccess(actor, storeId);
   const prisma = getPrismaClient();
 
@@ -863,19 +957,24 @@ async function generateSessionPaymentLink(actor, storeId, tableSessionId) {
     throw createHttpError(400, "No unsettled orders in this session");
   }
 
-  // Check if any order already has an active paymentLinkUrl
-  const existingLink = session.orders.find(o => o.paymentLinkUrl && o.paymentLinkId);
-  if (existingLink) {
-    return {
-      id: existingLink.paymentLinkId,
-      short_url: existingLink.paymentLinkUrl,
-      totalAmount: session.orders.reduce((sum, o) => sum + o.totalAmount, 0)
-    };
-  }
-
   const totalAmount = session.orders.reduce((sum, o) => sum + o.totalAmount, 0);
   if (totalAmount <= 0) {
     throw createHttpError(400, "Total amount must be greater than 0");
+  }
+
+  let payableAmount = totalAmount;
+  if (customOnlineAmount && Number(customOnlineAmount) > 0) {
+    payableAmount = Number(customOnlineAmount);
+  }
+
+  // Check if an existing link exists matching amount
+  const existingLink = session.orders.find(o => o.paymentLinkUrl && o.paymentLinkId);
+  if (existingLink && !customOnlineAmount) {
+    return {
+      id: existingLink.paymentLinkId,
+      short_url: existingLink.paymentLinkUrl,
+      totalAmount: payableAmount
+    };
   }
 
   const store = await prisma.store.findUnique({
@@ -902,18 +1001,21 @@ async function generateSessionPaymentLink(actor, storeId, tableSessionId) {
   });
 
   const options = {
-    amount: Math.round(totalAmount * 100),
+    amount: Math.round(payableAmount * 100),
     currency: "INR",
     accept_partial: false,
     reference_id: `sess_${tableSessionId}_${Date.now()}`,
-    description: `Bill for Table ${session.table.tableNumber}`,
+    description: payableAmount < totalAmount
+      ? `Online portion (₹${payableAmount}) for Table ${session.table.tableNumber}`
+      : `Bill for Table ${session.table.tableNumber}`,
     customer: {
       name: `Table ${session.table.tableNumber}`,
       contact: "+919876543210"
     },
     notify: { sms: false, email: false },
     notes: {
-      tableSessionId
+      tableSessionId,
+      payable_amount: String(payableAmount)
     }
   };
 
@@ -927,14 +1029,26 @@ async function generateSessionPaymentLink(actor, storeId, tableSessionId) {
       },
       data: {
         paymentLinkId: paymentLink.id,
-        paymentLinkUrl: paymentLink.short_url
+        paymentLinkUrl: paymentLink.short_url,
+        onlineAmount: payableAmount,
+        paymentMethod: payableAmount < totalAmount ? 'SPLIT' : 'ONLINE',
+        cashAmount: payableAmount < totalAmount ? (totalAmount - payableAmount) : 0
+      }
+    });
+
+    await prisma.tableSession.update({
+      where: { id: tableSessionId },
+      data: {
+        paymentMethod: payableAmount < totalAmount ? 'SPLIT' : 'ONLINE',
+        onlineAmount: payableAmount,
+        cashAmount: payableAmount < totalAmount ? (totalAmount - payableAmount) : 0
       }
     });
 
     return {
       id: paymentLink.id,
       short_url: paymentLink.short_url,
-      totalAmount
+      totalAmount: payableAmount
     };
   } catch (error) {
     const errorMsg = error.error?.description || error.message || JSON.stringify(error);
@@ -1059,6 +1173,9 @@ async function getTableSessionBill(storeId, tableSessionId) {
       id: session.id,
       pin: session.pin,
       status: session.status,
+      paymentMethod: session.paymentMethod,
+      cashAmount: session.cashAmount || 0,
+      onlineAmount: session.onlineAmount || 0,
       tableNumber: session.table.tableNumber,
       createdAt: session.createdAt
     },

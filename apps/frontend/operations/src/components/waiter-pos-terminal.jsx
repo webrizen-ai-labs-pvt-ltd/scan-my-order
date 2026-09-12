@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../lib/api';
 import { Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
-import { Add01Icon, Remove01Icon, ShoppingCart01Icon, Tick02Icon, Cancel01Icon, QrCodeIcon, Tag01Icon, PrinterIcon, Loading02Icon, ArrowLeft01Icon } from 'hugeicons-react';
+import { Add01Icon, Remove01Icon, ShoppingCart01Icon, Tick02Icon, Cancel01Icon, QrCodeIcon, Tag01Icon, PrinterIcon, Loading02Icon, ArrowLeft01Icon, DiningTableIcon } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from './receipt';
+import { PaymentBifurcationModal } from './payment-bifurcation-modal';
 
 export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
   const [menu, setMenu] = useState([]);
@@ -32,6 +33,8 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [qrModal, setQrModal] = useState({ isOpen: false, url: '', orderId: '' });
+  const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [activePaymentOrderId, setActivePaymentOrderId] = useState(null);
   const [receiptOrder, setReceiptOrder] = useState(null);
   const receiptRef = useRef();
   
@@ -39,6 +42,16 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
   useEffect(() => {
     qrModalRef.current = qrModal;
   }, [qrModal]);
+
+  const activePaymentOrderIdRef = useRef(activePaymentOrderId);
+  useEffect(() => {
+    activePaymentOrderIdRef.current = activePaymentOrderId;
+  }, [activePaymentOrderId]);
+
+  const paymentModalOpenRef = useRef(paymentModalOpen);
+  useEffect(() => {
+    paymentModalOpenRef.current = paymentModalOpen;
+  }, [paymentModalOpen]);
 
   useEffect(() => {
     if (!selectedStoreId) return;
@@ -75,6 +88,18 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
     fetchData();
   }, [selectedStoreId]);
 
+  const fetchTables = async () => {
+    if (!selectedStoreId) return;
+    try {
+      const res = await api.get(`/stores/${selectedStoreId}/tables`);
+      if (res.data.success) {
+        setTables(res.data.data.filter(t => t.isActive));
+      }
+    } catch (err) {
+      console.error('Failed to fetch tables:', err);
+    }
+  };
+
   useEffect(() => {
     if (!selectedStoreId || !token) return;
     const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -84,17 +109,41 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
       try {
         const message = JSON.parse(event.data);
         const currentModal = qrModalRef.current;
-        if ((message.type === 'ORDER_PROCESSING' || message.type === 'ORDER_SETTLED') && currentModal.isOpen && message.data?.id === currentModal.orderId) {
+        const targetOrderId = message.data?.id;
+        if (
+          (message.type === 'ORDER_PROCESSING' || message.type === 'ORDER_SETTLED') &&
+          ((currentModal.isOpen && targetOrderId === currentModal.orderId) ||
+           (paymentModalOpenRef.current && targetOrderId === activePaymentOrderIdRef.current))
+        ) {
            setQrModal({ isOpen: false, url: '', orderId: '' });
+           setPaymentModalOpen(false);
+           setActivePaymentOrderId(null);
            setCart([]);
            setSelectedTableId('');
            setAppliedPromo(null);
            setIsCartOpen(false);
            
-           const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${currentModal.orderId}`);
+           const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${targetOrderId}`);
            if (orderRes.data.success) {
              setReceiptOrder(orderRes.data.data);
            }
+        }
+
+        // Live table status refresh on order and table events
+        const tableEvents = [
+          'ORDER_PENDING_VERIFICATION',
+          'ORDER_PROCESSING',
+          'ORDER_READY',
+          'ORDER_SERVED',
+          'ORDER_SETTLED',
+          'ORDER_CANCELLED',
+          'TABLE_UPDATED',
+          'RESERVATION_CREATED',
+          'RESERVATION_UPDATED',
+          'RESERVATION_DELETED'
+        ];
+        if (tableEvents.includes(message.type)) {
+          fetchTables();
         }
       } catch(e) {}
     };
@@ -220,9 +269,16 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
   const totalAmount = subTotalAfterDiscount + taxAmount;
 
   const handleCheckout = async (paymentModel, useQR = false) => {
-    if (orderType === 'DINE_IN' && !selectedTableId) {
-      alert("Please select a table for Dine-In orders.");
-      return;
+    if (orderType === 'DINE_IN') {
+      if (!selectedTableId) {
+        alert("Please select a table for Dine-In orders.");
+        return;
+      }
+      const selectedTable = tables.find(t => t.id === selectedTableId);
+      if (selectedTable && selectedTable.status !== 'AVAILABLE' && selectedTable.isAvailable === false) {
+        alert(`Table ${selectedTable.tableNumber} is currently unavailable (${selectedTable.status === 'OCCUPIED' ? 'Occupied' : 'Reserved'}). Please pick an available table.`);
+        return;
+      }
     }
     if (cart.length === 0) return;
 
@@ -265,6 +321,139 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
       alert("Failed to place order: " + (err.response?.data?.message || err.message));
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  /* ─── Payment Bifurcation Modal Handlers ────────────────────────── */
+  const handleOpenPaymentModal = () => {
+    if (orderType === 'DINE_IN') {
+      if (!selectedTableId) {
+        alert("Please select a table for Dine-In orders.");
+        return;
+      }
+      const selectedTable = tables.find(t => t.id === selectedTableId);
+      if (selectedTable && selectedTable.status !== 'AVAILABLE' && selectedTable.isAvailable === false) {
+        alert(`Table ${selectedTable.tableNumber} is currently unavailable (${selectedTable.status === 'OCCUPIED' ? 'Occupied' : 'Reserved'}). Please pick an available table.`);
+        return;
+      }
+    }
+    if (cart.length === 0) return;
+    setPaymentModalOpen(true);
+  };
+
+  const handleGenerateModalQR = async (onlineAmount) => {
+    let orderId = activePaymentOrderId;
+    if (!orderId) {
+      const payload = {
+        type: orderType,
+        paymentModel: 'PREPAID',
+        paymentMethod: onlineAmount === totalAmount ? 'ONLINE' : 'SPLIT',
+        cashAmount: totalAmount - onlineAmount,
+        onlineAmount: onlineAmount,
+        origin: 'WAITER',
+        tableId: orderType === 'DINE_IN' ? selectedTableId : undefined,
+        promoCode: appliedPromo ? appliedPromo.code : undefined,
+        items: cart.map(c => ({
+          menuItemId: c.menuItem.id,
+          quantity: c.quantity,
+          modifiers: c.modifiers.map(m => m.id)
+        }))
+      };
+      const res = await api.post(`/stores/${selectedStoreId}/orders`, payload);
+      orderId = res.data.data.order.id;
+      setActivePaymentOrderId(orderId);
+    }
+    const linkRes = await api.post(`/stores/${selectedStoreId}/orders/${orderId}/payment-link`, {
+      onlineAmount
+    });
+    return { url: linkRes.data.data.short_url };
+  };
+
+  const handleModalSettle = async (tenderDetails) => {
+    setIsSubmitting(true);
+    try {
+      let settledOrder = null;
+      let orderId = activePaymentOrderId;
+
+      if (!orderId) {
+        const payload = {
+          type: orderType,
+          paymentModel: 'PREPAID',
+          paymentMethod: tenderDetails.paymentMethod,
+          cashAmount: tenderDetails.cashAmount,
+          onlineAmount: tenderDetails.onlineAmount,
+          origin: 'WAITER',
+          tableId: orderType === 'DINE_IN' ? selectedTableId : undefined,
+          promoCode: appliedPromo ? appliedPromo.code : undefined,
+          items: cart.map(c => ({
+            menuItemId: c.menuItem.id,
+            quantity: c.quantity,
+            modifiers: c.modifiers.map(m => m.id)
+          }))
+        };
+        const res = await api.post(`/stores/${selectedStoreId}/orders`, payload);
+        settledOrder = res.data.data.order;
+
+        if (tenderDetails.paymentMethod !== 'CASH') {
+          const updateRes = await api.patch(`/stores/${selectedStoreId}/orders/${settledOrder.id}/status`, {
+            status: 'SETTLED',
+            paymentMethod: tenderDetails.paymentMethod,
+            cashAmount: tenderDetails.cashAmount,
+            onlineAmount: tenderDetails.onlineAmount,
+          });
+          if (updateRes.data.success) settledOrder = updateRes.data.data;
+        }
+      } else {
+        const updateRes = await api.patch(`/stores/${selectedStoreId}/orders/${orderId}/status`, {
+          status: 'SETTLED',
+          paymentMethod: tenderDetails.paymentMethod,
+          cashAmount: tenderDetails.cashAmount,
+          onlineAmount: tenderDetails.onlineAmount,
+        });
+        settledOrder = updateRes.data.data;
+      }
+
+      setPaymentModalOpen(false);
+      setActivePaymentOrderId(null);
+      setCart([]);
+      setSelectedTableId('');
+      setAppliedPromo(null);
+      setIsCartOpen(false);
+      setReceiptOrder(settledOrder);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to settle order: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleModalVerifyPayment = async () => {
+    if (!activePaymentOrderId) return { success: false, message: 'No active order' };
+    setIsVerifying(true);
+    try {
+      const res = await api.get(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}/payment-status`);
+      if (res.data.success && res.data.data.status === 'success') {
+        const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}`);
+        const order = orderRes.data.data;
+        setPaymentModalOpen(false);
+        setActivePaymentOrderId(null);
+        setCart([]);
+        setSelectedTableId('');
+        setAppliedPromo(null);
+        setIsCartOpen(false);
+        setReceiptOrder(order);
+        return { success: true };
+      } else {
+        alert(res.data.data?.message || 'Payment not received yet.');
+        return { success: false, message: res.data.data?.message || 'Payment pending' };
+      }
+    } catch (err) {
+      const msg = err.response?.data?.error?.message || 'Failed to verify payment.';
+      alert('Error: ' + msg);
+      return { success: false, message: msg };
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -479,16 +668,72 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
             </div>
 
             {orderType === 'DINE_IN' && (
-              <Select value={selectedTableId} onValueChange={setSelectedTableId}>
-                <SelectTrigger className="w-full bg-white dark:bg-zinc-950 h-10 text-sm rounded-lg">
-                  <SelectValue placeholder="Select Table" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tables.map(t => (
-                    <SelectItem key={t.id} value={t.id} className="text-sm py-2">Table {t.tableNumber}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs font-bold text-zinc-700 dark:text-zinc-300">
+                  <span className="flex items-center gap-1.5">
+                    <DiningTableIcon size={14} className="text-zinc-400" />
+                    Select Table:
+                  </span>
+                  <div className="flex items-center gap-1.5 text-[9px] font-medium text-zinc-500">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      Free
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                      Occupied
+                    </span>
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
+                      Reserved
+                    </span>
+                  </div>
+                </div>
+
+                {/* Mobile-Friendly Table Selection Grid */}
+                <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto p-1 bg-zinc-100/60 dark:bg-zinc-900/60 rounded-xl border border-zinc-200 dark:border-zinc-800 scrollbar-thin">
+                  {tables.length === 0 ? (
+                    <div className="col-span-3 text-center py-2 text-xs text-zinc-400">No tables configured</div>
+                  ) : (
+                    tables.map(t => {
+                      const isReserved = t.status === 'RESERVED' || Boolean(t.activeReservation);
+                      const isOccupied = ['OCCUPIED', 'PROCESSING', 'READY', 'SERVED', 'BILL_REQUESTED', 'ATTENTION'].includes(t.status) || Boolean(t.currentOrder);
+                      const isAvailable = !isReserved && !isOccupied;
+                      const isSelected = selectedTableId === t.id;
+                      const isDisabled = !isAvailable;
+
+                      return (
+                        <button
+                          key={t.id}
+                          type="button"
+                          disabled={isDisabled}
+                          onClick={() => setSelectedTableId(t.id)}
+                          className={`p-2 rounded-lg border text-xs flex flex-col items-center justify-center gap-1 transition-all ${
+                            isDisabled
+                              ? 'opacity-40 cursor-not-allowed bg-zinc-200/50 dark:bg-zinc-800/40 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400'
+                              : isSelected
+                              ? 'bg-primary/10 border-primary text-primary font-bold shadow-sm ring-2 ring-primary ring-offset-1 dark:ring-offset-zinc-900'
+                              : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:border-zinc-300'
+                          }`}
+                        >
+                          <span className="font-bold text-xs">Table {t.tableNumber}</span>
+                          <span className="text-[9px] text-zinc-400">({t.capacity || 4}p)</span>
+                          {isOccupied ? (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                              Occupied
+                            </span>
+                          ) : isReserved ? (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
+                              Reserved
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              Free
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
             )}
           </div>
 
@@ -576,30 +821,33 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
               <span>₹{totalAmount}</span>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mt-2">
+            <div className="flex flex-col gap-2 mt-2">
               <Button
                 disabled={cart.length === 0 || isSubmitting}
-                onClick={() => handleCheckout('POSTPAID')}
-                variant="outline"
-                className="w-full h-11 text-sm font-bold rounded-r-none border-zinc-300 dark:border-zinc-700"
+                onClick={handleOpenPaymentModal}
+                className="w-full h-12 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-1.5 shadow"
               >
-                {isSubmitting ? <Loading02Icon size={16} className="animate-spin" /> : 'Send to Kitchen'}
+                {isSubmitting ? <Loading02Icon size={16} className="animate-spin" /> : `Pay & Settle (₹${totalAmount})`}
               </Button>
-              <Button
-                disabled={cart.length === 0 || isSubmitting}
-                onClick={() => handleCheckout('PREPAID')}
-                className="w-full h-11 text-sm font-bold rounded-l-none bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 flex items-center justify-center gap-1.5 shadow"
-              >
-                {isSubmitting ? <Loading02Icon size={16} className="animate-spin" /> : 'Pay Cash'}
-              </Button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  disabled={cart.length === 0 || isSubmitting}
+                  onClick={() => handleCheckout('POSTPAID')}
+                  variant="outline"
+                  className="w-full h-11 text-sm font-bold border-zinc-300 dark:border-zinc-700"
+                >
+                  {isSubmitting ? <Loading02Icon size={16} className="animate-spin" /> : 'Send to Kitchen'}
+                </Button>
+                <Button
+                  disabled={cart.length === 0 || isSubmitting}
+                  onClick={() => handleCheckout('PREPAID')}
+                  className="w-full h-11 text-sm font-bold bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-zinc-200 text-white dark:text-zinc-900 flex items-center justify-center gap-1.5 shadow"
+                >
+                  {isSubmitting ? <Loading02Icon size={16} className="animate-spin" /> : 'Quick Cash'}
+                </Button>
+              </div>
             </div>
-            <Button
-              disabled={cart.length === 0 || isSubmitting}
-              onClick={() => handleCheckout('PREPAID', true)}
-              className="w-full h-11 text-sm font-bold bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-1.5 shadow mt-1"
-            >
-              {isSubmitting ? <Loading02Icon size={16} className="animate-spin" /> : <QrCodeIcon size={16} />} Generate QR Pay
-            </Button>
           </div>
         </div>
       )}
@@ -718,13 +966,27 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
                 <Button onClick={handlePrint} className="w-full h-11 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-bold rounded-lg shadow flex items-center justify-center gap-1.5">
                   <PrinterIcon size={16} /> Print Receipt
                 </Button>
-                <Button variant="outline" className="w-full h-11 text-sm font-bold rounded-lg border-zinc-300 dark:border-zinc-700" onClick={() => setReceiptOrder(null)}>
-                  Done
-                </Button>
-             </div>
-          </div>
-        </div>
-      )}
+                 <Button variant="outline" className="w-full h-11 text-sm font-bold rounded-lg border-zinc-300 dark:border-zinc-700" onClick={() => setReceiptOrder(null)}>
+                   Done
+                 </Button>
+              </div>
+           </div>
+         </div>
+       )}
+
+      {/* ─── PAYMENT BIFURCATION MODAL (CASH, ONLINE QR, SPLIT) ─── */}
+      <PaymentBifurcationModal
+        isOpen={paymentModalOpen}
+        onClose={() => setPaymentModalOpen(false)}
+        totalAmount={totalAmount}
+        title="Collect Payment"
+        subtitle={orderType === 'DINE_IN' && selectedTableId ? `Table ${tables.find(t => t.id === selectedTableId)?.tableNumber || ''}` : 'Takeaway Order'}
+        onSettle={handleModalSettle}
+        onGenerateQR={handleGenerateModalQR}
+        isSubmitting={isSubmitting}
+        isVerifying={isVerifying}
+        onVerifyPayment={handleModalVerifyPayment}
+      />
     </div>
   );
 };
