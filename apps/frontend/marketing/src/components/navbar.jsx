@@ -124,7 +124,7 @@ const Navbar = () => {
                     <div className="flex items-center min-w-max">
                         <Link to="/" className="flex flex-row items-center gap-1.5">
                             <span className="text-[#050f2c] dark:text-white text-lg font-elsie">Scan</span>
-                            <img src="/logo4.png" alt="My" className="h-8" />
+                            <img src="/logo.png" alt="My" className="h-8" />
                             <span className="text-[#050f2c] dark:text-white text-lg font-elsie">Order</span>
                         </Link>
                     </div>
