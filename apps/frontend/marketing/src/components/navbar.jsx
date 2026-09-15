@@ -122,11 +122,10 @@ const Navbar = () => {
             <header className="sticky left-0 top-0 w-full flex items-center py-2 border-b border-b-zinc-100 dark:border-b-zinc-900 z-40 bg-white dark:bg-zinc-950 bg-opacity-80 backdrop-filter backdrop-blur-xl">
                 <nav className="relative mx-auto container w-full px-4 sm:px-6 lg:px-8 flex gap-x-5 justify-between items-center">
                     <div className="flex items-center min-w-max">
-                        <Link to="/" className="flex flex-row items-center gap-3">
-                            <img src="/logo.png" alt="Scan My Order" className="h-8 dark:invert" />
-                            <div className="flex flex-col">
-                                <span className="text-white text-lg font-elsie">Scan My Order</span>
-                            </div>
+                        <Link to="/" className="flex flex-row items-center gap-1.5">
+                            <span className="text-[#050f2c] dark:text-white text-lg font-elsie">Scan</span>
+                            <img src="/logo.png" alt="My" className="h-8" />
+                            <span className="text-[#050f2c] dark:text-white text-lg font-elsie">Order</span>
                         </Link>
                     </div>
 
