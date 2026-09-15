@@ -115,7 +115,7 @@ const Navbar = () => {
         )}
       />
 
-      <header className="sticky top-0 z-40 w-full border-b border-b-zinc-100 bg-white/80 py-2 backdrop-blur-xl dark:border-b-zinc-900 dark:bg-zinc-950/80">
+      <header className="sticky top-0 z-40 w-full border-b border-border/60 bg-background/70 py-2 backdrop-blur-xl [backdrop-filter:blur(20px)_saturate(180%)]">
         <nav className="container relative mx-auto flex w-full items-center justify-between gap-x-5 px-4 sm:px-6 lg:px-8" aria-label="Primary">
           <div className="flex min-w-max items-center">
             <Brand onClick={closeNavbar} />
@@ -124,7 +124,7 @@ const Navbar = () => {
           <div
             id="primary-navigation"
             className={cn(
-              'absolute left-0 top-full w-full border-b border-zinc-200 bg-white px-4 py-4 dark:border-zinc-800 dark:bg-zinc-950 sm:px-6',
+              'absolute left-0 top-full w-full border-b border-border/60 bg-background/95 px-4 py-4 backdrop-blur-xl sm:px-6',
               'max-h-[calc(100vh-4rem)] overflow-y-auto transition-all duration-300 ease-in-out',
               'lg:relative lg:top-0 lg:flex lg:max-h-none lg:justify-between lg:overflow-visible lg:border-none lg:bg-transparent lg:px-0 lg:py-0 lg:dark:bg-transparent',
               navIsOpened
@@ -156,7 +156,7 @@ const Navbar = () => {
               <Button asChild variant="outline" className="w-full sm:w-auto">
                 <a href={links.admin}>Sign in</a>
               </Button>
-              <Button asChild className="w-full sm:w-auto">
+              <Button asChild className="w-full depth-1 sm:w-auto">
                 <Link to="/contact" onClick={closeNavbar}>
                   Get started
                 </Link>

@@ -110,7 +110,7 @@ export default function ContactPage() {
             </p>
           </Reveal>
 
-          <Reveal delay={0.15} className="mt-10 soft-border bg-card p-5 shadow-soft-in dark:shadow-soft-in-dark">
+          <Reveal delay={0.15} className="mt-10 glass sheen depth-1 rounded-[var(--radius)] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Prefer email?</p>
             <a
               href={`mailto:${links.contactEmail}`}
@@ -124,7 +124,7 @@ export default function ContactPage() {
 
         <Reveal delay={0.1}>
           {submitted ? (
-            <div className="soft-border bg-card p-8 shadow-soft-in dark:shadow-soft-in-dark" role="status">
+            <div className="glass sheen depth-2 rounded-[var(--radius)] p-8" role="status">
               <CheckmarkCircle02Icon size={32} className="text-yellow-700 dark:text-yellow-400" aria-hidden="true" />
               <h2 className="mt-4 font-elsie text-2xl">Almost there.</h2>
               <p className="mt-2 text-sm text-muted-foreground text-pretty">
@@ -143,7 +143,7 @@ export default function ContactPage() {
             <form
               onSubmit={onSubmit}
               noValidate
-              className="soft-border bg-card p-6 shadow-soft-in dark:shadow-soft-in-dark sm:p-8"
+              className="glass sheen depth-2 rounded-[var(--radius)] p-6 sm:p-8"
             >
               <div className="grid gap-5 sm:grid-cols-2">
                 {Object.entries(FIELDS).map(([key, cfg]) => (

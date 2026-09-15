@@ -23,16 +23,16 @@ const ICONS = {
   multi: Store01Icon,
 };
 
-/** Decorative feature glyph in a soft yellow tile. */
+/** Decorative feature glyph on a small lit tile. */
 export function FeatureIcon({ name, className }) {
   const Icon = ICONS[name] ?? QrCodeIcon;
   return (
     <span
       aria-hidden="true"
       className={cn(
-        'inline-flex h-11 w-11 shrink-0 items-center justify-center',
-        'bg-yellow-400/20 text-yellow-800 dark:bg-yellow-300/10 dark:text-yellow-300',
-        'soft-border',
+        'inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl',
+        'bg-gradient-to-b from-primary/30 to-primary/10 text-yellow-800 dark:text-yellow-300',
+        'border border-primary/30 sheen depth-1',
         className
       )}
     >

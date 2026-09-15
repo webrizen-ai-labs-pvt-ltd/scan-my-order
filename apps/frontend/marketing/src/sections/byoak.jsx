@@ -1,25 +1,31 @@
 import { CheckmarkCircle02Icon, ShieldKeyIcon } from 'hugeicons-react';
+import { cn } from '@smo/ui/lib/utils';
 import { byoak } from '../data/site';
 import { Reveal, RevealGroup, RevealItem } from '../components/reveal';
+import { Tilt, TiltLayer } from '../components/tilt';
+import { Parallax } from '../components/parallax';
 
-function FlowNode({ label, sub, accent = false }) {
+function FlowNode({ label, sub, accent = false, depth }) {
   return (
-    <div
-      className={
-        accent
-          ? 'bg-primary px-4 py-3 text-primary-foreground shadow-soft-in'
-          : 'soft-border bg-card px-4 py-3 shadow-soft-in dark:shadow-soft-in-dark'
-      }
-    >
-      <p className="text-sm font-semibold">{label}</p>
-      <p className={accent ? 'text-xs text-primary-foreground/70' : 'text-xs text-muted-foreground'}>{sub}</p>
-    </div>
+    <TiltLayer depth={depth}>
+      <div
+        className={cn(
+          'rounded-2xl px-4 py-3 sheen',
+          accent
+            ? 'bg-primary text-primary-foreground glow'
+            : 'border border-white/10 bg-white/[0.06] text-zinc-50 backdrop-blur-md'
+        )}
+      >
+        <p className="text-sm font-semibold">{label}</p>
+        <p className={cn('text-xs', accent ? 'text-primary-foreground/70' : 'text-zinc-400')}>{sub}</p>
+      </div>
+    </TiltLayer>
   );
 }
 
 function Arrow() {
   return (
-    <span aria-hidden="true" className="flex items-center justify-center text-muted-foreground">
+    <span aria-hidden="true" className="flex items-center justify-center text-zinc-500">
       <svg width="40" height="16" viewBox="0 0 40 16" fill="none" className="rotate-90 sm:rotate-0">
         <path d="M0 8h36M30 2l6 6-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -29,7 +35,13 @@ function Arrow() {
 
 export function Byoak() {
   return (
-    <section className="border-y bg-zinc-950 text-zinc-50 dark:bg-zinc-900">
+    <section className="relative isolate overflow-hidden bg-zinc-950 text-zinc-50">
+      {/* Depth: a lit grid floor receding into the dark */}
+      <Parallax speed={8} className="pointer-events-none absolute inset-0 -z-10 scene">
+        <div className="grid-floor absolute inset-x-[-20%] bottom-[-10%] top-[40%] opacity-70 [transform:rotateX(70deg)] [transform-origin:50%_100%]" />
+        <div className="absolute left-1/2 top-[55%] h-[30rem] w-[50rem] -translate-x-1/2 rounded-full bg-primary/15 blur-3xl" />
+      </Parallax>
+
       <div className="container mx-auto grid items-center gap-12 px-4 py-20 md:px-8 md:py-28 lg:grid-cols-2 lg:gap-16">
         <div>
           <Reveal>
@@ -51,22 +63,26 @@ export function Byoak() {
           </RevealGroup>
         </div>
 
-        {/* Money flow diagram */}
-        <Reveal delay={0.1} className="text-zinc-900 dark:text-zinc-50">
-          <div className="border border-zinc-800 bg-zinc-900/60 p-6 backdrop-blur-sm dark:border-zinc-700 dark:bg-zinc-950/40 sm:p-8">
-            <p className="mb-5 text-xs font-medium uppercase tracking-wider text-zinc-400">Where the money goes</p>
-            <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
-              <FlowNode label="Guest pays" sub="UPI · Card · Wallet" />
-              <Arrow />
-              <FlowNode label="Your Razorpay" sub="Your keys, your account" accent />
-              <Arrow />
-              <FlowNode label="Your bank" sub="100% of the bill" />
+        {/* Money-flow diagram as a floating glass slab */}
+        <Reveal delay={0.1}>
+          <Tilt max={7} lift={20}>
+            <div className="rounded-[var(--radius)] border border-white/10 bg-white/[0.04] p-6 backdrop-blur-xl depth-3 sheen sm:p-8">
+              <p className="mb-5 text-xs font-medium uppercase tracking-wider text-zinc-400">Where the money goes</p>
+              <div className="grid gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
+                <FlowNode label="Guest pays" sub="UPI · Card · Wallet" depth={16} />
+                <Arrow />
+                <FlowNode label="Your Razorpay" sub="Your keys, your account" accent depth={40} />
+                <Arrow />
+                <FlowNode label="Your bank" sub="100% of the bill" depth={16} />
+              </div>
+              <div className="mt-6 flex items-center justify-between border-t border-white/10 pt-5 text-sm">
+                <span className="text-zinc-400">Platform commission on this order</span>
+                <TiltLayer depth={30}>
+                  <span className="font-elsie text-3xl text-yellow-400 drop-shadow-[0_8px_20px_rgba(234,179,8,0.5)]">₹0</span>
+                </TiltLayer>
+              </div>
             </div>
-            <div className="mt-6 flex items-center justify-between border-t border-zinc-800 pt-5 text-sm dark:border-zinc-700">
-              <span className="text-zinc-400">Platform commission on this order</span>
-              <span className="font-elsie text-2xl text-yellow-400">₹0</span>
-            </div>
-          </div>
+          </Tilt>
         </Reveal>
       </div>
     </section>

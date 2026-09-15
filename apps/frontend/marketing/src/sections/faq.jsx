@@ -16,14 +16,14 @@ export function Faq() {
             body="Can’t find what you need? We answer every message personally during beta."
           />
           <Reveal delay={0.1} className="mt-8">
-            <Button asChild variant="outline">
+            <Button asChild variant="outline" className="depth-1">
               <Link to="/contact">Ask a question</Link>
             </Button>
           </Reveal>
         </div>
 
         <Reveal delay={0.1}>
-          <Accordion type="single" collapsible className="soft-border bg-card px-5 shadow-soft-in dark:shadow-soft-in-dark sm:px-7">
+          <Accordion type="single" collapsible className="glass sheen depth-2 rounded-[var(--radius)] px-5 sm:px-7">
             {faqs.map((f, i) => (
               <AccordionItem key={f.q} value={`faq-${i}`} className="last:border-b-0">
                 <AccordionTrigger className="min-h-[56px] py-4 text-left text-base hover:no-underline">

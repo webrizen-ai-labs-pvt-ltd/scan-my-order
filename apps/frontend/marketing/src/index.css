@@ -2,25 +2,79 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Marketing-only design tokens.
+ * Visual language: spatial / dimensional — real depth (WebGL + CSS 3D),
+ * frosted glass panels, multi-layer elevation shadows, brand yellow accent.
+ * These override the sharp-cornered @smo/ui defaults for this app only.
+ */
 @layer base {
   :root {
     --primary: 45 93% 47%;
-    --primary-foreground: 0 0% 0%;
-    --radius: 0rem;
-    --background: 0 0% 98%;
+    --primary-foreground: 45 100% 6%;
+    --radius: 1.25rem;
+
+    --background: 40 33% 97%;
+    --foreground: 240 10% 8%;
+    --card: 0 0% 100%;
+    --muted-foreground: 240 5% 38%;
+    --border: 240 6% 88%;
+
+    /* Spatial surface */
+    --glass-bg: 255 255 255 / 0.62;
+    --glass-brd: 255 255 255 / 0.85;
+    --glass-blur: 28px;
+    --sheen: 255 255 255 / 0.9;
+    --void: 240 12% 82%;
+
+    /* Elevation — stacked, not a single blur */
+    --depth-1: 0 1px 1px rgb(16 14 8 / 0.04), 0 4px 10px -2px rgb(16 14 8 / 0.06);
+    --depth-2: 0 1px 1px rgb(16 14 8 / 0.05), 0 8px 20px -6px rgb(16 14 8 / 0.1),
+      0 24px 48px -16px rgb(16 14 8 / 0.12);
+    --depth-3: 0 1px 1px rgb(16 14 8 / 0.06), 0 12px 28px -8px rgb(16 14 8 / 0.14),
+      0 40px 80px -24px rgb(16 14 8 / 0.18);
+    --glow: 0 24px 70px -20px rgb(234 179 8 / 0.5);
+
+    --perspective: 1400px;
   }
 
   .dark {
-    --primary: 45 93% 47%;
-    --primary-foreground: 0 0% 0%;
-    --radius: 0rem;
-    --background: 240 10% 3.9%;
+    --primary: 45 93% 52%;
+    --primary-foreground: 45 100% 6%;
+    --radius: 1.25rem;
+
+    --background: 240 12% 5%;
+    --foreground: 60 12% 96%;
+    --card: 240 10% 9%;
+    --muted-foreground: 240 6% 64%;
+    --border: 240 6% 18%;
+
+    --glass-bg: 255 255 255 / 0.05;
+    --glass-brd: 255 255 255 / 0.12;
+    --glass-blur: 28px;
+    --sheen: 255 255 255 / 0.14;
+    --void: 240 14% 3%;
+
+    --depth-1: 0 1px 0 rgb(255 255 255 / 0.04) inset, 0 4px 12px -2px rgb(0 0 0 / 0.5);
+    --depth-2: 0 1px 0 rgb(255 255 255 / 0.06) inset, 0 10px 24px -8px rgb(0 0 0 / 0.6),
+      0 30px 60px -20px rgb(0 0 0 / 0.5);
+    --depth-3: 0 1px 0 rgb(255 255 255 / 0.08) inset, 0 16px 36px -10px rgb(0 0 0 / 0.7),
+      0 50px 100px -30px rgb(0 0 0 / 0.6);
+    --glow: 0 24px 80px -20px rgb(234 179 8 / 0.35);
   }
 
   html {
     scroll-behavior: smooth;
   }
 
+  body {
+    background-image:
+      radial-gradient(60rem 40rem at 78% -10%, hsl(var(--primary) / 0.13), transparent 60%),
+      radial-gradient(50rem 30rem at 0% 20%, hsl(var(--primary) / 0.07), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  /* 3D & motion are decorative only — strip them, keep the final layout. */
   @media (prefers-reduced-motion: reduce) {
     html {
       scroll-behavior: auto;
@@ -36,19 +90,90 @@
 }
 
 @layer utilities {
-  .glow-bg {
-    background: radial-gradient(circle at center, rgba(234, 179, 8, 0.15) 0%, transparent 70%);
+  /* --- Spatial surfaces --- */
+  .glass {
+    background: rgb(var(--glass-bg));
+    border: 1px solid rgb(var(--glass-brd));
+    backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
   }
-  .dark .glow-bg {
-    background: radial-gradient(circle at center, rgba(234, 179, 8, 0.05) 0%, transparent 70%);
+
+  /* Top-edge specular highlight — sells a lit, physical panel. */
+  .sheen {
+    position: relative;
   }
-  .soft-border {
-    border: 1px solid theme('colors.border');
+  .sheen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding-top: 1px;
+    background: linear-gradient(to bottom, rgb(var(--sheen)), transparent 45%);
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
   }
+
+  .depth-1 {
+    box-shadow: var(--depth-1);
+  }
+  .depth-2 {
+    box-shadow: var(--depth-2);
+  }
+  .depth-3 {
+    box-shadow: var(--depth-3);
+  }
+  .glow {
+    box-shadow: var(--glow);
+  }
+
+  /* --- 3D scaffolding --- */
+  .scene {
+    perspective: var(--perspective);
+    perspective-origin: 50% 40%;
+  }
+  .scene-near {
+    perspective: 900px;
+  }
+  .flat-3d {
+    transform-style: preserve-3d;
+  }
+
+  /* Contact-shadow ellipse cast under a floating object. */
+  .cast-shadow::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    bottom: -6%;
+    width: 62%;
+    height: 8%;
+    translate: -50% 0;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgb(0 0 0 / 0.35), transparent);
+    filter: blur(14px);
+    pointer-events: none;
+  }
+
+  .grid-floor {
+    background-image:
+      linear-gradient(to right, hsl(var(--foreground) / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--foreground) / 0.07) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(70% 60% at 50% 40%, #000, transparent);
+  }
+
   .text-balance {
     text-wrap: balance;
   }
   .text-pretty {
     text-wrap: pretty;
+  }
+
+  /* Legacy helper kept so older sections keep their hairline border. */
+  .soft-border {
+    border: 1px solid hsl(var(--border));
   }
 }
