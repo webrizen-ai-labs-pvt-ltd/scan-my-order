@@ -124,7 +124,7 @@ export const OperationsLayout = () => {
         <Sidebar className="border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
           <SidebarHeader className="p-3.5 flex flex-row items-center gap-3 border-b border-zinc-800">
             <Link to="/" className="flex items-center gap-3">
-              <img src="/logo.png" alt="Logo" className="h-8 w-auto dark:invert" />
+              <img src="/logo.png" alt="Logo" className="h-8 w-auto" />
               <div className="flex flex-col overflow-hidden">
                 <span className="truncate text-sm font-semibold text-zinc-900 dark:text-white">Scan My Order</span>
                 <span className="truncate text-[10px] text-zinc-500 dark:text-zinc-400">Operations OS</span>
