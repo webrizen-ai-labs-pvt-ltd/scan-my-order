@@ -61,7 +61,7 @@ class MemoryCache {
 }
 
 // Dedicated singletons for specific concerns
-const authUserCache = new MemoryCache(30000, 2000); // 30s TTL
+const authUserCache = new MemoryCache(300000, 2000); // 5 min TTL
 const storeTenantCache = new MemoryCache(300000, 1000); // 5 min TTL
 const tenantSubscriptionCache = new MemoryCache(60000, 1000); // 60s TTL
 const publicMenuCache = new MemoryCache(30000, 500); // 30s TTL

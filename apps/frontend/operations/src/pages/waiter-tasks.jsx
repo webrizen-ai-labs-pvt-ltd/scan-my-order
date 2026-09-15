@@ -417,7 +417,7 @@ export const WaiterTasks = () => {
     setIsVerifying(true);
     try {
       if (paymentOrder.tableSessionId) {
-        const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/verify-payment`);
+        const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/verify-payment`, { manual: true });
         if (res.data.success && res.data.data.status === 'SETTLED') {
           const sessId = paymentOrder.tableSessionId;
           const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
@@ -453,8 +453,22 @@ export const WaiterTasks = () => {
           return { success: false, message: res.data.data?.message || 'Payment not yet confirmed.' };
         }
       } else {
-        const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
-        if (res.data.success && res.data.data.status === 'success') {
+        let isSuccess = false;
+        try {
+          const verifyRes = await api.post(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/verify-payment`, { manual: true });
+          if (verifyRes.data.success && (verifyRes.data.data.status === 'PROCESSING' || verifyRes.data.data.status === 'SETTLED' || verifyRes.data.data.success)) {
+            isSuccess = true;
+          }
+        } catch (e) {}
+
+        if (!isSuccess) {
+          const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
+          if (res.data.success && res.data.data.status === 'success') {
+            isSuccess = true;
+          }
+        }
+
+        if (isSuccess) {
           const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}`);
           if (orderRes.data.success) {
             setReceiptOrder(orderRes.data.data);
@@ -465,7 +479,7 @@ export const WaiterTasks = () => {
           fetchOrders(selectedStoreId, true);
           return { success: true };
         } else {
-          return { success: false, message: res.data.data?.message || 'Payment not received yet.' };
+          return { success: false, message: 'Payment not received yet.' };
         }
       }
     } catch (err) {
@@ -493,7 +507,7 @@ export const WaiterTasks = () => {
         
         try {
           if (paymentOrder.tableSessionId) {
-            const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/verify-payment`);
+            const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/verify-payment`, { polling: true });
             if (res.data.success && res.data.data.status === 'SETTLED') {
               clearInterval(intervalId);
               showToast('Payment verified successfully!', 'success');

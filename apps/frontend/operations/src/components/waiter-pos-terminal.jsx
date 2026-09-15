@@ -432,8 +432,25 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
     if (!activePaymentOrderId) return { success: false, message: 'No active order' };
     setIsVerifying(true);
     try {
-      const res = await api.get(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}/payment-status`);
-      if (res.data.success && res.data.data.status === 'success') {
+      let isSuccess = false;
+      try {
+        const verifyRes = await api.post(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}/verify-payment`, { manual: true });
+        if (verifyRes.data.success && (verifyRes.data.data.status === 'PROCESSING' || verifyRes.data.data.status === 'SETTLED' || verifyRes.data.data.success)) {
+          isSuccess = true;
+        }
+      } catch (e) {}
+
+      if (!isSuccess) {
+        const res = await api.get(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}/payment-status`);
+        if (res.data.success && res.data.data.status === 'success') {
+          isSuccess = true;
+        } else {
+          alert(res.data.data?.message || 'Payment not received yet.');
+          return { success: false, message: res.data.data?.message || 'Payment pending' };
+        }
+      }
+
+      if (isSuccess) {
         const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}`);
         const order = orderRes.data.data;
         setPaymentModalOpen(false);
@@ -444,9 +461,6 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
         setIsCartOpen(false);
         setReceiptOrder(order);
         return { success: true };
-      } else {
-        alert(res.data.data?.message || 'Payment not received yet.');
-        return { success: false, message: res.data.data?.message || 'Payment pending' };
       }
     } catch (err) {
       const msg = err.response?.data?.error?.message || 'Failed to verify payment.';
@@ -500,7 +514,7 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
     if (qrModal.isOpen && qrModal.orderId) {
       interval = setInterval(async () => {
         try {
-          const res = await api.post(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/verify-payment`);
+          const res = await api.post(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/verify-payment`, { polling: true });
           if (res.data.success && res.data.data.success) {
              setQrModal({ isOpen: false, url: '', orderId: '' });
              setCart([]);

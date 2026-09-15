@@ -280,7 +280,7 @@ export const OperationsLayout = () => {
             </div>
           </header>
 
-          <div className="w-full p-6 md:p-8">
+          <div className={`w-full ${location.pathname.startsWith('/dashboard/pos') || location.pathname.startsWith('/dashboard/kds') ? 'p-2 md:p-3 h-[calc(100vh-4.05rem)] overflow-hidden flex flex-col' : 'p-6 md:p-8'}`}>
             <Outlet />
           </div>
         </SidebarInset>

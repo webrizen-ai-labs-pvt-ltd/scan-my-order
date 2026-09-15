@@ -90,7 +90,8 @@ router.post("/:id/payment-link", asyncHandler(async (req, res) => {
 // POST /api/stores/:storeId/orders/:id/verify-payment
 router.post("/:id/verify-payment", asyncHandler(async (req, res) => {
   const { verifyRazorpayPayment } = require("./order-service");
-  const result = await verifyRazorpayPayment(req.user, req.params.storeId, req.params.id);
+  const { manual, polling } = req.body || {};
+  const result = await verifyRazorpayPayment(req.user, req.params.storeId, req.params.id, manual, polling);
   res.json(createApiResponse(result));
 }));
 
@@ -126,7 +127,8 @@ router.post("/sessions/:sessionId/payment-link", asyncHandler(async (req, res) =
 // POST /api/stores/:storeId/orders/sessions/:sessionId/verify-payment
 router.post("/sessions/:sessionId/verify-payment", asyncHandler(async (req, res) => {
   const { verifySessionPayment } = require("./order-service");
-  const result = await verifySessionPayment(req.user, req.params.storeId, req.params.sessionId);
+  const { manual, polling } = req.body || {};
+  const result = await verifySessionPayment(req.user, req.params.storeId, req.params.sessionId, manual, polling);
   res.json(createApiResponse(result));
 }));
 

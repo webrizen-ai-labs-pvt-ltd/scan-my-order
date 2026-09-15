@@ -6,9 +6,18 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from './receipt';
 import { PaymentBifurcationModal } from './payment-bifurcation-modal';
 
+/* ─── Global Orders SWR Cache ─────────────────────────────────────── */
+const activeOrdersCache = {
+  orders: new Map(),
+  storeData: new Map(),
+};
+
 export const POSActiveOrders = ({ selectedStoreId, token }) => {
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const cachedOrders = selectedStoreId ? activeOrdersCache.orders.get(selectedStoreId) : null;
+  const cachedStoreData = selectedStoreId ? activeOrdersCache.storeData.get(selectedStoreId) : null;
+
+  const [orders, setOrders] = useState(() => cachedOrders || []);
+  const [loading, setLoading] = useState(() => !cachedOrders || cachedOrders.length === 0);
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
@@ -17,7 +26,7 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
 
-  const [storeData, setStoreData] = useState(null);
+  const [storeData, setStoreData] = useState(() => cachedStoreData || null);
   const [receiptOrder, setReceiptOrder] = useState(null);
   const receiptRef = useRef();
 
@@ -36,15 +45,17 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
     paymentModalOpenRef.current = paymentModalOpen;
   }, [paymentModalOpen]);
 
-  const fetchOrders = async (storeIdToFetch) => {
+  const fetchOrders = async (storeIdToFetch, silent = false) => {
     if (!storeIdToFetch) return;
+    if (!silent && !activeOrdersCache.orders.has(storeIdToFetch)) setLoading(true);
     try {
       const res = await api.get(`/stores/${storeIdToFetch}/orders`);
       if (res.data.success) {
         setOrders(res.data.data);
+        activeOrdersCache.orders.set(storeIdToFetch, res.data.data);
       }
     } catch (err) {
-      setError('Failed to fetch orders');
+      if (!silent) setError('Failed to fetch orders');
     } finally {
       setLoading(false);
     }
@@ -52,11 +63,22 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
 
   useEffect(() => {
     if (selectedStoreId) {
-      setLoading(true);
-      fetchOrders(selectedStoreId);
+      const hasCache = activeOrdersCache.orders.has(selectedStoreId);
+      if (hasCache) {
+        setOrders(activeOrdersCache.orders.get(selectedStoreId));
+        setStoreData(activeOrdersCache.storeData.get(selectedStoreId) || null);
+        setLoading(false);
+        fetchOrders(selectedStoreId, true);
+      } else {
+        setLoading(true);
+        fetchOrders(selectedStoreId, false);
+      }
       
       api.get(`/stores/${selectedStoreId}`).then(res => {
-        if (res.data.success) setStoreData(res.data.data);
+        if (res.data.success) {
+          setStoreData(res.data.data);
+          activeOrdersCache.storeData.set(selectedStoreId, res.data.data);
+        }
       }).catch(err => console.error("Failed to fetch store data", err));
       
       const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -176,7 +198,7 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
     try {
       if (activePaymentGroup.tableSessionId) {
         const sessId = activePaymentGroup.tableSessionId;
-        const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${sessId}/verify-payment`);
+        const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${sessId}/verify-payment`, { manual: true });
         if (res.data.success && res.data.data.status === 'SETTLED') {
           const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
           if (billRes.data.success) {
@@ -211,8 +233,22 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
         }
       } else {
         const order = activePaymentGroup.orders[0];
-        const res = await api.get(`/stores/${selectedStoreId}/orders/${order.id}/payment-status`);
-        if (res.data.success && res.data.data.status === 'success') {
+        let isSuccess = false;
+        try {
+          const verifyRes = await api.post(`/stores/${selectedStoreId}/orders/${order.id}/verify-payment`, { manual: true });
+          if (verifyRes.data.success && (verifyRes.data.data.status === 'PROCESSING' || verifyRes.data.data.status === 'SETTLED' || verifyRes.data.data.success)) {
+            isSuccess = true;
+          }
+        } catch (e) {}
+
+        if (!isSuccess) {
+          const res = await api.get(`/stores/${selectedStoreId}/orders/${order.id}/payment-status`);
+          if (res.data.success && res.data.data.status === 'success') {
+            isSuccess = true;
+          }
+        }
+
+        if (isSuccess) {
           const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${order.id}`);
           if (orderRes.data.success) {
             setReceiptOrder(orderRes.data.data);
@@ -222,7 +258,7 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
           fetchOrders(selectedStoreId);
           return { success: true };
         } else {
-          return { success: false, message: res.data.data?.message || 'Payment not received yet.' };
+          return { success: false, message: 'Payment not received yet.' };
         }
       }
     } catch (err) {

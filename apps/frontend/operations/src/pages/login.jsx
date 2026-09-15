@@ -217,13 +217,16 @@ export const Login = () => {
   };
 
   return (
-    <div className="h-screen bg-white dark:bg-zinc-950 grid md:grid-cols-[0.6fr_1fr] p-4 relative transition-colors duration-300">
+    <div className="min-h-screen md:h-screen bg-white dark:bg-zinc-950 grid grid-cols-1 md:grid-cols-[0.6fr_1fr] p-3 sm:p-4 md:p-4 relative transition-colors duration-300">
+      {/* Mobile-only theme toggler (the desktop one lives in the right panel) */}
+      <AnimatedThemeToggler className="md:hidden absolute top-6 right-5 z-20" />
+
       {/* Left Panel */}
-      <div className="bg-zinc-50 dark:bg-zinc-800 rounded-l-3xl border-y-2 border-l-2 border-zinc-200 dark:border-zinc-700 flex justify-center items-center transition-colors duration-300 overflow-y-auto">
-        <div className="max-w-xl mx-auto p-8 w-full">
+      <div className="bg-zinc-50 dark:bg-zinc-800 rounded-3xl md:rounded-r-none md:rounded-l-3xl border-2 md:border-r-0 border-zinc-200 dark:border-zinc-700 flex justify-center items-center transition-colors duration-300 md:overflow-y-auto">
+        <div className="max-w-xl mx-auto p-5 sm:p-8 w-full">
           {/* Header */}
           <div className="space-y-2 mb-6">
-            <Link to="/" className="py-3.5 flex flex-row items-center gap-3 group">
+            <Link to="/" className="py-3.5 pr-14 md:pr-0 flex flex-row items-center gap-3 group">
               <img 
                 src="/logo.png" 
                 alt="Scan My Order" 
@@ -303,7 +306,7 @@ export const Login = () => {
 
               {/* Password Field */}
               <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
+                <div className="flex justify-between items-center gap-2">
                   <label htmlFor="password" className="text-sm font-medium text-zinc-700 dark:text-zinc-300 transition-colors duration-300">
                     Password
                   </label>
@@ -363,11 +366,12 @@ export const Login = () => {
               </div>
 
               {/* Actions */}
-              <div className="grid md:grid-cols-2 gap-3 pt-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-6">
                 <Button
                   type="submit"
                   disabled={loading}
                   size="lg"
+                  className="w-full"
                 >
                   {loading ? (
                     <span className="flex items-center justify-center gap-2">
@@ -388,6 +392,7 @@ export const Login = () => {
                   size="lg"
                   disabled={loading}
                   onClick={handlePasskeyLogin}
+                  className="w-full"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M7.864 4.243A7.5 7.5 0 0 1 19.5 10.5c0 2.92-.556 5.709-1.568 8.268M5.742 6.364A7.465 7.465 0 0 0 4.5 10.5a7.464 7.464 0 0 1-1.15 3.993m1.989 3.559A11.209 11.209 0 0 0 8.25 10.5a3.75 3.75 0 1 1 7.5 0c0 .527-.021 1.049-.064 1.565M12 10.5a14.94 14.94 0 0 1-3.6 9.75m6.633-4.596a18.666 18.666 0 0 1-2.485 5.33" />
@@ -413,7 +418,7 @@ export const Login = () => {
       </div>
 
       {/* Right Panel */}
-      <div className="bg-zinc-100 dark:bg-zinc-900 rounded-r-3xl border-y-2 border-r-2 border-zinc-200 dark:border-zinc-700 overflow-hidden relative h-full transition-colors duration-300">
+      <div className="hidden md:block bg-zinc-100 dark:bg-zinc-900 rounded-r-3xl border-y-2 border-r-2 border-zinc-200 dark:border-zinc-700 overflow-hidden relative h-full transition-colors duration-300">
         <img 
           src="https://i.pinimg.com/1200x/20/16/57/201657f3c93339ccb3f6b69a3a5091c6.jpg" 
           alt="Authentication" 

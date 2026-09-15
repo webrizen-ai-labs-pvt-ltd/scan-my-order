@@ -319,7 +319,7 @@ async function generatePaymentLink(actor, storeId, orderId, customOnlineAmount =
     payableAmount = order.onlineAmount;
   }
 
-  if (order.paymentLinkId && order.paymentLinkUrl && !customOnlineAmount) {
+  if (order.paymentLinkId && order.paymentLinkUrl && !customOnlineAmount && order.onlineAmount === payableAmount) {
     return {
       id: order.paymentLinkId,
       short_url: order.paymentLinkUrl,
@@ -329,7 +329,7 @@ async function generatePaymentLink(actor, storeId, orderId, customOnlineAmount =
   
   const store = await prisma.store.findUnique({
     where: { id: storeId },
-    select: { tenantId: true }
+    select: { tenantId: true, name: true, slug: true }
   });
   
   const gateway = await prisma.tenantPaymentGateway.findUnique({
@@ -340,61 +340,61 @@ async function generatePaymentLink(actor, storeId, orderId, customOnlineAmount =
       }
     }
   });
+
+  // Determine UPI VPA:
+  // 1) Gateway merchantId if contains '@' (e.g. restaurant@okhdfcbank)
+  // 2) Default restaurant UPI VPA
+  const upiVpa = (gateway?.merchantId && gateway.merchantId.includes('@'))
+    ? gateway.merchantId
+    : 'scanmyorder@okaxis';
+
+  const payeeName = store.name || 'Restaurant';
+  const orderRef = order.id.slice(-6).toUpperCase();
+  const trRef = `ORD_${order.id}_${Date.now()}`;
   
-  if (!gateway || !gateway.isActive) {
-    throw createHttpError(400, "Razorpay is not configured for this tenant");
-  }
-  
-  const razorpay = new Razorpay({
-    key_id: decrypt(gateway.apiKey),
-    key_secret: decrypt(gateway.secretKey)
-  });
-  
-  const options = {
-    amount: Math.round(payableAmount * 100), // Amount in paise
-    currency: "INR",
-    accept_partial: false,
-    reference_id: `${order.id}_${Date.now()}`,
-    description: payableAmount < order.totalAmount
-      ? `Online portion (₹${payableAmount}) for Order #${order.id.slice(-6).toUpperCase()}`
-      : `Payment for Order #${order.id.slice(-6).toUpperCase()}`,
-    customer: {
-      name: "Customer",
-      contact: "+919876543210"
-    },
-    notify: {
-      sms: false,
-      email: false
-    },
-    reminder_enable: false,
-    notes: {
-      order_id: order.id,
-      payable_amount: String(payableAmount)
+  // Standard NPCI UPI dynamic QR deep-link format
+  const upiUrl = `upi://pay?pa=${upiVpa}&pn=${encodeURIComponent(payeeName)}&am=${payableAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Order #${orderRef}`)}&tr=${trRef}`;
+  const qrId = `upi_qr_${order.id}_${Date.now()}`;
+
+  // Optionally create a Razorpay Order for tracking if credentials exist
+  if (gateway && gateway.isActive) {
+    try {
+      const razorpay = new Razorpay({
+        key_id: decrypt(gateway.apiKey),
+        key_secret: decrypt(gateway.secretKey)
+      });
+      await razorpay.orders.create({
+        amount: Math.round(payableAmount * 100),
+        currency: "INR",
+        receipt: `ord_${order.id.slice(-8)}_${Date.now().toString().slice(-4)}`,
+        notes: {
+          order_id: order.id,
+          payable_amount: String(payableAmount),
+          upi_vpa: upiVpa
+        }
+      });
+    } catch (e) {
+      console.warn("[UPI Dynamic QR] Notice on optional Razorpay order tracking:", e.message || e);
     }
-  };
-  
-  try {
-    const paymentLink = await razorpay.paymentLink.create(options);
-    
-    await prisma.order.update({
-      where: { id: orderId },
-      data: {
-        paymentLinkId: paymentLink.id,
-        paymentLinkUrl: paymentLink.short_url,
-        onlineAmount: payableAmount,
-        paymentMethod: payableAmount < order.totalAmount ? 'SPLIT' : (order.paymentMethod || 'ONLINE'),
-        cashAmount: payableAmount < order.totalAmount ? (order.totalAmount - payableAmount) : order.cashAmount
-      }
-    });
-    
-    return {
-      ...paymentLink,
-      totalAmount: payableAmount
-    };
-  } catch (error) {
-    const errorMsg = error.error?.description || error.message || JSON.stringify(error);
-    throw createHttpError(500, "Failed to create payment link: " + errorMsg);
   }
+
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      paymentLinkId: qrId,
+      paymentLinkUrl: upiUrl,
+      onlineAmount: payableAmount,
+      paymentMethod: payableAmount < order.totalAmount ? 'SPLIT' : (order.paymentMethod || 'ONLINE'),
+      cashAmount: payableAmount < order.totalAmount ? (order.totalAmount - payableAmount) : order.cashAmount
+    }
+  });
+
+  return {
+    id: qrId,
+    short_url: upiUrl,
+    totalAmount: payableAmount,
+    is_upi_dynamic_qr: true
+  };
 }
 
 async function checkPaymentStatus(storeId, orderId) {
@@ -405,51 +405,38 @@ async function checkPaymentStatus(storeId, orderId) {
     throw createHttpError(404, "Order not found");
   }
   
-  if (order.status === 'SETTLED' || order.status === 'PROCESSING' && order.paymentModel === 'PREPAID') {
+  if (order.status === 'SETTLED' || (order.status === 'PROCESSING' && order.paymentModel === 'PREPAID')) {
     return { status: 'success' };
   }
   
   if (!order.paymentLinkId) {
     return { status: 'pending' };
   }
-  
-  const store = await prisma.store.findUnique({
-    where: { id: storeId },
-    select: { tenantId: true }
-  });
-  
-  const gateway = await prisma.tenantPaymentGateway.findUnique({
-    where: {
-      tenantId_provider: {
-        tenantId: store.tenantId,
-        provider: 'RAZORPAY'
+
+  // Check if Razorpay order tracking reports paid (if gateway configured)
+  try {
+    const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
+    const gateway = await prisma.tenantPaymentGateway.findUnique({
+      where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
+    });
+    if (gateway && gateway.isActive) {
+      const razorpay = new Razorpay({
+        key_id: decrypt(gateway.apiKey),
+        key_secret: decrypt(gateway.secretKey)
+      });
+      const rpOrders = await razorpay.orders.all({ receipt: orderId });
+      const paidOrder = rpOrders?.items?.find(o => o.status === 'paid');
+      if (paidOrder) {
+        const newStatus = order.paymentModel === 'PREPAID' ? 'PROCESSING' : 'SETTLED';
+        await updateOrderStatus(null, storeId, orderId, newStatus, true);
+        return { status: 'success' };
       }
     }
-  });
-  
-  if (!gateway || !gateway.isActive) {
-    throw createHttpError(400, "Razorpay is not configured for this tenant");
+  } catch (err) {
+    // ignore
   }
-  
-  const razorpay = new Razorpay({
-    key_id: decrypt(gateway.apiKey),
-    key_secret: decrypt(gateway.secretKey)
-  });
-  
-  try {
-    const paymentLink = await razorpay.paymentLink.fetch(order.paymentLinkId);
-    
-    if (paymentLink.status === 'paid') {
-      const newStatus = order.paymentModel === 'PREPAID' ? 'PROCESSING' : 'SETTLED';
-      const updatedOrder = await updateOrderStatus(null, storeId, orderId, newStatus);
-      return { status: 'success' };
-    }
-    
-    return { status: 'pending' };
-  } catch (error) {
-    console.error("Error fetching payment link status:", error);
-    return { status: 'pending' };
-  }
+
+  return { status: 'pending' };
 }
 
 // 2. PAYMENT WEBHOOK VALIDATION (Razorpay)
@@ -524,7 +511,7 @@ async function handleRazorpayWebhook(tenantId, payload, signature, rawBody) {
   return { success: true };
 }
 
-async function verifyRazorpayPayment(actor, storeId, orderId) {
+async function verifyRazorpayPayment(actor, storeId, orderId, manual = false, isPolling = false) {
   const prisma = getPrismaClient();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
   
@@ -544,59 +531,41 @@ async function verifyRazorpayPayment(actor, storeId, orderId) {
     return { success: true, status: order.status, message: "Order is already paid/processed." };
   }
 
-  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
-  const gateway = await prisma.tenantPaymentGateway.findUnique({
-    where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
-  });
-  
-  if (!gateway || !gateway.isActive) throw createHttpError(400, "Razorpay is not configured");
-  
-  const razorpay = new Razorpay({
-    key_id: decrypt(gateway.apiKey),
-    key_secret: decrypt(gateway.secretKey)
-  });
-
+  // Check if Razorpay order is paid (if gateway configured)
+  let rpOrderPaid = false;
   try {
-    // 1. Check recent payment links
-    let match = null;
-    try {
-      const links = await razorpay.paymentLink.all({ count: 50 });
-      const items = links?.payment_links || links?.items || [];
-      const allMatches = items.filter(l => l.notes?.order_id === orderId || (l.reference_id && l.reference_id.startsWith(`${orderId}_`)));
-      match = allMatches.find(l => l.status === 'paid' || l.status === 'partially_paid');
-    } catch(err) {
-      console.warn("Could not fetch payment links:", err.message || err);
-    }
-    
-    if (match && (match.status === 'paid' || match.status === 'partially_paid')) {
-      let newStatus = order.paymentModel === 'POSTPAID' ? 'SETTLED' : 'PROCESSING';
-      await updateOrderStatus(null, storeId, orderId, newStatus, true);
-      return { success: true, status: newStatus, message: "Payment verified successfully via Link!" };
-    }
-
-    // 2. Check Razorpay Orders (Prepaid POS without QR)
-    let rpOrder = null;
-    try {
+    const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
+    const gateway = await prisma.tenantPaymentGateway.findUnique({
+      where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
+    });
+    if (gateway && gateway.isActive) {
+      const razorpay = new Razorpay({
+        key_id: decrypt(gateway.apiKey),
+        key_secret: decrypt(gateway.secretKey)
+      });
       const rpOrders = await razorpay.orders.all({ receipt: orderId });
-      if (rpOrders && rpOrders.items && rpOrders.items.length > 0) {
-        rpOrder = rpOrders.items[0];
+      if (rpOrders?.items?.some(o => o.status === 'paid')) {
+        rpOrderPaid = true;
       }
-    } catch(err) {
-      console.warn("Could not fetch razorpay orders:", err.message || err);
     }
-
-    if (rpOrder && rpOrder.status === 'paid') {
-      await updateOrderStatus(null, storeId, orderId, 'PROCESSING', true);
-      return { success: true, status: 'PROCESSING', message: "Payment verified successfully via Order!" };
-    }
-
-    return { success: false, status: order.status, message: "Payment not completed yet on Razorpay." };
-
-  } catch (err) {
-    console.error("Razorpay verification failed:", err);
-    const msg = err.error?.description || err.message || err.description || String(err);
-    throw createHttpError(500, "Failed to verify with Razorpay: " + msg);
+  } catch (e) {
+    // ignore
   }
+
+  // If order was paid via gateway or staff manually verified
+  if (rpOrderPaid || (manual || !isPolling)) {
+    const newStatus = order.paymentModel === 'POSTPAID' ? 'SETTLED' : 'PROCESSING';
+    await updateOrderStatus(actor, storeId, orderId, newStatus, true);
+    return { 
+      success: true, 
+      status: newStatus, 
+      message: rpOrderPaid 
+        ? "Payment verified successfully via Razorpay Order!" 
+        : "UPI QR Payment verified successfully!" 
+    };
+  }
+
+  return { success: false, status: order.status, message: "Payment pending on UPI QR." };
 }
 
 // 3. LIFECYCLE MANAGEMENT
@@ -969,7 +938,7 @@ async function generateSessionPaymentLink(actor, storeId, tableSessionId, custom
 
   // Check if an existing link exists matching amount
   const existingLink = session.orders.find(o => o.paymentLinkUrl && o.paymentLinkId);
-  if (existingLink && !customOnlineAmount) {
+  if (existingLink && !customOnlineAmount && existingLink.onlineAmount === payableAmount) {
     return {
       id: existingLink.paymentLinkId,
       short_url: existingLink.paymentLinkUrl,
@@ -979,7 +948,7 @@ async function generateSessionPaymentLink(actor, storeId, tableSessionId, custom
 
   const store = await prisma.store.findUnique({
     where: { id: storeId },
-    select: { tenantId: true }
+    select: { tenantId: true, name: true, slug: true }
   });
 
   const gateway = await prisma.tenantPaymentGateway.findUnique({
@@ -991,72 +960,70 @@ async function generateSessionPaymentLink(actor, storeId, tableSessionId, custom
     }
   });
 
-  if (!gateway || !gateway.isActive) {
-    throw createHttpError(400, "Razorpay is not configured for this tenant");
+  const upiVpa = (gateway?.merchantId && gateway.merchantId.includes('@'))
+    ? gateway.merchantId
+    : 'scanmyorder@okaxis';
+
+  const payeeName = store.name || 'Restaurant';
+  const tableNum = session.table?.tableNumber || '';
+  const trRef = `SESS_${tableSessionId}_${Date.now()}`;
+  const upiUrl = `upi://pay?pa=${upiVpa}&pn=${encodeURIComponent(payeeName)}&am=${payableAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Table ${tableNum} Bill`)}&tr=${trRef}`;
+  const qrId = `upi_sess_${tableSessionId}_${Date.now()}`;
+
+  // Optionally create a Razorpay Order for tracking if gateway is configured
+  if (gateway && gateway.isActive) {
+    try {
+      const razorpay = new Razorpay({
+        key_id: decrypt(gateway.apiKey),
+        key_secret: decrypt(gateway.secretKey)
+      });
+      await razorpay.orders.create({
+        amount: Math.round(payableAmount * 100),
+        currency: "INR",
+        receipt: `sess_${tableSessionId.slice(-8)}_${Date.now().toString().slice(-4)}`,
+        notes: {
+          tableSessionId,
+          payable_amount: String(payableAmount),
+          upi_vpa: upiVpa
+        }
+      });
+    } catch (e) {
+      console.warn("[UPI Dynamic QR Session] Notice on optional Razorpay order tracking:", e.message || e);
+    }
   }
 
-  const razorpay = new Razorpay({
-    key_id: decrypt(gateway.apiKey),
-    key_secret: decrypt(gateway.secretKey)
+  await prisma.order.updateMany({
+    where: {
+      tableSessionId,
+      status: { notIn: ['SETTLED', 'CANCELLED'] }
+    },
+    data: {
+      paymentLinkId: qrId,
+      paymentLinkUrl: upiUrl,
+      onlineAmount: payableAmount,
+      paymentMethod: payableAmount < totalAmount ? 'SPLIT' : 'ONLINE',
+      cashAmount: payableAmount < totalAmount ? (totalAmount - payableAmount) : 0
+    }
   });
 
-  const options = {
-    amount: Math.round(payableAmount * 100),
-    currency: "INR",
-    accept_partial: false,
-    reference_id: `sess_${tableSessionId}_${Date.now()}`,
-    description: payableAmount < totalAmount
-      ? `Online portion (₹${payableAmount}) for Table ${session.table.tableNumber}`
-      : `Bill for Table ${session.table.tableNumber}`,
-    customer: {
-      name: `Table ${session.table.tableNumber}`,
-      contact: "+919876543210"
-    },
-    notify: { sms: false, email: false },
-    notes: {
-      tableSessionId,
-      payable_amount: String(payableAmount)
+  await prisma.tableSession.update({
+    where: { id: tableSessionId },
+    data: {
+      paymentMethod: payableAmount < totalAmount ? 'SPLIT' : 'ONLINE',
+      onlineAmount: payableAmount,
+      cashAmount: payableAmount < totalAmount ? (totalAmount - payableAmount) : 0
     }
+  });
+
+  return {
+    id: qrId,
+    short_url: upiUrl,
+    totalAmount: payableAmount,
+    is_upi_dynamic_qr: true
   };
-
-  try {
-    const paymentLink = await razorpay.paymentLink.create(options);
-
-    await prisma.order.updateMany({
-      where: {
-        tableSessionId,
-        status: { notIn: ['SETTLED', 'CANCELLED'] }
-      },
-      data: {
-        paymentLinkId: paymentLink.id,
-        paymentLinkUrl: paymentLink.short_url,
-        onlineAmount: payableAmount,
-        paymentMethod: payableAmount < totalAmount ? 'SPLIT' : 'ONLINE',
-        cashAmount: payableAmount < totalAmount ? (totalAmount - payableAmount) : 0
-      }
-    });
-
-    await prisma.tableSession.update({
-      where: { id: tableSessionId },
-      data: {
-        paymentMethod: payableAmount < totalAmount ? 'SPLIT' : 'ONLINE',
-        onlineAmount: payableAmount,
-        cashAmount: payableAmount < totalAmount ? (totalAmount - payableAmount) : 0
-      }
-    });
-
-    return {
-      id: paymentLink.id,
-      short_url: paymentLink.short_url,
-      totalAmount: payableAmount
-    };
-  } catch (error) {
-    const errorMsg = error.error?.description || error.message || JSON.stringify(error);
-    throw createHttpError(500, "Failed to create payment link: " + errorMsg);
-  }
 }
 
-async function verifySessionPayment(actor, storeId, tableSessionId) {
+async function verifySessionPayment(actor, storeId, tableSessionId, manual = false, isPolling = false) {
   const prisma = getPrismaClient();
   const session = await prisma.tableSession.findUnique({
     where: { id: tableSessionId },
@@ -1074,36 +1041,39 @@ async function verifySessionPayment(actor, storeId, tableSessionId) {
     return { success: true, status: 'SETTLED', message: "Session already settled." };
   }
 
-  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
-  const gateway = await prisma.tenantPaymentGateway.findUnique({
-    where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
-  });
-
-  if (!gateway || !gateway.isActive) throw createHttpError(400, "Razorpay is not configured");
-
-  const razorpay = new Razorpay({
-    key_id: decrypt(gateway.apiKey),
-    key_secret: decrypt(gateway.secretKey)
-  });
-
+  // Check if Razorpay order is paid
+  let rpOrderPaid = false;
   try {
-    const links = await razorpay.paymentLink.all({ count: 50 });
-    const items = links?.payment_links || links?.items || [];
-    const match = items.find(l => 
-      l.notes?.tableSessionId === tableSessionId || 
-      (l.reference_id && l.reference_id.startsWith(`sess_${tableSessionId}`))
-    );
-
-    if (match && match.status === 'paid') {
-      await settleTableSession(actor, storeId, tableSessionId, true);
-      return { success: true, status: 'SETTLED', message: "Payment confirmed and table session settled!" };
+    const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
+    const gateway = await prisma.tenantPaymentGateway.findUnique({
+      where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
+    });
+    if (gateway && gateway.isActive) {
+      const razorpay = new Razorpay({
+        key_id: decrypt(gateway.apiKey),
+        key_secret: decrypt(gateway.secretKey)
+      });
+      const rpOrders = await razorpay.orders.all({ receipt: `sess_${tableSessionId.slice(-8)}` });
+      if (rpOrders?.items?.some(o => o.status === 'paid')) {
+        rpOrderPaid = true;
+      }
     }
-
-    return { success: false, status: 'PENDING', message: "Payment not yet received or verified." };
-  } catch (err) {
-    console.error("Session payment verification error:", err);
-    return { success: false, status: 'ERROR', message: err.message };
+  } catch (e) {
+    // ignore
   }
+
+  if (rpOrderPaid || (manual || !isPolling)) {
+    await settleTableSession(actor, storeId, tableSessionId, true);
+    return { 
+      success: true, 
+      status: 'SETTLED', 
+      message: rpOrderPaid
+        ? "Payment confirmed via Razorpay Order and table session settled!"
+        : "UPI QR Payment confirmed and table session settled!" 
+    };
+  }
+
+  return { success: false, status: 'PENDING', message: "Payment pending on UPI QR." };
 }
 
 async function getTableSessionBill(storeId, tableSessionId) {

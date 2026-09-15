@@ -345,7 +345,7 @@ export const PaymentBifurcationModal = ({
                     ₹{totalAmount.toLocaleString('en-IN')}
                   </span>
                 </div>
-                <p className="text-[11px] text-blue-600 dark:text-blue-500">Customer scans Razorpay UPI dynamic QR code to pay</p>
+                <p className="text-[11px] text-blue-600 dark:text-blue-500">Customer scans UPI dynamic QR code (GPay, PhonePe, Paytm, BHIM) to pay</p>
               </div>
 
               {/* QR Box */}
@@ -385,7 +385,7 @@ export const PaymentBifurcationModal = ({
                     onClick={handleTriggerGenerateQR}
                     className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
                   >
-                    {generatingQr ? "Generating QR…" : "Generate Razorpay QR"}
+                    {generatingQr ? "Generating QR…" : "Generate UPI QR"}
                   </Button>
                 </div>
               )}

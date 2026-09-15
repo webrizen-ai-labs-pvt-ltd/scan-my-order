@@ -53,10 +53,14 @@ async function authenticate(req, _res, next) {
     req.auth = payload;
     next();
   } catch (error) {
-    if (!error.statusCode) {
-      console.error("[Auth Middleware Unexpected Error]:", error.message);
+    if (error.name === 'TokenExpiredError' || error.name === 'JsonWebTokenError') {
+      return next(createHttpError(401, "Invalid or expired token"));
     }
-    next(error.statusCode ? error : createHttpError(401, "Invalid bearer token"));
+    if (error.statusCode) {
+      return next(error);
+    }
+    console.error("[Auth Middleware Database/Network Error]:", error.message || error);
+    return next(createHttpError(500, "Authentication service temporarily unavailable"));
   }
 }
 

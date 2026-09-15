@@ -1,39 +1,203 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
-import { Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
-import { Search01Icon, DiningTableIcon, PackageProcess01Icon, Chair01Icon, CashierIcon, Cancel01Icon, Delete02Icon, MinusSignIcon, PlusSignIcon, NoteEditIcon, Discount01Icon, CheckmarkCircle02Icon } from 'hugeicons-react';
+import { Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@smo/ui';
+import {
+  Search01Icon,
+  PackageProcess01Icon,
+  Chair01Icon,
+  CashierIcon,
+  Cancel01Icon,
+  Delete02Icon,
+  MinusSignIcon,
+  PlusSignIcon,
+  NoteEditIcon,
+  Discount01Icon,
+  CheckmarkCircle02Icon,
+  ArrowRight01Icon,
+  Loading03Icon,
+} from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from './receipt';
 import { PaymentBifurcationModal } from './payment-bifurcation-modal';
 
-/* Stable, collision-free line ids so notes never get re-attached to the wrong row. */
+/* Stable, collision-free line ids */
 let lineCounter = 0;
 const createLineId = () => `ln_${Date.now().toString(36)}_${(lineCounter++).toString(36)}`;
 
+/* ─────────────────────────────────────────────────────────────────
+   Enterprise SWR Cache
+   - In-memory Map (fast path)
+   - sessionStorage persistence (survives tab reloads, not new sessions)
+   - TTL for "fresh" (skip network) vs "stale" (revalidate in background)
+   - Hard max-age (drop dead data)
+   - Request deduplication per store bundle
+   ───────────────────────────────────────────────────────────────── */
+const CACHE_TTL_MS = 60_000;              // <60s old → skip refetch entirely
+const CACHE_MAX_AGE_MS = 30 * 60_000;     // >30min old → treat as missing
+const STORAGE_PREFIX = 'pos_cache_v2:';
+
+const _memory = new Map();                // "storeId:resource" -> { data, ts }
+const _inflightStores = new Map();        // storeId -> Promise (bundle dedup)
+
+const _storage = (() => {
+  try {
+    const t = '__pos_probe__';
+    window.sessionStorage.setItem(t, '1');
+    window.sessionStorage.removeItem(t);
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+})();
+
+const cacheKey = (storeId, resource) => `${storeId}:${resource}`;
+
+function readCache(storeId, resource) {
+  if (!storeId) return null;
+  const k = cacheKey(storeId, resource);
+  let entry = _memory.get(k);
+
+  if (!entry && _storage) {
+    try {
+      const raw = _storage.getItem(STORAGE_PREFIX + k);
+      if (raw) entry = JSON.parse(raw);
+    } catch {
+      entry = null;
+    }
+  }
+
+  if (!entry) return null;
+
+  if (Date.now() - entry.ts > CACHE_MAX_AGE_MS) {
+    _memory.delete(k);
+    try { _storage?.removeItem(STORAGE_PREFIX + k); } catch { /* noop */ }
+    return null;
+  }
+
+  _memory.set(k, entry);
+  return entry;
+}
+
+function writeCache(storeId, resource, data) {
+  if (!storeId) return;
+  const k = cacheKey(storeId, resource);
+  const entry = { data, ts: Date.now() };
+  _memory.set(k, entry);
+  if (_storage) {
+    try {
+      _storage.setItem(STORAGE_PREFIX + k, JSON.stringify(entry));
+    } catch { /* quota / private mode — silently skip persistence */ }
+  }
+}
+
+const isFresh = (entry) => Boolean(entry) && (Date.now() - entry.ts) < CACHE_TTL_MS;
+
+function readStoreSnapshot(storeId) {
+  if (!storeId) {
+    return { menu: null, tables: null, store: null, promos: null, hasAny: false };
+  }
+  const menu = readCache(storeId, 'menu');
+  const tables = readCache(storeId, 'tables');
+  const store = readCache(storeId, 'store');
+  const promos = readCache(storeId, 'promos');
+  return {
+    menu,
+    tables,
+    store,
+    promos,
+    hasAny: Boolean(menu || tables || store || promos),
+  };
+}
+
+/* Bundle fetch with per-store dedup so parallel effects don't double-hit the API */
+function fetchStoreBundle(storeId) {
+  if (_inflightStores.has(storeId)) return _inflightStores.get(storeId);
+
+  const promise = (async () => {
+    const [menuRes, tablesRes, storeRes, promosRes] = await Promise.all([
+      api.get(`/stores/${storeId}/menu`),
+      api.get(`/stores/${storeId}/tables`),
+      api.get(`/stores/${storeId}`),
+      api.get(`/stores/${storeId}/promos`),
+    ]);
+    return { menuRes, tablesRes, storeRes, promosRes };
+  })();
+
+  _inflightStores.set(storeId, promise);
+  promise.finally(() => _inflightStores.delete(storeId));
+  return promise;
+}
+
+/* SVG Item Placeholder for items without photos */
+const ItemPlaceholder = ({ dietary, name }) => {
+  const isDrink = /coffee|tea|latte|brew|shake|drink|juice|beverage|mocha|espresso|cappuccino/i.test(name || '');
+  const isDessert = /cake|waffle|cookie|brownie|dessert|pastry|pie|sweet/i.test(name || '');
+
+  return (
+    <div className="w-full h-full flex items-center justify-center relative overflow-hidden rounded-xl bg-gradient-to-br from-stone-100 to-stone-200/60 dark:from-zinc-800/80 dark:to-zinc-900/60 text-stone-400 dark:text-zinc-600">
+      <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#b45309_1px,transparent_1px)] [background-size:8px_8px]" />
+      {isDrink ? (
+        <svg className="size-12 drop-shadow-sm text-teal-700/60 dark:text-teal-400/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
+          <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
+          <line x1="6" y1="2" x2="6" y2="4" />
+          <line x1="10" y1="2" x2="10" y2="4" />
+          <line x1="14" y1="2" x2="14" y2="4" />
+        </svg>
+      ) : isDessert ? (
+        <svg className="size-12 drop-shadow-sm text-amber-700/60 dark:text-amber-400/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8" />
+          <path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1" />
+          <path d="M2 21h20" />
+          <path d="M7 8v3" />
+          <path d="M12 5v6" />
+          <path d="M17 8v3" />
+        </svg>
+      ) : (
+        <svg className="size-12 drop-shadow-sm text-amber-700/60 dark:text-amber-400/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" />
+          <circle cx="12" cy="12" r="5" strokeDasharray="3 3" />
+          <path d="M12 3v2" />
+          <path d="M12 19v2" />
+        </svg>
+      )}
+    </div>
+  );
+};
+
 export const POSTerminal = ({ selectedStoreId, token }) => {
   const [searchParams] = useSearchParams();
-  const [menu, setMenu] = useState([]);
-  const [tables, setTables] = useState([]);
-  const [storeData, setStoreData] = useState(null);
-  const [promos, setPromos] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  /* ─── Synchronous hydration (no loading flash if cache exists) ──── */
+  const initialSnap = useMemo(() => readStoreSnapshot(selectedStoreId), []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const [menu, setMenu] = useState(() => initialSnap.menu?.data || []);
+  const [tables, setTables] = useState(() => initialSnap.tables?.data || []);
+  const [storeData, setStoreData] = useState(() => initialSnap.store?.data || null);
+  const [promos, setPromos] = useState(() => initialSnap.promos?.data || []);
+  const [isInitialLoading, setIsInitialLoading] = useState(() => !initialSnap.hasAny);
+  const [isRevalidating, setIsRevalidating] = useState(false);
   const [error, setError] = useState('');
 
   // UI State
-  const [selectedCategoryId, setSelectedCategoryId] = useState(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(() => {
+    const m = initialSnap.menu?.data;
+    return m && m.length > 0 ? m[0].id : null;
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const isSearching = searchQuery.trim().length > 0;
   const searchInputRef = useRef(null);
 
-  // Cart State
+  // Cart & Order State
   const [cart, setCart] = useState([]);
   const [orderType, setOrderType] = useState('DINE_IN');
   const [selectedTableId, setSelectedTableId] = useState('');
+  const [customerName, setCustomerName] = useState('');
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState(null);
-  const [cartNotes, setCartNotes] = useState({});       // keyed by lineId
-  const [activeNoteId, setActiveNoteId] = useState(null); // lineId
+  const [cartNotes, setCartNotes] = useState({});
+  const [activeNoteId, setActiveNoteId] = useState(null);
 
   // Modifier Modal State
   const [modifierItem, setModifierItem] = useState(null);
@@ -48,6 +212,11 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
   const [receiptOrder, setReceiptOrder] = useState(null);
   const receiptRef = useRef();
 
+  // Reference number for active receipt ticket
+  const orderRefNumber = useMemo(() => {
+    return (Math.floor(10000 + Math.random() * 90000)).toString();
+  }, []);
+
   const qrModalRef = useRef(qrModal);
   useEffect(() => { qrModalRef.current = qrModal; }, [qrModal]);
 
@@ -57,7 +226,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
   const activePaymentOrderIdRef = useRef(activePaymentOrderId);
   useEffect(() => { activePaymentOrderIdRef.current = activePaymentOrderId; }, [activePaymentOrderId]);
 
-  /* ─── Toasts (replaces window.alert) ─────────────────────────────── */
+  /* ─── Toasts ──────────────────────────────────────────────────────── */
   const [toasts, setToasts] = useState([]);
   const toastIdRef = useRef(0);
   const toastTimers = useRef(new Map());
@@ -77,52 +246,101 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
 
   useEffect(() => () => { toastTimers.current.forEach(clearTimeout); }, []);
 
-  /* ─── Fetch Tables with Live Status ──────────────────────────────── */
+  /* ─── Fetch Tables with Live Status (writes through cache) ──────── */
   const fetchTables = useCallback(async () => {
     if (!selectedStoreId) return;
     try {
       const res = await api.get(`/stores/${selectedStoreId}/tables`);
       if (res.data.success) {
-        setTables(res.data.data.filter(t => t.isActive));
+        const activeTables = (res.data.data || []).filter(t => t.isActive);
+        setTables(activeTables);
+        writeCache(selectedStoreId, 'tables', activeTables);
       }
     } catch (err) {
       console.error('Failed to fetch tables with live status:', err);
     }
   }, [selectedStoreId]);
 
-  /* ─── Data fetching ──────────────────────────────────────────────── */
+  /* ─── SWR Data Hydration + Background Revalidation ───────────────── */
   useEffect(() => {
     if (!selectedStoreId) return;
     let cancelled = false;
-    const fetchData = async () => {
-      setLoading(true);
-      setError('');
+
+    const snap = readStoreSnapshot(selectedStoreId);
+
+    // 1) Hydrate synchronously from cache → no loading flash for cached stores
+    if (snap.menu) setMenu(snap.menu.data || []);
+    if (snap.tables) setTables(snap.tables.data || []);
+    if (snap.store) setStoreData(snap.store.data || null);
+    if (snap.promos) setPromos(snap.promos.data || []);
+
+    setError('');
+    setIsInitialLoading(!snap.hasAny);
+
+    // 2) Fast path: everything fresh → skip network entirely
+    const allFresh =
+      isFresh(snap.menu) &&
+      isFresh(snap.tables) &&
+      isFresh(snap.store) &&
+      isFresh(snap.promos);
+
+    if (allFresh) {
+      setIsRevalidating(false);
+      return () => { cancelled = true; };
+    }
+
+    // 3) Otherwise revalidate in the background — UI already has (stale) data
+    setIsRevalidating(snap.hasAny);
+
+    (async () => {
       try {
-        const [menuRes, tablesRes, storeRes, promosRes] = await Promise.all([
-          api.get(`/stores/${selectedStoreId}/menu`),
-          api.get(`/stores/${selectedStoreId}/tables`),
-          api.get(`/stores/${selectedStoreId}`),
-          api.get(`/stores/${selectedStoreId}/promos`),
-        ]);
+        const { menuRes, tablesRes, storeRes, promosRes } =
+          await fetchStoreBundle(selectedStoreId);
         if (cancelled) return;
-        if (menuRes.data.success) {
-          setMenu(menuRes.data.data);
-          if (menuRes.data.data.length > 0) setSelectedCategoryId(menuRes.data.data[0].id);
+
+        if (menuRes?.data?.success) {
+          const freshMenu = menuRes.data.data || [];
+          setMenu(freshMenu);
+          writeCache(selectedStoreId, 'menu', freshMenu);
         }
-        if (tablesRes.data.success) setTables(tablesRes.data.data.filter(t => t.isActive));
-        if (storeRes.data.success) setStoreData(storeRes.data.data);
-        if (promosRes.data.success) setPromos(promosRes.data.data);
+        if (tablesRes?.data?.success) {
+          const freshTables = (tablesRes.data.data || []).filter(t => t.isActive);
+          setTables(freshTables);
+          writeCache(selectedStoreId, 'tables', freshTables);
+        }
+        if (storeRes?.data?.success) {
+          setStoreData(storeRes.data.data);
+          writeCache(selectedStoreId, 'store', storeRes.data.data);
+        }
+        if (promosRes?.data?.success) {
+          const freshPromos = promosRes.data.data || [];
+          setPromos(freshPromos);
+          writeCache(selectedStoreId, 'promos', freshPromos);
+        }
       } catch (err) {
-        if (!cancelled) setError('Failed to fetch data');
+        if (!cancelled && !snap.hasAny) setError('Failed to fetch data');
+        console.error('POS revalidation failed:', err);
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setIsInitialLoading(false);
+          setIsRevalidating(false);
+        }
       }
-    };
-    fetchData();
+    })();
+
     return () => { cancelled = true; };
   }, [selectedStoreId]);
 
-  /* Preselect table from URL query param (?table=...) if provided and available */
+  /* Keep selectedCategoryId valid whenever the menu set changes */
+  useEffect(() => {
+    if (!menu.length) return;
+    setSelectedCategoryId(prev => {
+      if (prev && menu.some(c => c.id === prev)) return prev;
+      return menu[0].id;
+    });
+  }, [menu]);
+
+  /* Preselect table from URL query param (?table=...) */
   useEffect(() => {
     const tableParam = searchParams.get('table');
     if (tableParam && tables.length > 0) {
@@ -134,7 +352,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     }
   }, [searchParams, tables]);
 
-  /* Reset everything when switching stores */
+  /* Reset state when store switches */
   useEffect(() => {
     setCart([]);
     setCartNotes({});
@@ -142,6 +360,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     setAppliedPromo(null);
     setPromoCodeInput('');
     setSelectedTableId('');
+    setCustomerName('');
     setOrderType('DINE_IN');
     setSearchQuery('');
     setReceiptOrder(null);
@@ -150,7 +369,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     setActivePaymentOrderId(null);
   }, [selectedStoreId]);
 
-  /* ─── SSE stream with Real-time Table Status Sync ────────────────── */
+  /* ─── SSE Live Updates ───────────────────────────────────────────── */
   useEffect(() => {
     if (!selectedStoreId || !token) return;
     const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -174,7 +393,6 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
           if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
         }
 
-        // Live table availability refresh on order or reservation events
         const tableStatusEvents = [
           'ORDER_PENDING_VERIFICATION',
           'ORDER_PROCESSING',
@@ -190,58 +408,37 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         if (tableStatusEvents.includes(message.type)) {
           fetchTables();
         }
-      } catch (e) { /* ignore malformed frames */ }
+      } catch (e) { /* ignore */ }
     };
     return () => eventSource.close();
   }, [selectedStoreId, token, fetchTables]);
 
-  /* ─── QR polling ─────────────────────────────────────────────────── */
-  useEffect(() => {
-    let intervalId;
-    let attempts = 0;
-    if (qrModal.isOpen && qrModal.orderId) {
-      intervalId = setInterval(async () => {
-        attempts++;
-        if (attempts > 100) {
-          clearInterval(intervalId);
-          pushToast('Payment QR expired. Please generate a new one.', 'error');
-          setQrModal({ isOpen: false, url: '', orderId: '' });
-          return;
-        }
-        try {
-          const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
-          if (res.data.success && res.data.data.status === 'success') {
-            clearInterval(intervalId);
-            setQrModal({ isOpen: false, url: '', orderId: '' });
-            resetCartState();
-            const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}`);
-            if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
-          }
-        } catch (err) { /* keep polling */ }
-      }, 3000);
-    }
-    return () => { if (intervalId) clearInterval(intervalId); };
-  }, [qrModal.isOpen, qrModal.orderId, selectedStoreId, pushToast]);
-
-  /* ─── Global Escape-to-close ─────────────────────────────────────── */
+  /* ─── Keyboard Shortcuts ─────────────────────────────────────────── */
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (e.key !== 'Escape') return;
-      if (modifierItem) { setModifierItem(null); return; }
-      if (receiptOrder) { setReceiptOrder(null); return; }
-      if (qrModal.isOpen && !isVerifying) { setQrModal({ isOpen: false, url: '', orderId: '' }); return; }
-      if (paymentModalOpen && !isVerifying && !isSubmitting) { setPaymentModalOpen(false); return; }
-      if (activeNoteId) { setActiveNoteId(null); return; }
-      if (searchQuery) { setSearchQuery(''); }
+      if ((e.key === 'k' && (e.metaKey || e.ctrlKey)) || (e.key === '/' && !['INPUT', 'TEXTAREA'].includes(e.target.tagName))) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (e.key === 'Escape') {
+        if (modifierItem) { setModifierItem(null); return; }
+        if (receiptOrder) { setReceiptOrder(null); return; }
+        if (qrModal.isOpen && !isVerifying) { setQrModal({ isOpen: false, url: '', orderId: '' }); return; }
+        if (paymentModalOpen && !isVerifying && !isSubmitting) { setPaymentModalOpen(false); return; }
+        if (activeNoteId) { setActiveNoteId(null); return; }
+        if (searchQuery) { setSearchQuery(''); }
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [modifierItem, receiptOrder, qrModal.isOpen, paymentModalOpen, isVerifying, isSubmitting, activeNoteId, searchQuery]);
 
-  /* ─── Cart helpers ───────────────────────────────────────────────── */
+  /* ─── Cart Helpers ───────────────────────────────────────────────── */
   const resetCartState = () => {
     setCart([]);
     setSelectedTableId('');
+    setCustomerName('');
     setAppliedPromo(null);
     setPromoCodeInput('');
     setCartNotes({});
@@ -275,7 +472,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     setPromoCodeInput('');
   };
 
-  /* ─── Menu / item actions ────────────────────────────────────────── */
+  /* ─── Menu Filtering ─────────────────────────────────────────────── */
   const selectedCategoryItems = useMemo(() => {
     if (isSearching) {
       const q = searchQuery.trim().toLowerCase();
@@ -315,7 +512,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
       if (current.includes(optionId)) {
         return { ...prev, [groupId]: current.filter(id => id !== optionId) };
       }
-      if (maxSelections === 1) return { ...prev, [groupId]: [optionId] }; // radio behaviour
+      if (maxSelections === 1) return { ...prev, [groupId]: [optionId] };
       if (current.length >= maxSelections) return prev;
       return { ...prev, [groupId]: [...current, optionId] };
     });
@@ -389,7 +586,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     setCartNotes(prev => ({ ...prev, [lineId]: note }));
 
   const clearCart = () => {
-    const snapshot = { cart, cartNotes, appliedPromo, promoCodeInput };
+    const snapshot = { cart, cartNotes, appliedPromo, promoCodeInput, customerName };
     resetCartState();
     pushToast('Order cleared', 'info', {
       label: 'Undo',
@@ -398,11 +595,12 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         setCartNotes(snapshot.cartNotes);
         setAppliedPromo(snapshot.appliedPromo);
         setPromoCodeInput(snapshot.promoCodeInput);
+        setCustomerName(snapshot.customerName);
       },
     });
   };
 
-  /* ─── Totals ─────────────────────────────────────────────────────── */
+  /* ─── Financial Totals ───────────────────────────────────────────── */
   const subTotal = useMemo(() =>
     cart.reduce((acc, c) => {
       const itemTotal = c.menuItem.price + c.modifiers.reduce((s, m) => s + m.price, 0);
@@ -431,15 +629,15 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
   const totalAmount = subTotalAfterDiscount + taxAmount;
   const totalItemCount = useMemo(() => cart.reduce((a, c) => a + c.quantity, 0), [cart]);
 
-  /* ─── Checkout ───────────────────────────────────────────────────── */
+  /* ─── Validation & Checkout ──────────────────────────────────────── */
   const selectedTable = useMemo(() => tables.find(t => t.id === selectedTableId), [tables, selectedTableId]);
   const isSelectedTableUnavailable = orderType === 'DINE_IN' && selectedTable && (selectedTable.status !== 'AVAILABLE' && selectedTable.isAvailable === false);
   const needsTable = orderType === 'DINE_IN' && !selectedTableId;
   const checkoutDisabled = cart.length === 0 || isSubmitting || needsTable || isSelectedTableUnavailable;
 
-  const handleCheckout = async (paymentModel, useQR = false) => {
+  const handleCheckout = async (paymentModel) => {
     if (needsTable) { pushToast('Please select a table for Dine-In orders.', 'error'); return; }
-    if (isSelectedTableUnavailable) { pushToast(`Table ${selectedTable?.tableNumber} is currently unavailable (occupied or reserved). Please pick an available table.`, 'error'); return; }
+    if (isSelectedTableUnavailable) { pushToast(`Table ${selectedTable?.tableNumber} is currently unavailable.`, 'error'); return; }
     if (cart.length === 0) return;
     setIsSubmitting(true);
     try {
@@ -447,6 +645,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         type: orderType,
         paymentModel,
         origin: 'POS',
+        customerName: customerName.trim() || undefined,
         tableId: orderType === 'DINE_IN' ? selectedTableId : undefined,
         promoCode: appliedPromo ? appliedPromo.code : undefined,
         items: cart.map((c) => ({
@@ -459,16 +658,12 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
       const res = await api.post(`/stores/${selectedStoreId}/orders`, payload);
       const orderId = res.data.data.order.id;
 
-      if (useQR) {
-        const linkRes = await api.post(`/stores/${selectedStoreId}/orders/${orderId}/payment-link`);
-        setQrModal({ isOpen: true, url: linkRes.data.data.short_url, orderId });
-        return;
-      }
       if (paymentModel === 'PREPAID') {
         await api.patch(`/stores/${selectedStoreId}/orders/${orderId}/status`, { status: 'SETTLED' });
       }
       resetCartState();
       setReceiptOrder(res.data.data.order);
+      pushToast('Order placed successfully!', 'success');
     } catch (err) {
       console.error(err);
       pushToast('Failed to place order: ' + (err.response?.data?.message || err.message), 'error');
@@ -477,30 +672,10 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     }
   };
 
-  const verifyOrder = async () => {
-    setIsVerifying(true);
-    try {
-      const res = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}/payment-status`);
-      if (res.data.success && res.data.data.status === 'success') {
-        setQrModal({ isOpen: false, url: '', orderId: '' });
-        resetCartState();
-        const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${qrModal.orderId}`);
-        if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
-      } else {
-        pushToast(res.data.data?.message || 'Payment not received yet.', 'info');
-      }
-    } catch (err) {
-      const msg = err.response?.data?.error?.message || 'Failed to verify order.';
-      pushToast('Error: ' + msg, 'error');
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  /* ─── Payment Bifurcation Modal Handlers ────────────────────────── */
+  /* ─── Payment Bifurcation Modal Integration ─────────────────────── */
   const handleOpenPaymentModal = () => {
     if (needsTable) { pushToast('Please select a table for Dine-In orders.', 'error'); return; }
-    if (isSelectedTableUnavailable) { pushToast(`Table ${selectedTable?.tableNumber} is currently unavailable (occupied or reserved). Please pick an available table.`, 'error'); return; }
+    if (isSelectedTableUnavailable) { pushToast(`Table ${selectedTable?.tableNumber} is currently unavailable.`, 'error'); return; }
     if (cart.length === 0) return;
     setPaymentModalOpen(true);
   };
@@ -514,6 +689,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         paymentMethod: onlineAmount === totalAmount ? 'ONLINE' : 'SPLIT',
         cashAmount: totalAmount - onlineAmount,
         onlineAmount: onlineAmount,
+        customerName: customerName.trim() || undefined,
         origin: 'POS',
         tableId: orderType === 'DINE_IN' ? selectedTableId : undefined,
         promoCode: appliedPromo ? appliedPromo.code : undefined,
@@ -548,6 +724,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
           paymentMethod: tenderDetails.paymentMethod,
           cashAmount: tenderDetails.cashAmount,
           onlineAmount: tenderDetails.onlineAmount,
+          customerName: customerName.trim() || undefined,
           origin: 'POS',
           tableId: orderType === 'DINE_IN' ? selectedTableId : undefined,
           promoCode: appliedPromo ? appliedPromo.code : undefined,
@@ -597,8 +774,25 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     if (!activePaymentOrderId) return { success: false, message: 'No active order' };
     setIsVerifying(true);
     try {
-      const res = await api.get(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}/payment-status`);
-      if (res.data.success && res.data.data.status === 'success') {
+      let isSuccess = false;
+      try {
+        const verifyRes = await api.post(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}/verify-payment`, { manual: true });
+        if (verifyRes.data.success && (verifyRes.data.data.status === 'PROCESSING' || verifyRes.data.data.status === 'SETTLED' || verifyRes.data.data.success)) {
+          isSuccess = true;
+        }
+      } catch (e) {}
+
+      if (!isSuccess) {
+        const res = await api.get(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}/payment-status`);
+        if (res.data.success && res.data.data.status === 'success') {
+          isSuccess = true;
+        } else {
+          pushToast(res.data.data?.message || 'Payment not received yet.', 'info');
+          return { success: false, message: res.data.data?.message || 'Payment pending' };
+        }
+      }
+
+      if (isSuccess) {
         const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}`);
         const order = orderRes.data.data;
         setPaymentModalOpen(false);
@@ -607,12 +801,9 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         setReceiptOrder(order);
         pushToast('Payment verified and order settled!', 'success');
         return { success: true };
-      } else {
-        pushToast(res.data.data?.message || 'Payment not received yet.', 'info');
-        return { success: false, message: res.data.data?.message || 'Payment pending' };
       }
     } catch (err) {
-      const msg = err.response?.data?.error?.message || 'Failed to verify payment.';
+      const msg = err.response?.data?.error?.message || err.response?.data?.message || 'Failed to verify payment.';
       pushToast('Error: ' + msg, 'error');
       return { success: false, message: msg };
     } finally {
@@ -620,7 +811,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     }
   };
 
-  /* ─── Receipt printing via hidden iframe (avoids popup blockers) ─── */
+  /* ─── Receipt Printing ───────────────────────────────────────────── */
   const printReceipt = useCallback(() => {
     if (!receiptRef.current) return;
     const iframe = document.createElement('iframe');
@@ -661,44 +852,40 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     }, 250);
   }, []);
 
-  /* ─── Render ─────────────────────────────────────────────────────── */
-  if (loading) {
+  /* ─── Loading / Error Views ──────────────────────────────────────── */
+  if (isInitialLoading) {
     return (
-      <div className="flex h-full gap-2 p-2">
-        <Skeleton className="flex-1 h-full rounded-xl" />
-        <Skeleton className="w-80 h-full rounded-xl" />
+      <div className="h-full flex flex-col items-center justify-center gap-3 bg-stone-100/60 dark:bg-zinc-950">
+        <Loading03Icon size={30} className="animate-spin text-amber-500" />
+        <span className="text-[11px] font-bold uppercase tracking-wider text-stone-500 dark:text-zinc-400">
+          Loading POS…
+        </span>
       </div>
     );
   }
-  if (error) return <div className="text-red-500 p-4">{error}</div>;
+
+  if (error && menu.length === 0) return <div className="text-rose-500 p-6 font-bold">{error}</div>;
 
   return (
-    <div className="h-full grid grid-cols-[1fr_320px] gap-2 overflow-hidden relative bg-zinc-100 dark:bg-zinc-950 p-2">
+    <div className="h-full grid grid-cols-[1fr_360px] 2xl:grid-cols-[1fr_390px] gap-3 p-3 overflow-hidden relative bg-stone-100/60 dark:bg-zinc-950">
 
       {/* ─── TOASTS ─── */}
-      <div
-        aria-live="polite"
-        className="pointer-events-none absolute top-3 right-3 z-[100] flex flex-col items-end gap-2 max-w-[320px]"
-      >
+      <div aria-live="polite" className="pointer-events-none absolute top-3 right-3 z-[100] flex flex-col items-end gap-2 max-w-[340px]">
         {toasts.map(t => {
           const tone =
             t.type === 'error'
-              ? 'bg-red-50 text-red-700 border-red-200 dark:bg-red-950/80 dark:text-red-300 dark:border-red-900'
+              ? 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/90 dark:text-rose-200 dark:border-rose-900'
               : t.type === 'success'
-                ? 'bg-green-50 text-green-700 border-green-200 dark:bg-green-950/80 dark:text-green-300 dark:border-green-900'
-                : 'bg-white text-zinc-700 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700';
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/90 dark:text-emerald-200 dark:border-emerald-900'
+                : 'bg-white text-stone-800 border-stone-200 dark:bg-zinc-900 dark:text-zinc-200 dark:border-zinc-700';
           return (
-            <div
-              key={t.id}
-              role="status"
-              className={`pointer-events-auto flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium shadow-lg ${tone}`}
-            >
+            <div key={t.id} role="status" className={`pointer-events-auto flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-xs font-semibold shadow-lg ${tone}`}>
               <span className="min-w-0 flex-1">{t.message}</span>
               {t.action && (
                 <button
                   type="button"
                   onClick={() => { t.action.onClick(); dismissToast(t.id); }}
-                  className="shrink-0 rounded px-1.5 py-0.5 text-[11px] font-bold underline underline-offset-2 hover:bg-black/5 dark:hover:bg-white/10"
+                  className="shrink-0 rounded px-2 py-0.5 text-[11px] font-bold underline hover:opacity-80"
                 >
                   {t.action.label}
                 </button>
@@ -709,475 +896,515 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                 onClick={() => dismissToast(t.id)}
                 className="shrink-0 rounded p-0.5 opacity-60 hover:opacity-100"
               >
-                <Cancel01Icon size={13} />
+                <Cancel01Icon size={14} />
               </button>
             </div>
           );
         })}
       </div>
 
-      {/* ─── LEFT: MENU AREA ─── */}
-      <div className="flex flex-col h-full min-h-0 overflow-hidden bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800">
+      {/* ─── LEFT: MENU & CATALOG AREA ─── */}
+      <div className="flex flex-col h-full min-h-0 overflow-hidden gap-3">
 
-        {/* Top Bar */}
-        <div className="shrink-0 flex gap-2 items-center border-b border-zinc-200 dark:border-zinc-800 px-3 py-2">
-          <div className="flex-1 relative min-w-0">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none">
-              <Search01Icon size={16} />
-            </span>
-            <input
-              ref={searchInputRef}
-              type="text"
-              aria-label="Search menu"
-              placeholder="Search menu…"
-              className="w-full h-8 pl-9 pr-8 text-xs bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 outline-none rounded-md focus:ring-1 focus:ring-zinc-400 dark:focus:ring-zinc-500"
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-            />
-            {isSearching && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-700"
-              >
-                <Cancel01Icon size={13} />
-              </button>
-            )}
-          </div>
+        {/* 1. Top Bar: Search + Customer Name + Table (moved from cart) */}
+        <div className="shrink-0 grid grid-cols-2 lg:grid-cols-[minmax(0,1fr)_170px_190px] gap-2">
 
-          <div className="shrink-0 flex bg-zinc-100 dark:bg-zinc-800 p-0.5 rounded-md">
-            <button
-              type="button"
-              aria-pressed={orderType === 'DINE_IN'}
-              className={`flex items-center gap-1 px-2.5 h-7 text-[11px] font-bold rounded transition-colors ${orderType === 'DINE_IN' ? 'bg-white dark:bg-zinc-900 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
-              onClick={() => setOrderType('DINE_IN')}
-            >
-              <Chair01Icon size={12} />
-              Dine-In
-            </button>
-            <button
-              type="button"
-              aria-pressed={orderType === 'TAKEAWAY'}
-              className={`flex items-center gap-1 px-2.5 h-7 text-[11px] font-bold rounded transition-colors ${orderType === 'TAKEAWAY' ? 'bg-white dark:bg-zinc-900 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
-              onClick={() => { setOrderType('TAKEAWAY'); setSelectedTableId(''); }}
-            >
-              <PackageProcess01Icon size={12} /> Takeaway
-            </button>
-          </div>
-
-          {orderType === 'DINE_IN' && (
-            <div className="relative shrink-0">
-              <DiningTableIcon
-                size={13}
-                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-zinc-400 z-10"
+          {/* Search */}
+          <div className="relative col-span-2 lg:col-span-1">
+            <div className="h-10 rounded-l-full bg-white dark:bg-zinc-900 border border-stone-200/90 dark:border-zinc-800 shadow-xs flex items-center pl-4 pr-1.5 gap-3 transition-all">
+              <Search01Icon size={18} className="text-amber-600 dark:text-amber-400 shrink-0" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                aria-label="Search menu"
+                placeholder="Search dishes, drinks, or items… (Press '/' or 'Ctrl+K' to focus)"
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full bg-transparent text-xs text-stone-900 dark:text-stone-100 placeholder-stone-400 dark:placeholder-zinc-500 outline-none font-medium py-3"
               />
-              <Select value={selectedTableId} onValueChange={setSelectedTableId}>
-                <SelectTrigger
-                  aria-label="Select table"
-                  className={`w-36 h-8 bg-white dark:bg-zinc-900 text-xs pl-7 ${needsTable ? 'border-amber-400 dark:border-amber-500' : ''}`}
+              {isSearching ? (
+                <button
+                  type="button"
+                  onClick={() => { setSearchQuery(''); searchInputRef.current?.focus(); }}
+                  aria-label="Clear search"
+                  className="shrink-0 size-7 flex items-center justify-center text-stone-500 hover:text-stone-700 hover:bg-stone-100 dark:hover:bg-zinc-800 transition-colors"
                 >
-                  <SelectValue placeholder="Select Table" />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  {tables.length === 0 ? (
-                    <div className="px-3 py-2 text-xs text-zinc-500">No tables configured</div>
-                  ) : (
-                    tables.map(t => {
-                      const isReserved = t.status === 'RESERVED' || Boolean(t.activeReservation);
-                      const isOccupied = ['OCCUPIED', 'PROCESSING', 'READY', 'SERVED', 'BILL_REQUESTED', 'ATTENTION'].includes(t.status) || Boolean(t.currentOrder);
-                      const isAvailable = !isReserved && !isOccupied;
+                  <Cancel01Icon size={15} />
+                </button>
+              ) : (
+                <div className="shrink-0 h-7 px-3.5 bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 flex items-center gap-1 text-[11px] font-bold text-stone-500 dark:text-zinc-400">
+                  <span>⌘</span>
+                  <span>K</span>
+                </div>
+              )}
+            </div>
+          </div>
 
-                      return (
-                        <SelectItem
-                          key={t.id}
-                          value={t.id}
-                          disabled={!isAvailable}
-                          className="text-xs py-1.5 cursor-pointer"
-                        >
-                          <div className="flex items-center justify-between w-full gap-3">
-                            <span className="font-semibold">Table {t.tableNumber} <span className="text-[10px] text-zinc-400 font-normal">({t.capacity || 4}p)</span></span>
-                            {isOccupied ? (
-                              <span className="ml-2 px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                                Occupied
-                              </span>
-                            ) : isReserved ? (
-                              <span className="ml-2 px-1.5 py-0.2 rounded text-[9px] font-bold bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
-                                Reserved
-                              </span>
-                            ) : (
-                              <span className="ml-2 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                                Free
-                              </span>
-                            )}
-                          </div>
-                        </SelectItem>
-                      );
-                    })
-                  )}
-                </SelectContent>
-              </Select>
+          {/* Customer Name */}
+          <input
+            type="text"
+            value={customerName}
+            onChange={e => setCustomerName(e.target.value)}
+            placeholder="Customer name"
+            aria-label="Customer name"
+            className="h-10 w-full bg-white dark:bg-zinc-900 border border-stone-200/90 dark:border-zinc-800 shadow-xs px-5 text-xs font-medium text-stone-900 dark:text-zinc-100 placeholder-stone-400 dark:placeholder-zinc-500 outline-none"
+          />
+
+          {/* Table Selector (swaps to Takeaway label when order type is Takeaway) */}
+          {orderType === 'DINE_IN' ? (
+            <Select value={selectedTableId} onValueChange={setSelectedTableId}>
+              <SelectTrigger
+                className={`h-10 w-full rounded-r-full bg-white dark:bg-zinc-900 border-stone-200/90 dark:border-zinc-800 px-4 text-xs font-medium ${
+                  needsTable ? 'border-amber-400' : ''
+                }`}
+              >
+                <SelectValue placeholder="Select Table" />
+              </SelectTrigger>
+              <SelectContent className="max-h-64">
+                {tables.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-stone-400">No tables configured</div>
+                ) : (
+                  tables.map(t => {
+                    const isReserved = t.status === 'RESERVED' || Boolean(t.activeReservation);
+                    const isOccupied = ['OCCUPIED', 'PROCESSING', 'READY', 'SERVED', 'BILL_REQUESTED', 'ATTENTION'].includes(t.status) || Boolean(t.currentOrder);
+                    const isAvailable = !isReserved && !isOccupied;
+
+                    return (
+                      <SelectItem
+                        key={t.id}
+                        value={t.id}
+                        disabled={!isAvailable}
+                        className="text-xs py-1.5 cursor-pointer"
+                      >
+                        <div className="flex items-center justify-between w-full gap-2">
+                          <span className="font-bold">Table {t.tableNumber}</span>
+                          <span className="text-[10px] text-stone-400 font-normal">({t.capacity || 4}p)</span>
+                          {isOccupied ? (
+                            <span className="ml-auto px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                              Occupied
+                            </span>
+                          ) : isReserved ? (
+                            <span className="ml-auto px-1.5 py-0.2 rounded text-[9px] font-bold bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
+                              Reserved
+                            </span>
+                          ) : (
+                            <span className="ml-auto px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                              Free
+                            </span>
+                          )}
+                        </div>
+                      </SelectItem>
+                    );
+                  })
+                )}
+              </SelectContent>
+            </Select>
+          ) : (
+            <div className="h-12 w-full rounded-full border border-dashed border-stone-200 dark:border-zinc-700 bg-stone-100/50 dark:bg-zinc-800/40 text-[11px] font-medium text-stone-400 dark:text-zinc-500 flex items-center justify-center gap-2 px-5">
+              <PackageProcess01Icon size={14} />
+              <span>Takeaway Order</span>
             </div>
           )}
         </div>
 
-        {/* Dine-In Table Selection Strip with Small Chips */}
-        {orderType === 'DINE_IN' && (
-          <div className="shrink-0 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/40 flex flex-col gap-1.5">
-            <div className="flex items-center justify-between text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-zinc-700 dark:text-zinc-300">
-                <DiningTableIcon size={14} className="text-zinc-400" />
-                <span>Select Table:</span>
-                {selectedTableId && (
-                  <span className="text-primary font-bold text-[11px] bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full ml-1">
-                    Table {tables.find(t => t.id === selectedTableId)?.tableNumber} Selected
-                  </span>
-                )}
-              </div>
-
-              {/* Status Legend Chips */}
-              <div className="flex items-center gap-2 text-[10px] text-zinc-500 font-medium">
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                  <span className="size-1.5 rounded-full bg-emerald-500" /> Free
-                </span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                  <span className="size-1.5 rounded-full bg-blue-500" /> Occupied
-                </span>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
-                  <span className="size-1.5 rounded-full bg-pink-500" /> Reserved
-                </span>
-              </div>
-            </div>
-
-            {/* Table Buttons Strip */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-thin">
-              {tables.length === 0 ? (
-                <div className="text-xs text-zinc-400 py-1 italic">No tables configured for this store</div>
-              ) : (
-                tables.map((t) => {
-                  const isReserved = t.status === 'RESERVED' || Boolean(t.activeReservation);
-                  const isOccupied = ['OCCUPIED', 'PROCESSING', 'READY', 'SERVED', 'BILL_REQUESTED', 'ATTENTION'].includes(t.status) || Boolean(t.currentOrder);
-                  const isAvailable = !isReserved && !isOccupied;
-                  const isSelected = selectedTableId === t.id;
-                  const isDisabled = !isAvailable;
-
-                  return (
-                    <button
-                      key={t.id}
-                      type="button"
-                      disabled={isDisabled}
-                      onClick={() => setSelectedTableId(t.id)}
-                      title={
-                        isOccupied
-                          ? `Table ${t.tableNumber} is Occupied with dining guests`
-                          : isReserved
-                          ? `Table ${t.tableNumber} is Reserved`
-                          : `Select Table ${t.tableNumber} (${t.capacity || 4} seats)`
-                      }
-                      className={`h-8 px-2.5 rounded-lg border text-xs flex items-center gap-1.5 transition-all whitespace-nowrap shrink-0 ${
-                        isDisabled
-                          ? 'opacity-40 cursor-not-allowed bg-zinc-100 dark:bg-zinc-800/40 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400 select-none'
-                          : isSelected
-                          ? 'bg-primary/10 border-primary text-primary font-bold shadow-sm ring-2 ring-primary ring-offset-1 dark:ring-offset-zinc-900'
-                          : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:border-zinc-300 dark:hover:border-zinc-700'
-                      }`}
-                    >
-                      <span className="font-bold">Table {t.tableNumber}</span>
-                      <span className="text-[10px] text-zinc-400">({t.capacity || 4}p)</span>
-
-                      {/* Small Status Chip */}
-                      {isOccupied ? (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                          Occupied
-                        </span>
-                      ) : isReserved ? (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
-                          Reserved
-                        </span>
-                      ) : (
-                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                          Free
-                        </span>
-                      )}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Category Tabs */}
-        <div className="shrink-0 px-3 py-2 border-b border-zinc-200 dark:border-zinc-800 flex gap-1.5 overflow-x-auto">
+        {/* 2. Category Cards Showcase */}
+        <div className="shrink-0 flex items-center gap-3 overflow-x-auto pb-1 scrollbar-none select-none">
           {menu.map(cat => {
             const active = selectedCategoryId === cat.id && !isSearching;
+            const count = cat.items?.length || 0;
+
             return (
               <button
-                type="button"
                 key={cat.id}
-                aria-pressed={active}
+                type="button"
                 onClick={() => { setSelectedCategoryId(cat.id); setSearchQuery(''); }}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${active
-                  ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 shadow-sm'
-                  : 'bg-zinc-50 text-zinc-600 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
-                  }`}
+                className={`shrink-0 w-44 h-21 rounded-2xl p-3 flex flex-col justify-between text-left transition-all duration-200 shadow-xs relative overflow-hidden group ${
+                  active
+                    ? 'bg-amber-400 dark:bg-amber-400 text-amber-950 shadow-md scale-[1.01]'
+                    : 'bg-white dark:bg-zinc-900 border border-stone-200/90 dark:border-zinc-800 text-stone-800 dark:text-zinc-200 hover:border-amber-400/60 dark:hover:border-amber-400/40 hover:bg-stone-50/70 dark:hover:bg-zinc-800/50'
+                }`}
               >
-                {cat.icon && <span>{cat.icon}</span>}
-                {cat.name}
-                {cat.itemCount !== undefined && (
-                  <span className={`text-[9px] px-1 py-0.5 rounded-full tabular-nums ${active ? 'bg-white/20 dark:bg-black/20' : 'bg-zinc-200 dark:bg-zinc-700'}`}>
-                    {cat.itemCount}
+                <div className={`absolute -right-2 -bottom-2 opacity-10 pointer-events-none transition-transform group-hover:scale-110 ${
+                  active ? 'text-amber-950 opacity-15' : 'text-amber-700 dark:text-white'
+                }`}>
+                  <svg className="size-18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93V18a1 1 0 0 1-2 0v-1.07A6 6 0 0 1 6.07 12H7a1 1 0 0 1 0-2h-.93A6 6 0 0 1 11 4.07V5a1 1 0 0 1 2 0v-.93A6 6 0 0 1 17.93 9H17a1 1 0 0 1 0 2h.93A6 6 0 0 1 13 16.93z"/>
+                  </svg>
+                </div>
+
+                <div className="flex items-center justify-between relative z-10">
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                    active
+                      ? 'bg-amber-950/15 text-amber-950 backdrop-blur-xs'
+                      : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20'
+                  }`}>
+                    Available
                   </span>
-                )}
+                  {active && (
+                    <span className="size-2 rounded-full bg-amber-950 animate-pulse" />
+                  )}
+                </div>
+
+                <div className="relative z-10">
+                  <h3 className={`font-bold text-sm leading-tight truncate ${active ? 'text-amber-950' : 'text-stone-900 dark:text-zinc-100'}`}>
+                    {cat.name}
+                  </h3>
+                  <span className={`text-[11px] font-medium ${active ? 'text-amber-900/80' : 'text-stone-400 dark:text-zinc-500'}`}>
+                    {count} item{count === 1 ? '' : 's'}
+                  </span>
+                </div>
               </button>
             );
           })}
         </div>
 
-        {/* Search Banner */}
-        {isSearching && (
-          <div className="shrink-0 px-3 py-1.5 bg-yellow-50 dark:bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 text-[11px] font-medium flex items-center gap-2 border-b border-yellow-100 dark:border-yellow-500/20">
-            <Search01Icon size={16} />
-            <span className="truncate">
-              {selectedCategoryItems.length} result{selectedCategoryItems.length === 1 ? '' : 's'} for “{searchQuery}”
-            </span>
-            <button
-              type="button"
-              aria-label="Clear search"
-              onClick={() => setSearchQuery('')}
-              className="ml-auto rounded p-0.5 hover:bg-yellow-100 dark:hover:bg-yellow-500/20"
-            >
-              <Cancel01Icon size={14} />
-            </button>
-          </div>
-        )}
+        {/* 3. Product Cards Grid */}
+        <div className="flex-1 min-h-0 bg-white dark:bg-zinc-900 rounded-2xl border border-stone-200/90 dark:border-zinc-800 flex flex-col overflow-hidden shadow-xs">
 
-        {/* Products Grid */}
-        <div className="flex-1 min-h-0 overflow-y-auto p-2">
-          {selectedCategoryItems.length === 0 ? (
-            <div className="h-full flex flex-col items-center justify-center dark:text-zinc-400">
-              <div className="text-4xl mb-2 opacity-50 size-20 p-6 rounded-xl border-2 border-zinc-100/10 flex justify-center items-center bg-primary/20">
-                <Search01Icon size={64} />
-              </div>
-              <p className="text-sm">No items found</p>
-              {isSearching && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="mt-2 text-xs font-semibold text-yellow-600 hover:underline dark:text-yellow-400"
-                >
-                  Clear search
-                </button>
+          <div className="shrink-0 px-4 py-2.5 border-b border-stone-200/80 dark:border-zinc-800 flex items-center justify-between bg-stone-50/50 dark:bg-zinc-900/50">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-xs text-stone-900 dark:text-zinc-100 uppercase tracking-wider">
+                {isSearching ? `Search Results for "${searchQuery}"` : (menu.find(c => c.id === selectedCategoryId)?.name || 'Menu Items')}
+              </span>
+              <span className="text-[11px] font-semibold text-stone-400 dark:text-zinc-500">
+                ({selectedCategoryItems.length})
+              </span>
+              {isRevalidating && (
+                <span
+                  title="Refreshing data…"
+                  className="size-2 rounded-full bg-amber-400 animate-pulse ml-1"
+                />
               )}
             </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 auto-rows-max">
-              {selectedCategoryItems.map(item => {
-                const isDisabled = item.isManuallyDisabled || item.isSystemDisabled;
-                const line = getCartLineForItem(item);
-                const inCart = Boolean(line);
-                return (
-                  <Card
-                    key={item.id}
-                    role="button"
-                    tabIndex={isDisabled ? -1 : 0}
-                    aria-disabled={isDisabled}
-                    aria-label={`Add ${item.name}, ₹${item.price}`}
-                    className={`cursor-pointer transition-all hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 border-zinc-200 dark:border-zinc-800 relative ${isDisabled ? 'opacity-50 grayscale cursor-not-allowed' : ''}`}
-                    onClick={() => !isDisabled && initiateAddToCart(item)}
-                    onKeyDown={(e) => {
-                      if (isDisabled) return;
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        initiateAddToCart(item);
-                      }
-                    }}
-                  >
-                    <CardContent className="p-2.5 flex flex-col h-full relative">
+            {isSearching && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline"
+              >
+                Clear Search
+              </button>
+            )}
+          </div>
+
+          <div className="flex-1 min-h-0 overflow-y-auto p-3">
+            {selectedCategoryItems.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-stone-400 dark:text-zinc-500 py-12">
+                <Search01Icon size={48} className="mb-2 opacity-30 text-amber-600 dark:text-amber-400" />
+                <p className="text-sm font-semibold">No menu items found</p>
+                <p className="text-xs opacity-70 mt-0.5">Try searching with a different keyword or choose another category.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-3 auto-rows-max">
+                {selectedCategoryItems.map(item => {
+                  const isDisabled = item.isManuallyDisabled || item.isSystemDisabled;
+                  const line = getCartLineForItem(item);
+                  const inCart = Boolean(line);
+
+                  return (
+                    <div
+                      key={item.id}
+                      role="button"
+                      tabIndex={isDisabled ? -1 : 0}
+                      onClick={() => !isDisabled && initiateAddToCart(item)}
+                      onKeyDown={(e) => {
+                        if (isDisabled) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          initiateAddToCart(item);
+                        }
+                      }}
+                      className={`group rounded-2xl bg-stone-50/50 dark:bg-zinc-800/40 border border-stone-200/80 dark:border-zinc-800/80 hover:border-amber-400/70 dark:hover:border-amber-400/50 hover:bg-white dark:hover:bg-zinc-800 hover:shadow-md transition-all duration-200 p-3 flex flex-col justify-between relative cursor-pointer select-none ${
+                        isDisabled ? 'opacity-40 grayscale cursor-not-allowed' : ''
+                      } ${inCart ? 'ring-2 ring-amber-400 bg-amber-50/20' : ''}`}
+                    >
                       <span
-                        aria-hidden="true"
-                        className={`absolute top-1.5 right-1.5 size-2.5 rounded-full border ${item.dietary === 'VEG' ? 'bg-green-500 border-green-600' :
-                          item.dietary === 'NON_VEG' ? 'bg-red-500 border-red-600' :
-                            item.dietary === 'VEGAN' ? 'bg-cyan-400 border-cyan-500' :
-                              item.dietary === 'EGG' ? 'bg-amber-400 border-amber-500' :
-                                'bg-zinc-300 border-zinc-400'
-                          }`}
+                        title={item.dietary}
+                        className={`absolute top-2.5 right-2.5 size-2.5 rounded-full border shadow-xs z-10 ${
+                          item.dietary === 'VEG'
+                            ? 'bg-emerald-500 border-emerald-600'
+                            : item.dietary === 'NON_VEG'
+                            ? 'bg-rose-500 border-rose-600'
+                            : item.dietary === 'VEGAN'
+                            ? 'bg-teal-400 border-teal-500'
+                            : item.dietary === 'EGG'
+                            ? 'bg-amber-400 border-amber-500'
+                            : 'bg-stone-300 border-stone-400'
+                        }`}
                       />
-                      <div className="flex-1 mb-1.5 pr-3">
-                        <h4 className="font-semibold text-xs text-zinc-900 dark:text-zinc-100 line-clamp-2 leading-tight">{item.name}</h4>
+
+                      <div className="h-28 w-full flex items-center justify-center rounded-xl overflow-hidden mb-2 relative">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-200"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                            }}
+                          />
+                        ) : null}
+                        <div className={`${item.image ? 'hidden' : ''} w-full h-full`}>
+                          <ItemPlaceholder dietary={item.dietary} name={item.name} />
+                        </div>
+
                         {isDisabled && (
-                          <span className="text-[9px] text-red-500 font-bold mt-0.5 inline-block uppercase">Sold Out</span>
-                        )}
-                      </div>
-                      <div className="font-bold text-sm text-zinc-900 dark:text-zinc-100 mt-auto flex justify-between items-end">
-                        ₹{item.price}
-                        {item.modifierGroups?.length > 0 && (
-                          <span className="text-[9px] font-medium text-zinc-500 bg-zinc-100 dark:bg-zinc-800 px-1 py-0.5 rounded">Options</span>
+                          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center rounded-xl">
+                            <span className="text-[10px] font-black tracking-widest text-white uppercase bg-rose-600 px-2 py-0.5 rounded-md">
+                              Sold Out
+                            </span>
+                          </div>
                         )}
                       </div>
 
-                      {/* Quick overlay for non-modifier items */}
-                      {!isDisabled && !item.modifierGroups?.length && inCart && (
-                        <div
-                          className="absolute inset-0 bg-black/40 dark:bg-black/60 rounded-lg flex items-center justify-center gap-2 opacity-0 hover:opacity-100 focus-within:opacity-100 transition-opacity"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            aria-label={`Remove one ${item.name}`}
-                            onClick={(e) => quickRemove(item, e)}
-                            className="bg-white dark:bg-zinc-900 text-red-500 p-1.5 rounded-full shadow-lg hover:scale-110 transition-transform"
-                          >
-                            <MinusSignIcon size={14} />
-                          </button>
-                          <span className="text-white font-bold text-sm bg-black/50 px-2 py-0.5 rounded-full tabular-nums">
-                            {line.quantity}
-                          </span>
-                          <button
-                            type="button"
-                            aria-label={`Add one more ${item.name}`}
-                            onClick={(e) => quickAdd(item, e)}
-                            className="bg-white dark:bg-zinc-900 text-green-500 p-1.5 rounded-full shadow-lg hover:scale-110 transition-transform"
-                          >
-                            <PlusSignIcon size={14} />
-                          </button>
+                      <div className="flex flex-col gap-1">
+                        <h4 className="font-bold text-xs text-stone-900 dark:text-zinc-100 truncate group-hover:text-amber-800 dark:group-hover:text-amber-400 transition-colors">
+                          {item.name}
+                        </h4>
+
+                        <div className="flex items-center justify-between mt-1 pt-1 border-t border-stone-200/60 dark:border-zinc-700/60">
+                          <div>
+                            <span className="font-black text-sm text-stone-900 dark:text-zinc-100 tabular-nums">
+                              ₹{item.price}
+                            </span>
+                            {item.modifierGroups?.length > 0 && (
+                              <span className="ml-1.5 text-[9px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded-md">
+                                Options
+                              </span>
+                            )}
+                          </div>
+
+                          {!isDisabled && (
+                            inCart && !item.modifierGroups?.length ? (
+                              <div
+                                onClick={e => e.stopPropagation()}
+                                className="flex items-center gap-1 bg-amber-400 text-amber-950 rounded-full px-1.5 py-0.5 shadow-xs"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={e => quickRemove(item, e)}
+                                  className="size-5 rounded-full flex items-center justify-center hover:bg-amber-950/15 transition-colors"
+                                >
+                                  <MinusSignIcon size={12} />
+                                </button>
+                                <span className="text-xs font-bold px-1 tabular-nums">
+                                  {line.quantity}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={e => quickAdd(item, e)}
+                                  className="size-5 rounded-full flex items-center justify-center hover:bg-amber-950/15 transition-colors"
+                                >
+                                  <PlusSignIcon size={12} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={e => { e.stopPropagation(); initiateAddToCart(item); }}
+                                aria-label={`Add ${item.name}`}
+                                className="size-7.5 rounded-full border border-amber-500/60 text-amber-700 dark:border-amber-400/50 dark:text-amber-400 hover:bg-amber-400 hover:text-amber-950 hover:border-amber-400 dark:hover:bg-amber-400 dark:hover:text-amber-950 flex items-center justify-center transition-all duration-200 shadow-xs active:scale-90"
+                              >
+                                <PlusSignIcon size={15} />
+                              </button>
+                            )
+                          )}
                         </div>
-                      )}
-                      {!isDisabled && inCart && (
-                        <div className="absolute -top-1.5 -left-1.5 bg-yellow-500 text-white text-[10px] font-bold size-5 rounded-full flex items-center justify-center shadow-md border-2 border-white dark:border-zinc-900 tabular-nums">
-                          {line.quantity}
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* ─── RIGHT: CART SIDEBAR ─── */}
-      <div className="flex flex-col h-full min-h-0 overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="flex flex-col h-full min-h-0 overflow-hidden rounded-2xl border border-stone-200/90 bg-white dark:border-zinc-800 dark:bg-zinc-900 shadow-sm">
 
-        {/* Cart Header */}
-        <div className="shrink-0 flex items-center justify-between border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+        {/* 1. Receipt Top Header */}
+        <div className="shrink-0 flex items-center justify-between border-b border-stone-200/80 px-4 py-3 dark:border-zinc-800 bg-stone-50/50 dark:bg-zinc-900/50">
           <div className="flex items-center gap-2">
-            <h3 className="flex items-center gap-1.5 text-sm font-bold">
-              <CashierIcon size={14} /> Current Order
-              {cart.length > 0 && (
-                <span className="rounded-full bg-yellow-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
-                  {totalItemCount}
-                </span>
-              )}
-            </h3>
-            {orderType === 'DINE_IN' ? (
-              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                selectedTableId
-                  ? 'bg-primary/10 text-primary border-primary/20'
-                  : 'bg-amber-500/10 text-amber-600 border-amber-500/30 animate-pulse'
-              }`}>
-                {selectedTableId ? `Table ${tables.find(t => t.id === selectedTableId)?.tableNumber || ''}` : 'Select Table'}
-              </span>
-            ) : (
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
-                Takeaway
-              </span>
-            )}
+            <div className="size-7 rounded-full bg-amber-400 text-amber-950 flex items-center justify-center shadow-xs">
+              <CashierIcon size={14} />
+            </div>
+            <div>
+              <h3 className="text-xs font-black text-stone-900 dark:text-zinc-100 tracking-tight">
+                Purchase Receipt <span className="text-stone-400 dark:text-zinc-500 font-normal">#{orderRefNumber}</span>
+              </h3>
+            </div>
           </div>
+
           {cart.length > 0 && (
             <button
               type="button"
               title="Clear cart"
-              aria-label="Clear cart"
               onClick={clearCart}
-              className="rounded-md p-1 text-zinc-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
+              className="size-7 rounded-lg text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors flex items-center justify-center"
             >
-              <Delete02Icon size={14} />
+              <Delete02Icon size={15} />
             </button>
           )}
         </div>
 
-        {/* Cart Items — the ONLY scrolling region */}
-        <div className="flex flex-1 min-h-0 flex-col gap-1.5 overflow-y-auto p-2">
+        {/* 2. Segmented Pill Order Type (customer name & table now in top bar) */}
+        <div className="shrink-0 p-3 border-b border-stone-200/80 dark:border-zinc-800">
+          <div className="flex items-stretch rounded-full overflow-hidden border border-stone-300 dark:border-zinc-700 divide-x divide-stone-300 dark:divide-zinc-700 shadow-sm">
+            <button
+              type="button"
+              onClick={() => setOrderType('DINE_IN')}
+              className={`flex-1 flex items-center justify-center gap-1.5 h-10 text-xs font-bold transition-colors ${
+                orderType === 'DINE_IN'
+                  ? 'bg-amber-400 text-amber-950'
+                  : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+              }`}
+            >
+              <Chair01Icon size={14} />
+              <span>Dine In</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setOrderType('TAKEAWAY'); setSelectedTableId(''); }}
+              className={`flex-1 flex items-center justify-center gap-1.5 h-10 text-xs font-bold transition-colors ${
+                orderType === 'TAKEAWAY'
+                  ? 'bg-amber-400 text-amber-950'
+                  : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+              }`}
+            >
+              <PackageProcess01Icon size={14} />
+              <span>Take Away</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 3. Order List */}
+        <div className="shrink-0 px-4 pt-2.5 pb-1 flex items-center justify-between">
+          <span className="text-xs font-black text-stone-900 dark:text-zinc-100 uppercase tracking-wider">
+            Order List
+          </span>
+          {cart.length > 0 && (
+            <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full tabular-nums">
+              {totalItemCount} items
+            </span>
+          )}
+        </div>
+
+        <div className="flex-1 min-h-0 overflow-y-auto px-3 py-1 flex flex-col gap-2">
           {cart.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center text-zinc-400">
-              <div className="text-3xl mb-2 opacity-40">🛒</div>
-              <p className="text-xs">Cart is empty</p>
-              <p className="text-[10px] mt-1 opacity-70">Tap a menu item to add it</p>
+            <div className="flex h-full flex-col items-center justify-center text-stone-400 dark:text-zinc-500 py-8">
+              <div className="size-14 rounded-full bg-stone-100 dark:bg-zinc-800 flex items-center justify-center text-2xl mb-2">
+                ☕
+              </div>
+              <p className="text-xs font-bold text-stone-600 dark:text-zinc-400">Your cart is empty</p>
+              <p className="text-[11px] text-stone-400 dark:text-zinc-500 mt-0.5">Click any menu item to begin order</p>
             </div>
           ) : (
-            cart.map((c) => {
+            cart.map(c => {
               const lineTotal = (c.menuItem.price + c.modifiers.reduce((s, m) => s + m.price, 0)) * c.quantity;
               const isNoteOpen = activeNoteId === c.lineId;
+
               return (
                 <div
                   key={c.lineId}
-                  className="shrink-0 rounded-lg border border-zinc-100 bg-zinc-50 p-2 dark:border-zinc-800/60 dark:bg-zinc-800/30"
+                  className="rounded-xl border border-stone-200/80 bg-stone-50/50 dark:border-zinc-800/80 dark:bg-zinc-800/30 p-2.5 transition-all"
                 >
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-2">
+                    <div className="size-9 rounded-lg overflow-hidden shrink-0 bg-stone-200/60 dark:bg-zinc-700/50 flex items-center justify-center text-xs">
+                      {c.menuItem.image ? (
+                        <img src={c.menuItem.image} alt="" className="size-full object-cover" />
+                      ) : (
+                        <span>🍽️</span>
+                      )}
+                    </div>
+
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-[11px] font-semibold">{c.menuItem.name}</p>
-                      {c.modifiers.length > 0 && (
-                        <p className="truncate text-[10px] text-zinc-500">+ {c.modifiers.map(m => m.name).join(', ')}</p>
-                      )}
+                      <h4 className="text-xs font-bold text-stone-900 dark:text-zinc-100 truncate">
+                        {c.menuItem.name}
+                      </h4>
+                      <div className="text-[10px] text-stone-500 dark:text-zinc-400 truncate flex items-center gap-1">
+                        <span>₹{c.menuItem.price}</span>
+                        {c.modifiers.length > 0 && (
+                          <span className="text-amber-700 dark:text-amber-400 font-medium">
+                            • {c.modifiers.map(m => m.name).join(', ')}
+                          </span>
+                        )}
+                      </div>
                       {cartNotes[c.lineId] && (
-                        <p className="truncate text-[10px] italic text-yellow-600 dark:text-yellow-400">“{cartNotes[c.lineId]}”</p>
+                        <p className="text-[10px] italic text-amber-700 dark:text-amber-400 truncate mt-0.5">
+                          “{cartNotes[c.lineId]}”
+                        </p>
                       )}
                     </div>
-                    <span className="shrink-0 text-[11px] font-bold tabular-nums">₹{lineTotal}</span>
-                    <div className="flex shrink-0 items-center rounded-md border border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900">
+
+                    <span className="shrink-0 text-xs font-black text-stone-900 dark:text-zinc-100 tabular-nums">
+                      ₹{lineTotal}
+                    </span>
+
+                    <div className="flex shrink-0 items-center rounded-lg border border-stone-200 bg-white dark:border-zinc-700 dark:bg-zinc-900 shadow-2xs">
                       <button
                         type="button"
-                        aria-label={`Decrease ${c.menuItem.name}`}
+                        aria-label="Decrease quantity"
                         onClick={() => updateQuantity(c.lineId, -1)}
-                        className="p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="p-1 text-stone-500 hover:bg-stone-100 dark:hover:bg-zinc-800 rounded-l-lg transition-colors"
                       >
-                        <MinusSignIcon size={14} />
+                        <MinusSignIcon size={12} />
                       </button>
-                      <span className="w-4 text-center text-[11px] font-bold tabular-nums">{c.quantity}</span>
+                      <span className="w-5 text-center text-[11px] font-black tabular-nums text-stone-900 dark:text-zinc-100">
+                        {c.quantity}
+                      </span>
                       <button
                         type="button"
-                        aria-label={`Increase ${c.menuItem.name}`}
+                        aria-label="Increase quantity"
                         onClick={() => updateQuantity(c.lineId, 1)}
-                        className="p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                        className="p-1 text-stone-500 hover:bg-stone-100 dark:hover:bg-zinc-800 rounded-r-lg transition-colors"
                       >
-                        <PlusSignIcon size={14} />
+                        <PlusSignIcon size={12} />
                       </button>
                     </div>
+
                     <button
                       type="button"
-                      title="Add note"
-                      aria-label={`Add note to ${c.menuItem.name}`}
-                      aria-expanded={isNoteOpen}
+                      title="Add special instructions"
                       onClick={() => setActiveNoteId(isNoteOpen ? null : c.lineId)}
-                      className={`shrink-0 rounded-md p-1 transition-colors ${isNoteOpen
-                        ? 'bg-yellow-100 text-yellow-600 dark:bg-yellow-500/20 dark:text-yellow-400'
-                        : 'text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                        }`}
+                      className={`shrink-0 size-6 rounded-md flex items-center justify-center transition-colors ${
+                        isNoteOpen || cartNotes[c.lineId]
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                          : 'text-stone-400 hover:bg-stone-100 dark:hover:bg-zinc-800'
+                      }`}
                     >
-                      <NoteEditIcon size={14} />
+                      <NoteEditIcon size={13} />
                     </button>
+
                     <button
                       type="button"
-                      title="Remove line"
-                      aria-label={`Remove ${c.menuItem.name}`}
+                      title="Remove item"
                       onClick={() => removeLine(c.lineId)}
-                      className="shrink-0 rounded-md p-1 text-zinc-400 transition-colors hover:text-red-500"
+                      className="shrink-0 size-6 rounded-md flex items-center justify-center text-stone-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                     >
-                      <Cancel01Icon size={14} />
+                      <Cancel01Icon size={13} />
                     </button>
                   </div>
+
                   {isNoteOpen && (
-                    <input
-                      autoFocus
-                      value={cartNotes[c.lineId] || ''}
-                      onChange={e => updateCartNote(c.lineId, e.target.value)}
-                      onKeyDown={e => { if (e.key === 'Enter') setActiveNoteId(null); }}
-                      placeholder="Special instructions…"
-                      aria-label="Special instructions"
-                      className="mt-1.5 w-full rounded-md border border-zinc-200 bg-white px-2 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-yellow-500 dark:border-zinc-700 dark:bg-zinc-900"
-                    />
+                    <div className="mt-2 pt-2 border-t border-stone-200/60 dark:border-zinc-700/60 flex items-center gap-1.5">
+                      <input
+                        autoFocus
+                        value={cartNotes[c.lineId] || ''}
+                        onChange={e => updateCartNote(c.lineId, e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') setActiveNoteId(null); }}
+                        placeholder="e.g., Less spicy, no onions, extra ice…"
+                        className="w-full rounded-lg border border-stone-200 bg-white px-3 py-2 text-[11px] outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 dark:border-zinc-700 dark:bg-zinc-900 transition-all"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setActiveNoteId(null)}
+                        className="text-[10px] font-bold px-2.5 py-1.5 rounded-lg bg-stone-200 hover:bg-stone-300 dark:bg-zinc-700 dark:hover:bg-zinc-600 shrink-0"
+                      >
+                        Done
+                      </button>
+                    </div>
                   )}
                 </div>
               );
@@ -1185,44 +1412,41 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
           )}
         </div>
 
-        {/* ── PINNED FOOTER ── */}
-        <div className="shrink-0 border-t border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950/50">
+        {/* 4. Financial Summary & Checkout Footer */}
+        <div className="shrink-0 border-t border-stone-200/90 bg-stone-50/80 dark:border-zinc-800 dark:bg-zinc-950/70 p-3 flex flex-col gap-3">
 
-          {/* Promo */}
-          <div className="flex items-center gap-1.5 border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
-            <span className="shrink-0 text-zinc-500"><Discount01Icon size={14} /></span>
+          {/* Promo Code Input — pill-shaped */}
+          <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-700 rounded-full pl-3.5 pr-1.5 py-1.5 shadow-2xs">
+            <Discount01Icon size={14} className="text-stone-400 shrink-0" />
             {appliedPromo ? (
-              <>
-                <span className="flex min-w-0 flex-1 items-center gap-1 truncate text-[11px] font-semibold text-green-600 dark:text-green-400">
-                  <CheckmarkCircle02Icon size={14} /> {appliedPromo.code} applied
+              <div className="flex items-center justify-between flex-1">
+                <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
+                  <CheckmarkCircle02Icon size={13} /> {appliedPromo.code} applied
                 </span>
                 <button
                   type="button"
-                  title="Remove promo"
-                  aria-label="Remove promo"
                   onClick={removePromo}
-                  className="shrink-0 rounded-md p-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                  className="size-7 rounded-full flex items-center justify-center text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors"
                 >
-                  <Cancel01Icon size={14} />
+                  <Cancel01Icon size={13} />
                 </button>
-              </>
+              </div>
             ) : (
               <>
                 <input
+                  type="text"
                   value={promoCodeInput}
                   onChange={e => setPromoCodeInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && applyPromo()}
                   placeholder="Promo code"
-                  aria-label="Promo code"
                   disabled={cart.length === 0}
-                  className="h-7 min-w-0 flex-1 rounded-md border border-zinc-200 bg-white px-2 text-[11px] uppercase tracking-wide focus:outline-none focus:ring-1 focus:ring-yellow-500 disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-900"
+                  className="min-w-0 flex-1 bg-transparent px-1 py-1.5 text-xs uppercase tracking-wide outline-none placeholder-stone-400 font-medium"
                 />
                 <button
                   type="button"
-                  title="Apply promo"
                   onClick={applyPromo}
                   disabled={cart.length === 0 || !promoCodeInput.trim()}
-                  className="shrink-0 rounded-md bg-zinc-200 px-2 py-1 text-xs text-zinc-900 transition-colors hover:bg-zinc-300 disabled:opacity-40 disabled:cursor-not-allowed dark:bg-zinc-700 dark:text-white dark:hover:bg-zinc-600"
+                  className="shrink-0 h-8 px-3.5 rounded-full bg-amber-400 text-amber-950 text-[11px] font-bold hover:bg-amber-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   Apply
                 </button>
@@ -1230,115 +1454,121 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
             )}
           </div>
 
-          {/* Totals */}
-          <div className="flex flex-col gap-0.5 px-3 py-2 text-[11px]">
-            <div className="flex justify-between text-zinc-500">
-              <span>Subtotal</span><span className="tabular-nums">₹{subTotal}</span>
+          {/* Price Breakdown */}
+          <div className="flex flex-col gap-1 text-xs">
+            <div className="flex justify-between text-stone-500 dark:text-zinc-400">
+              <span>Subtotal</span>
+              <span className="font-bold text-stone-800 dark:text-zinc-200 tabular-nums">₹{subTotal}</span>
             </div>
             {discountAmount > 0 && (
-              <div className="flex justify-between font-medium text-green-600 dark:text-green-400">
-                <span>Discount</span><span className="tabular-nums">−₹{discountAmount}</span>
+              <div className="flex justify-between text-amber-700 dark:text-amber-400 font-semibold">
+                <span>Discount</span>
+                <span className="tabular-nums">−₹{discountAmount}</span>
               </div>
             )}
             {taxAmount > 0 && (
-              <div className="flex justify-between text-zinc-500">
-                <span>Taxes</span><span className="tabular-nums">₹{taxAmount}</span>
+              <div className="flex justify-between text-stone-500 dark:text-zinc-400">
+                <span>Tax</span>
+                <span className="font-bold text-stone-800 dark:text-zinc-200 tabular-nums">₹{taxAmount}</span>
               </div>
             )}
-            <div className="mt-0.5 flex justify-between border-t border-dashed border-zinc-300 pt-1.5 text-sm font-bold text-zinc-900 dark:border-zinc-700 dark:text-zinc-100">
-              <span>Total</span><span className="tabular-nums">₹{totalAmount}</span>
+            <div className="flex justify-between items-baseline pt-1.5 border-t border-dashed border-stone-200 dark:border-zinc-800">
+              <span className="font-black text-sm text-stone-900 dark:text-zinc-100 uppercase tracking-tight">Total</span>
+              <span className="font-black text-xl text-stone-900 dark:text-zinc-100 tabular-nums">₹{totalAmount}</span>
             </div>
           </div>
 
-          {/* Checkout Buttons */}
-          <div className="space-y-2 px-3 pb-3">
-            {needsTable && cart.length > 0 && (
-              <p className="text-[10px] font-medium text-amber-600 dark:text-amber-400">
-                Please select a table to continue
-              </p>
-            )}
-            {isSelectedTableUnavailable && cart.length > 0 && (
-              <p className="text-[10px] font-medium text-red-600 dark:text-red-400">
-                Table {selectedTable?.tableNumber} is not available (occupied or reserved). Please pick an available table.
-              </p>
-            )}
-            <div className="flex flex-col gap-2">
-              <Button
-                type="button"
-                disabled={checkoutDisabled}
-                onClick={handleOpenPaymentModal}
-                title="Collect payment (Cash, UPI QR, or Split Payment)"
-                className="w-full h-12 text-base font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center justify-center gap-2 shadow-md"
-              >
-                <CashierIcon size={20} />
-                <span>{isSubmitting ? 'Processing…' : `Pay & Settle (₹${totalAmount})`}</span>
-              </Button>
+          {needsTable && cart.length > 0 && (
+            <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 text-center animate-pulse">
+              * Please select a dining table above to proceed.
+            </p>
+          )}
 
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={checkoutDisabled}
-                  onClick={() => handleCheckout('POSTPAID')}
-                  title="Send to kitchen, pay later"
-                  className="w-full"
-                >
-                  {isSubmitting ? <span className="animate-pulse">Processing…</span> : 'Postpaid'}
-                </Button>
-
-                <Button
-                  type="button"
-                  variant="secondary"
-                  disabled={checkoutDisabled}
-                  onClick={() => handleCheckout('PREPAID')}
-                  title="Fast direct cash settle"
-                  className="w-full"
-                >
-                  {isSubmitting ? <span className="animate-pulse">Processing…</span> : 'Quick Cash'}
-                </Button>
-              </div>
+          {/* Primary Checkout — full pill */}
+          <button
+            type="button"
+            disabled={checkoutDisabled}
+            onClick={handleOpenPaymentModal}
+            className={`w-full h-12 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm flex items-center justify-between pl-1.5 pr-4 shadow-md transition-all active:scale-[0.99] ${
+              checkoutDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:shadow-lg'
+            }`}
+          >
+            <div className="size-9 rounded-full bg-amber-950/15 flex items-center justify-center shrink-0">
+              <ArrowRight01Icon size={16} />
             </div>
+
+            <span className="truncate px-2 text-center tracking-wide">
+              {isSubmitting ? 'Processing…' : `Place Order  •  ₹${totalAmount}`}
+            </span>
+
+            <span className="tracking-tighter opacity-80 text-xs shrink-0 font-extrabold">
+              &gt;&gt;&gt;
+            </span>
+          </button>
+
+          {/* Quick Actions — one-sided pill segmented control */}
+          <div className="flex items-stretch rounded-full overflow-hidden border border-stone-300 dark:border-zinc-700 divide-x divide-stone-300 dark:divide-zinc-700 shadow-sm">
+            <button
+              type="button"
+              disabled={checkoutDisabled}
+              onClick={() => handleCheckout('POSTPAID')}
+              title="Send order ticket to Kitchen (Pay bill later at table/counter)"
+              className="flex-1 h-10 bg-stone-50 dark:bg-zinc-800 text-xs font-bold text-stone-700 dark:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Postpaid (KOT)
+            </button>
+            <button
+              type="button"
+              disabled={checkoutDisabled}
+              onClick={() => handleCheckout('PREPAID')}
+              title="Direct Cash Settle"
+              className="flex-1 h-10 bg-stone-100 dark:bg-zinc-800 text-xs font-bold text-stone-800 dark:text-zinc-100 hover:bg-stone-200 dark:hover:bg-zinc-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Quick Cash
+            </button>
           </div>
         </div>
       </div>
 
-      {/* ─── MODIFIER MODAL ─── */}
+      {/* ─── MODIFIER CUSTOMIZATION MODAL ─── */}
       {modifierItem && (
         <div
-          className="absolute inset-0 z-50 bg-black/50 flex items-center justify-center p-6 backdrop-blur-sm"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label={`Customize ${modifierItem.name}`}
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-full">
-            <div className="shrink-0 p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[85vh] border border-stone-200 dark:border-zinc-800">
+            <div className="shrink-0 p-4 border-b border-stone-200 dark:border-zinc-800 flex justify-between items-center bg-stone-50 dark:bg-zinc-800/50">
               <div className="min-w-0">
-                <h3 className="font-bold text-lg truncate">{modifierItem.name}</h3>
-                <p className="text-sm text-zinc-500">Customize your item</p>
+                <h3 className="font-bold text-base truncate text-stone-900 dark:text-zinc-100">{modifierItem.name}</h3>
+                <p className="text-xs text-stone-500 dark:text-zinc-400">Select your preferred options</p>
               </div>
               <button
                 type="button"
-                aria-label="Close"
                 onClick={() => setModifierItem(null)}
-                className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full"
+                className="p-1.5 hover:bg-stone-200 dark:hover:bg-zinc-700 rounded-full transition-colors"
               >
                 <Cancel01Icon size={16} />
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-5">
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 flex flex-col gap-4">
               {modifierItem.modifierGroups.map(group => {
                 const selected = selectedModifiers[group.id] || [];
                 return (
-                  <div key={group.id} className="flex flex-col gap-2.5">
+                  <div key={group.id} className="flex flex-col gap-2">
                     <div className="flex justify-between items-center">
-                      <h4 className="font-semibold text-sm">{group.name}</h4>
-                      <span className={`text-[10px] font-medium px-2 py-0.5 rounded ${group.isRequired && selected.length < group.minSelections
-                        ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
-                        : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800'
-                        }`}>
+                      <h4 className="font-bold text-xs text-stone-900 dark:text-zinc-100">{group.name}</h4>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                        group.isRequired && selected.length < group.minSelections
+                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                          : 'bg-stone-100 text-stone-500 dark:bg-zinc-800 dark:text-zinc-400'
+                      }`}>
                         {group.isRequired ? `Required (Min ${group.minSelections})` : 'Optional'} • Max {group.maxSelections}
                       </span>
                     </div>
+
                     <div className="flex flex-col gap-1.5">
                       {group.options.map(opt => {
                         const isSelected = selected.includes(opt.id);
@@ -1346,23 +1576,26 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                           <button
                             type="button"
                             key={opt.id}
-                            aria-pressed={isSelected}
                             onClick={() => handleModifierToggle(group.id, opt.id, group.maxSelections)}
-                            className={`flex justify-between items-center p-2.5 border rounded-lg transition-colors ${isSelected
-                              ? 'border-zinc-900 bg-zinc-50 dark:border-zinc-100 dark:bg-zinc-800/50'
-                              : 'border-zinc-200 hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600'
-                              }`}
+                            className={`flex justify-between items-center p-2.5 border rounded-xl transition-all ${
+                              isSelected
+                                ? 'border-amber-400 bg-amber-500/10'
+                                : 'border-stone-200 hover:border-stone-300 dark:border-zinc-700 dark:hover:border-zinc-600'
+                            }`}
                           >
-                            <div className="flex items-center gap-2.5">
-                              <div className={`w-4 h-4 border rounded flex items-center justify-center shrink-0 ${isSelected
-                                ? 'bg-zinc-900 border-zinc-900 dark:bg-zinc-100 dark:border-zinc-100 text-white dark:text-zinc-900'
-                                : 'border-zinc-300 dark:border-zinc-600'
-                                }`}>
+                            <div className="flex items-center gap-2">
+                              <div className={`size-4 rounded-full border flex items-center justify-center shrink-0 ${
+                                isSelected
+                                  ? 'bg-amber-400 border-amber-400 text-amber-950'
+                                  : 'border-stone-300 dark:border-zinc-600'
+                              }`}>
                                 {isSelected && <CheckmarkCircle02Icon size={12} />}
                               </div>
-                              <span className="font-medium text-sm text-left">{opt.name}</span>
+                              <span className="font-medium text-xs text-left text-stone-900 dark:text-zinc-100">{opt.name}</span>
                             </div>
-                            {opt.price > 0 && <span className="text-xs font-semibold tabular-nums">+₹{opt.price}</span>}
+                            {opt.price > 0 && (
+                              <span className="text-xs font-bold text-stone-800 dark:text-zinc-200 tabular-nums">+₹{opt.price}</span>
+                            )}
                           </button>
                         );
                       })}
@@ -1371,94 +1604,54 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                 );
               })}
             </div>
-            <div className="shrink-0 p-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50">
-              <Button type="button" onClick={submitModifiers} className="w-full h-11 flex items-center justify-center gap-2">
+
+            <div className="shrink-0 p-3 border-t border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-950">
+              <button
+                type="button"
+                onClick={submitModifiers}
+                className="w-full h-11 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-colors"
+              >
                 <span>Add to Cart</span>
                 <span className="tabular-nums">• ₹{modifierTotalPrice}</span>
-              </Button>
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ─── QR PAYMENT MODAL ─── */}
-      {qrModal.isOpen && (
-        <div
-          className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center p-6 backdrop-blur-md"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Scan to pay"
-        >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl p-8 max-w-sm w-full flex flex-col items-center text-center">
-            <div className="bg-yellow-50 dark:bg-yellow-500/10 p-3 rounded-full mb-4 text-3xl">📱</div>
-            <h3 className="font-bold text-xl mb-1">Scan to Pay</h3>
-            <p className="text-sm text-zinc-500 mb-4">Please scan this QR code to pay.</p>
-            <div className="bg-white p-4 rounded-xl shadow-inner border border-zinc-100 inline-block mb-4">
-              <QRCodeSVG value={qrModal.url} size={200} level="M" includeMargin={false} />
-            </div>
-            <div className="font-bold text-2xl text-zinc-900 dark:text-zinc-100 mb-2 tabular-nums">₹{totalAmount}</div>
-            <div className="flex items-center justify-center gap-2 text-yellow-600 dark:text-yellow-400 font-medium mb-6">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-yellow-500"></span>
-              </span>
-              Waiting for payment…
-            </div>
-            <div className="w-full flex gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                className="flex-1"
-                disabled={isVerifying}
-                onClick={() => setQrModal({ isOpen: false, url: '', orderId: '' })}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                className="flex-1 bg-amber-500 hover:bg-amber-600 text-white"
-                disabled={isVerifying}
-                onClick={verifyOrder}
-              >
-                {isVerifying ? 'Verifying…' : 'Verify Payment'}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── RECEIPT MODAL ─── */}
+      {/* ─── THERMAL RECEIPT MODAL ─── */}
       {receiptOrder && (
         <div
-          className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center p-6 backdrop-blur-md"
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4"
           role="dialog"
           aria-modal="true"
           aria-label="Order receipt"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl flex flex-col w-full max-w-md max-h-[90vh] overflow-hidden">
-            <div className="shrink-0 p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400">
-              <h3 className="font-bold flex items-center gap-2">
-                <CheckmarkCircle02Icon size={18} /> Order Successful
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl flex flex-col w-full max-w-md max-h-[90vh] overflow-hidden border border-stone-200 dark:border-zinc-800">
+            <div className="shrink-0 p-3.5 border-b border-stone-200 dark:border-zinc-800 flex justify-between items-center bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <CheckmarkCircle02Icon size={18} /> Order Placed Successfully
               </h3>
               <button
                 type="button"
-                aria-label="Close receipt"
                 onClick={() => setReceiptOrder(null)}
-                className="p-1 hover:bg-green-100 dark:hover:bg-green-800 rounded-full"
+                className="p-1 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 rounded-full"
               >
                 <Cancel01Icon size={16} />
               </button>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-zinc-100 dark:bg-black">
+
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 bg-stone-100 dark:bg-black">
               <Receipt ref={receiptRef} order={receiptOrder} storeData={storeData} />
             </div>
-            <div className="shrink-0 p-4 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
-              <Button type="button" variant="outline" className="flex-1" onClick={() => setReceiptOrder(null)}>
+
+            <div className="shrink-0 p-3 border-t border-stone-200 dark:border-zinc-800 flex gap-2.5 bg-stone-50 dark:bg-zinc-900">
+              <Button type="button" variant="outline" className="flex-1 rounded-full" onClick={() => setReceiptOrder(null)}>
                 Close
               </Button>
               <Button
                 type="button"
-                className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white"
+                className="flex-1 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-bold"
                 onClick={printReceipt}
               >
                 Print Receipt
@@ -1468,7 +1661,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         </div>
       )}
 
-      {/* ─── PAYMENT BIFURCATION MODAL (CASH, ONLINE QR, SPLIT) ─── */}
+      {/* ─── PAYMENT BIFURCATION MODAL ─── */}
       <PaymentBifurcationModal
         isOpen={paymentModalOpen}
         onClose={() => setPaymentModalOpen(false)}
