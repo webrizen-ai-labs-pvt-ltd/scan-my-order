@@ -193,7 +193,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
   const [cart, setCart] = useState([]);
   const [orderType, setOrderType] = useState('DINE_IN');
   const [selectedTableId, setSelectedTableId] = useState('');
-  const [customerName, setCustomerName] = useState('');
+  const [customerName, setCustomerName] = useState('Guest');
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState(null);
   const [cartNotes, setCartNotes] = useState({});
@@ -383,7 +383,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         if (
           (message.type === 'ORDER_PROCESSING' || message.type === 'ORDER_SETTLED') &&
           ((currentModal.isOpen && targetOrderId === currentModal.orderId) ||
-           (paymentModalOpenRef.current && targetOrderId === activePaymentOrderIdRef.current))
+            (paymentModalOpenRef.current && targetOrderId === activePaymentOrderIdRef.current))
         ) {
           setQrModal({ isOpen: false, url: '', orderId: '' });
           setPaymentModalOpen(false);
@@ -780,7 +780,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         if (verifyRes.data.success && (verifyRes.data.data.status === 'PROCESSING' || verifyRes.data.data.status === 'SETTLED' || verifyRes.data.data.success)) {
           isSuccess = true;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       if (!isSuccess) {
         const res = await api.get(`/stores/${selectedStoreId}/orders/${activePaymentOrderId}/payment-status`);
@@ -954,9 +954,8 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
           {orderType === 'DINE_IN' ? (
             <Select value={selectedTableId} onValueChange={setSelectedTableId}>
               <SelectTrigger
-                className={`h-10 w-full rounded-r-full bg-white dark:bg-zinc-900 border-stone-200/90 dark:border-zinc-800 px-4 text-xs font-medium ${
-                  needsTable ? 'border-amber-400' : ''
-                }`}
+                className={`h-10 w-full rounded-r-full bg-white dark:bg-zinc-900 border-stone-200/90 dark:border-zinc-800 px-4 text-xs font-medium ${needsTable ? 'border-amber-400' : ''
+                  }`}
               >
                 <SelectValue placeholder="Select Table" />
               </SelectTrigger>
@@ -1000,15 +999,14 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
               </SelectContent>
             </Select>
           ) : (
-            <div className="h-12 w-full rounded-full border border-dashed border-stone-200 dark:border-zinc-700 bg-stone-100/50 dark:bg-zinc-800/40 text-[11px] font-medium text-stone-400 dark:text-zinc-500 flex items-center justify-center gap-2 px-5">
-              <PackageProcess01Icon size={14} />
-              <span>Takeaway Order</span>
+            <div className="h-10 w-full rounded-r-full border border-dashed border-stone-200 dark:border-zinc-700 bg-stone-100/50 dark:bg-zinc-800/40 text-[11px] font-medium text-stone-400 dark:text-zinc-500 flex items-center justify-center gap-2 px-5">
+              <span>N/A</span>
             </div>
           )}
         </div>
 
         {/* 2. Category Cards Showcase */}
-        <div className="shrink-0 flex items-center gap-3 overflow-x-auto pb-1 scrollbar-none select-none">
+        <div className="shrink-0 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none select-none">
           {menu.map(cat => {
             const active = selectedCategoryId === cat.id && !isSearching;
             const count = cat.items?.length || 0;
@@ -1018,207 +1016,166 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                 key={cat.id}
                 type="button"
                 onClick={() => { setSelectedCategoryId(cat.id); setSearchQuery(''); }}
-                className={`shrink-0 w-44 h-21 rounded-2xl p-3 flex flex-col justify-between text-left transition-all duration-200 shadow-xs relative overflow-hidden group ${
-                  active
-                    ? 'bg-amber-400 dark:bg-amber-400 text-amber-950 shadow-md scale-[1.01]'
-                    : 'bg-white dark:bg-zinc-900 border border-stone-200/90 dark:border-zinc-800 text-stone-800 dark:text-zinc-200 hover:border-amber-400/60 dark:hover:border-amber-400/40 hover:bg-stone-50/70 dark:hover:bg-zinc-800/50'
-                }`}
+                className={`shrink-0 inline-flex items-center gap-2 rounded-full pl-4 pr-1.5 py-1.5 text-sm font-semibold whitespace-nowrap transition-all duration-200 shadow-xs ${active
+                    ? 'bg-amber-400 dark:bg-amber-400 text-amber-950 shadow-md'
+                    : 'bg-white dark:bg-zinc-900 border border-stone-200/90 dark:border-zinc-800 text-stone-700 dark:text-zinc-300 hover:border-amber-400/60 dark:hover:border-amber-400/40 hover:bg-stone-50/70 dark:hover:bg-zinc-800/50'
+                  }`}
               >
-                <div className={`absolute -right-2 -bottom-2 opacity-10 pointer-events-none transition-transform group-hover:scale-110 ${
-                  active ? 'text-amber-950 opacity-15' : 'text-amber-700 dark:text-white'
-                }`}>
-                  <svg className="size-18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.93V18a1 1 0 0 1-2 0v-1.07A6 6 0 0 1 6.07 12H7a1 1 0 0 1 0-2h-.93A6 6 0 0 1 11 4.07V5a1 1 0 0 1 2 0v-.93A6 6 0 0 1 17.93 9H17a1 1 0 0 1 0 2h.93A6 6 0 0 1 13 16.93z"/>
-                  </svg>
-                </div>
+                <span className="truncate max-w-[9rem]">{cat.name}</span>
 
-                <div className="flex items-center justify-between relative z-10">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    active
-                      ? 'bg-amber-950/15 text-amber-950 backdrop-blur-xs'
-                      : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20'
-                  }`}>
-                    Available
-                  </span>
-                  {active && (
-                    <span className="size-2 rounded-full bg-amber-950 animate-pulse" />
-                  )}
-                </div>
-
-                <div className="relative z-10">
-                  <h3 className={`font-bold text-sm leading-tight truncate ${active ? 'text-amber-950' : 'text-stone-900 dark:text-zinc-100'}`}>
-                    {cat.name}
-                  </h3>
-                  <span className={`text-[11px] font-medium ${active ? 'text-amber-900/80' : 'text-stone-400 dark:text-zinc-500'}`}>
-                    {count} item{count === 1 ? '' : 's'}
-                  </span>
-                </div>
+                <span
+                  className={`inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full text-[11px] font-bold tabular-nums ${active
+                      ? 'bg-amber-950/15 text-amber-950'
+                      : 'bg-stone-100 dark:bg-zinc-800 text-stone-500 dark:text-zinc-400'
+                    }`}
+                >
+                  {count}
+                </span>
               </button>
             );
           })}
         </div>
 
         {/* 3. Product Cards Grid */}
-        <div className="flex-1 min-h-0 bg-white dark:bg-zinc-900 rounded-2xl border border-stone-200/90 dark:border-zinc-800 flex flex-col overflow-hidden shadow-xs">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-3 auto-rows-max">
+  {selectedCategoryItems.map(item => {
+    const isDisabled = item.isManuallyDisabled || item.isSystemDisabled;
+    const line = getCartLineForItem(item);
+    const inCart = Boolean(line);
 
-          <div className="shrink-0 px-4 py-2.5 border-b border-stone-200/80 dark:border-zinc-800 flex items-center justify-between bg-stone-50/50 dark:bg-zinc-900/50">
-            <div className="flex items-center gap-2">
-              <span className="font-extrabold text-xs text-stone-900 dark:text-zinc-100 uppercase tracking-wider">
-                {isSearching ? `Search Results for "${searchQuery}"` : (menu.find(c => c.id === selectedCategoryId)?.name || 'Menu Items')}
-              </span>
-              <span className="text-[11px] font-semibold text-stone-400 dark:text-zinc-500">
-                ({selectedCategoryItems.length})
-              </span>
-              {isRevalidating && (
-                <span
-                  title="Refreshing data…"
-                  className="size-2 rounded-full bg-amber-400 animate-pulse ml-1"
-                />
-              )}
-            </div>
-            {isSearching && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="text-xs font-bold text-amber-700 dark:text-amber-400 hover:underline"
-              >
-                Clear Search
-              </button>
-            )}
+    return (
+      <div
+        key={item.id}
+        role="button"
+        tabIndex={isDisabled ? -1 : 0}
+        onClick={() => !isDisabled && initiateAddToCart(item)}
+        onKeyDown={(e) => {
+          if (isDisabled) return;
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            initiateAddToCart(item);
+          }
+        }}
+        className={`group relative h-48 rounded-2xl overflow-hidden border cursor-pointer select-none transition-all duration-200
+          ${isDisabled
+            ? 'opacity-60 grayscale cursor-not-allowed border-stone-200/80 dark:border-zinc-800/80'
+            : inCart
+              ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/10'
+              : 'border-stone-200/80 dark:border-zinc-800/80 hover:border-amber-400/70 dark:hover:border-amber-400/50 hover:shadow-xl hover:shadow-stone-900/10 dark:hover:shadow-black/30'
+          }`}
+      >
+        {/* ── Image layer (full bleed) ───────────────────────────── */}
+        <div className="absolute inset-0 bg-gradient-to-br from-stone-100 via-stone-50 to-stone-200 dark:from-zinc-800 dark:via-zinc-850 dark:to-zinc-900">
+          {item.image ? (
+            <img
+              src={item.image}
+              alt={item.name}
+              className="h-full w-full object-cover"
+              onError={(e) => {
+                e.currentTarget.style.display = 'none';
+                e.currentTarget.nextElementSibling?.classList.remove('hidden');
+              }}
+            />
+          ) : null}
+          <div className={`${item.image ? 'hidden' : ''} w-full h-full`}>
+            <ItemPlaceholder dietary={item.dietary} name={item.name} />
           </div>
+        </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto p-3">
-            {selectedCategoryItems.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-stone-400 dark:text-zinc-500 py-12">
-                <Search01Icon size={48} className="mb-2 opacity-30 text-amber-600 dark:text-amber-400" />
-                <p className="text-sm font-semibold">No menu items found</p>
-                <p className="text-xs opacity-70 mt-0.5">Try searching with a different keyword or choose another category.</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-3 auto-rows-max">
-                {selectedCategoryItems.map(item => {
-                  const isDisabled = item.isManuallyDisabled || item.isSystemDisabled;
-                  const line = getCartLineForItem(item);
-                  const inCart = Boolean(line);
+        {/* ── Bottom scrim: transparent → dark ───────────────────── */}
+        <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-black/85 via-black/45 to-transparent pointer-events-none" />
 
-                  return (
-                    <div
-                      key={item.id}
-                      role="button"
-                      tabIndex={isDisabled ? -1 : 0}
-                      onClick={() => !isDisabled && initiateAddToCart(item)}
-                      onKeyDown={(e) => {
-                        if (isDisabled) return;
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          initiateAddToCart(item);
-                        }
-                      }}
-                      className={`group rounded-2xl bg-stone-50/50 dark:bg-zinc-800/40 border border-stone-200/80 dark:border-zinc-800/80 hover:border-amber-400/70 dark:hover:border-amber-400/50 hover:bg-white dark:hover:bg-zinc-800 hover:shadow-md transition-all duration-200 p-3 flex flex-col justify-between relative cursor-pointer select-none ${
-                        isDisabled ? 'opacity-40 grayscale cursor-not-allowed' : ''
-                      } ${inCart ? 'ring-2 ring-amber-400 bg-amber-50/20' : ''}`}
-                    >
-                      <span
-                        title={item.dietary}
-                        className={`absolute top-2.5 right-2.5 size-2.5 rounded-full border shadow-xs z-10 ${
-                          item.dietary === 'VEG'
-                            ? 'bg-emerald-500 border-emerald-600'
-                            : item.dietary === 'NON_VEG'
-                            ? 'bg-rose-500 border-rose-600'
-                            : item.dietary === 'VEGAN'
-                            ? 'bg-teal-400 border-teal-500'
-                            : item.dietary === 'EGG'
-                            ? 'bg-amber-400 border-amber-500'
-                            : 'bg-stone-300 border-stone-400'
-                        }`}
-                      />
+        {/* ── Top badges ─────────────────────────────────────────── */}
+        <span
+          title={item.dietary}
+          className={`absolute top-2.5 left-2.5 size-3 rounded-full border-2 border-white/90 shadow-sm z-10 ${
+            item.dietary === 'VEG'
+              ? 'bg-emerald-500'
+              : item.dietary === 'NON_VEG'
+                ? 'bg-rose-500'
+                : item.dietary === 'VEGAN'
+                  ? 'bg-teal-400'
+                  : item.dietary === 'EGG'
+                    ? 'bg-amber-400'
+                    : 'bg-stone-300'
+          }`}
+        />
 
-                      <div className="h-28 w-full flex items-center justify-center rounded-xl overflow-hidden mb-2 relative">
-                        {item.image ? (
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="h-full w-full object-contain group-hover:scale-105 transition-transform duration-200"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                              e.currentTarget.nextElementSibling?.classList.remove('hidden');
-                            }}
-                          />
-                        ) : null}
-                        <div className={`${item.image ? 'hidden' : ''} w-full h-full`}>
-                          <ItemPlaceholder dietary={item.dietary} name={item.name} />
-                        </div>
+        {inCart && !isDisabled && (
+          <span className="absolute top-2.5 right-2.5 z-10 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-950 bg-amber-400 px-2 py-0.5 rounded-full shadow-sm">
+            In cart
+          </span>
+        )}
 
-                        {isDisabled && (
-                          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center rounded-xl">
-                            <span className="text-[10px] font-black tracking-widest text-white uppercase bg-rose-600 px-2 py-0.5 rounded-md">
-                              Sold Out
-                            </span>
-                          </div>
-                        )}
-                      </div>
+        {/* ── Bottom content over scrim ──────────────────────────── */}
+        <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col gap-2">
+          {item.modifierGroups?.length > 0 && !isDisabled && (
+            <span className="self-start text-[9px] font-black tracking-wider uppercase text-amber-200 bg-amber-500/25 border border-amber-300/30 backdrop-blur-sm px-1.5 py-0.5 rounded-md">
+              Options
+            </span>
+          )}
 
-                      <div className="flex flex-col gap-1">
-                        <h4 className="font-bold text-xs text-stone-900 dark:text-zinc-100 truncate group-hover:text-amber-800 dark:group-hover:text-amber-400 transition-colors">
-                          {item.name}
-                        </h4>
+          <h4 className="font-bold text-[13px] leading-snug text-white truncate drop-shadow-sm">
+            {item.name}
+          </h4>
 
-                        <div className="flex items-center justify-between mt-1 pt-1 border-t border-stone-200/60 dark:border-zinc-700/60">
-                          <div>
-                            <span className="font-black text-sm text-stone-900 dark:text-zinc-100 tabular-nums">
-                              ₹{item.price}
-                            </span>
-                            {item.modifierGroups?.length > 0 && (
-                              <span className="ml-1.5 text-[9px] font-bold text-amber-700 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded-md">
-                                Options
-                              </span>
-                            )}
-                          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-black text-[15px] text-white tabular-nums tracking-tight drop-shadow-sm">
+              <span className="text-[11px] font-bold text-white/70 mr-0.5">₹</span>
+              {item.price}
+            </span>
 
-                          {!isDisabled && (
-                            inCart && !item.modifierGroups?.length ? (
-                              <div
-                                onClick={e => e.stopPropagation()}
-                                className="flex items-center gap-1 bg-amber-400 text-amber-950 rounded-full px-1.5 py-0.5 shadow-xs"
-                              >
-                                <button
-                                  type="button"
-                                  onClick={e => quickRemove(item, e)}
-                                  className="size-5 rounded-full flex items-center justify-center hover:bg-amber-950/15 transition-colors"
-                                >
-                                  <MinusSignIcon size={12} />
-                                </button>
-                                <span className="text-xs font-bold px-1 tabular-nums">
-                                  {line.quantity}
-                                </span>
-                                <button
-                                  type="button"
-                                  onClick={e => quickAdd(item, e)}
-                                  className="size-5 rounded-full flex items-center justify-center hover:bg-amber-950/15 transition-colors"
-                                >
-                                  <PlusSignIcon size={12} />
-                                </button>
-                              </div>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={e => { e.stopPropagation(); initiateAddToCart(item); }}
-                                aria-label={`Add ${item.name}`}
-                                className="size-7.5 rounded-full border border-amber-500/60 text-amber-700 dark:border-amber-400/50 dark:text-amber-400 hover:bg-amber-400 hover:text-amber-950 hover:border-amber-400 dark:hover:bg-amber-400 dark:hover:text-amber-950 flex items-center justify-center transition-all duration-200 shadow-xs active:scale-90"
-                              >
-                                <PlusSignIcon size={15} />
-                              </button>
-                            )
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+            {!isDisabled && (
+              inCart && !item.modifierGroups?.length ? (
+                <div
+                  onClick={e => e.stopPropagation()}
+                  className="flex items-center gap-0.5 bg-amber-400 text-amber-950 rounded-full p-0.5 shadow-md ring-1 ring-white/20"
+                >
+                  <button
+                    type="button"
+                    onClick={e => quickRemove(item, e)}
+                    className="size-6 rounded-full flex items-center justify-center hover:bg-amber-950/15 active:scale-90 transition-all"
+                  >
+                    <MinusSignIcon size={12} />
+                  </button>
+                  <span className="text-xs font-black px-1.5 tabular-nums min-w-5 text-center">
+                    {line.quantity}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={e => quickAdd(item, e)}
+                    className="size-6 rounded-full flex items-center justify-center hover:bg-amber-950/15 active:scale-90 transition-all"
+                  >
+                    <PlusSignIcon size={12} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={e => { e.stopPropagation(); initiateAddToCart(item); }}
+                  aria-label={`Add ${item.name}`}
+                  className="h-7 px-3 rounded-full bg-white/95 hover:bg-amber-400 text-stone-900 hover:text-amber-950 text-[11px] font-bold flex items-center gap-1 backdrop-blur-sm shadow-md active:scale-95 transition-all duration-200"
+                >
+                  <PlusSignIcon size={13} />
+                  Add
+                </button>
+              )
             )}
           </div>
         </div>
+
+        {/* ── Sold out overlay ───────────────────────────────────── */}
+        {isDisabled && (
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-20">
+            <span className="text-[10px] font-black tracking-widest text-white uppercase bg-rose-600 px-2.5 py-1 rounded-md shadow-sm">
+              Sold Out
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  })}
+</div>
       </div>
 
       {/* ─── RIGHT: CART SIDEBAR ─── */}
@@ -1255,11 +1212,10 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
             <button
               type="button"
               onClick={() => setOrderType('DINE_IN')}
-              className={`flex-1 flex items-center justify-center gap-1.5 h-10 text-xs font-bold transition-colors ${
-                orderType === 'DINE_IN'
-                  ? 'bg-amber-400 text-amber-950'
-                  : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
-              }`}
+              className={`flex-1 flex items-center justify-center gap-1.5 h-10 text-xs font-bold transition-colors ${orderType === 'DINE_IN'
+                ? 'bg-amber-400 text-amber-950'
+                : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+                }`}
             >
               <Chair01Icon size={14} />
               <span>Dine In</span>
@@ -1267,11 +1223,10 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
             <button
               type="button"
               onClick={() => { setOrderType('TAKEAWAY'); setSelectedTableId(''); }}
-              className={`flex-1 flex items-center justify-center gap-1.5 h-10 text-xs font-bold transition-colors ${
-                orderType === 'TAKEAWAY'
-                  ? 'bg-amber-400 text-amber-950'
-                  : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
-              }`}
+              className={`flex-1 flex items-center justify-center gap-1.5 h-10 text-xs font-bold transition-colors ${orderType === 'TAKEAWAY'
+                ? 'bg-amber-400 text-amber-950'
+                : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+                }`}
             >
               <PackageProcess01Icon size={14} />
               <span>Take Away</span>
@@ -1294,9 +1249,6 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         <div className="flex-1 min-h-0 overflow-y-auto px-3 py-1 flex flex-col gap-2">
           {cart.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-stone-400 dark:text-zinc-500 py-8">
-              <div className="size-14 rounded-full bg-stone-100 dark:bg-zinc-800 flex items-center justify-center text-2xl mb-2">
-                ☕
-              </div>
               <p className="text-xs font-bold text-stone-600 dark:text-zinc-400">Your cart is empty</p>
               <p className="text-[11px] text-stone-400 dark:text-zinc-500 mt-0.5">Click any menu item to begin order</p>
             </div>
@@ -1368,11 +1320,10 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                       type="button"
                       title="Add special instructions"
                       onClick={() => setActiveNoteId(isNoteOpen ? null : c.lineId)}
-                      className={`shrink-0 size-6 rounded-md flex items-center justify-center transition-colors ${
-                        isNoteOpen || cartNotes[c.lineId]
-                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
-                          : 'text-stone-400 hover:bg-stone-100 dark:hover:bg-zinc-800'
-                      }`}
+                      className={`shrink-0 size-6 rounded-md flex items-center justify-center transition-colors ${isNoteOpen || cartNotes[c.lineId]
+                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300'
+                        : 'text-stone-400 hover:bg-stone-100 dark:hover:bg-zinc-800'
+                        }`}
                     >
                       <NoteEditIcon size={13} />
                     </button>
@@ -1416,8 +1367,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         <div className="shrink-0 border-t border-stone-200/90 bg-stone-50/80 dark:border-zinc-800 dark:bg-zinc-950/70 p-3 flex flex-col gap-3">
 
           {/* Promo Code Input — pill-shaped */}
-          <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-700 rounded-full pl-3.5 pr-1.5 py-1.5 shadow-2xs">
-            <Discount01Icon size={14} className="text-stone-400 shrink-0" />
+          <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-700 rounded-full pl-3.5 pr-1.5 py-1.5">
             {appliedPromo ? (
               <div className="flex items-center justify-between flex-1">
                 <span className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1">
@@ -1485,47 +1435,34 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
           )}
 
           {/* Primary Checkout — full pill */}
-          <button
-            type="button"
+          <Button
+            size="lg"
             disabled={checkoutDisabled}
             onClick={handleOpenPaymentModal}
-            className={`w-full h-12 rounded-full bg-amber-400 hover:bg-amber-500 text-amber-950 font-black text-sm flex items-center justify-between pl-1.5 pr-4 shadow-md transition-all active:scale-[0.99] ${
-              checkoutDisabled ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:shadow-lg'
-            }`}
           >
-            <div className="size-9 rounded-full bg-amber-950/15 flex items-center justify-center shrink-0">
-              <ArrowRight01Icon size={16} />
-            </div>
-
-            <span className="truncate px-2 text-center tracking-wide">
-              {isSubmitting ? 'Processing…' : `Place Order  •  ₹${totalAmount}`}
-            </span>
-
-            <span className="tracking-tighter opacity-80 text-xs shrink-0 font-extrabold">
-              &gt;&gt;&gt;
-            </span>
-          </button>
+            {isSubmitting ? 'Processing…' : `Place Order  •  ₹${totalAmount}`}
+          </Button>
 
           {/* Quick Actions — one-sided pill segmented control */}
-          <div className="flex items-stretch rounded-full overflow-hidden border border-stone-300 dark:border-zinc-700 divide-x divide-stone-300 dark:divide-zinc-700 shadow-sm">
-            <button
-              type="button"
+          <div className="flex overflow-hidden w-full justify-between gap-x-4">
+            <Button
               disabled={checkoutDisabled}
               onClick={() => handleCheckout('POSTPAID')}
               title="Send order ticket to Kitchen (Pay bill later at table/counter)"
-              className="flex-1 h-10 bg-stone-50 dark:bg-zinc-800 text-xs font-bold text-stone-700 dark:text-zinc-200 hover:bg-stone-100 dark:hover:bg-zinc-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              size="lg"
+              className="w-full"
             >
               Postpaid (KOT)
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
               disabled={checkoutDisabled}
               onClick={() => handleCheckout('PREPAID')}
               title="Direct Cash Settle"
-              className="flex-1 h-10 bg-stone-100 dark:bg-zinc-800 text-xs font-bold text-stone-800 dark:text-zinc-100 hover:bg-stone-200 dark:hover:bg-zinc-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              size="lg"
+              className="w-full"
             >
               Quick Cash
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -1560,11 +1497,10 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                   <div key={group.id} className="flex flex-col gap-2">
                     <div className="flex justify-between items-center">
                       <h4 className="font-bold text-xs text-stone-900 dark:text-zinc-100">{group.name}</h4>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        group.isRequired && selected.length < group.minSelections
-                          ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
-                          : 'bg-stone-100 text-stone-500 dark:bg-zinc-800 dark:text-zinc-400'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${group.isRequired && selected.length < group.minSelections
+                        ? 'bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                        : 'bg-stone-100 text-stone-500 dark:bg-zinc-800 dark:text-zinc-400'
+                        }`}>
                         {group.isRequired ? `Required (Min ${group.minSelections})` : 'Optional'} • Max {group.maxSelections}
                       </span>
                     </div>
@@ -1577,18 +1513,16 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                             type="button"
                             key={opt.id}
                             onClick={() => handleModifierToggle(group.id, opt.id, group.maxSelections)}
-                            className={`flex justify-between items-center p-2.5 border rounded-xl transition-all ${
-                              isSelected
-                                ? 'border-amber-400 bg-amber-500/10'
-                                : 'border-stone-200 hover:border-stone-300 dark:border-zinc-700 dark:hover:border-zinc-600'
-                            }`}
+                            className={`flex justify-between items-center p-2.5 border rounded-xl transition-all ${isSelected
+                              ? 'border-amber-400 bg-amber-500/10'
+                              : 'border-stone-200 hover:border-stone-300 dark:border-zinc-700 dark:hover:border-zinc-600'
+                              }`}
                           >
                             <div className="flex items-center gap-2">
-                              <div className={`size-4 rounded-full border flex items-center justify-center shrink-0 ${
-                                isSelected
-                                  ? 'bg-amber-400 border-amber-400 text-amber-950'
-                                  : 'border-stone-300 dark:border-zinc-600'
-                              }`}>
+                              <div className={`size-4 rounded-full border flex items-center justify-center shrink-0 ${isSelected
+                                ? 'bg-amber-400 border-amber-400 text-amber-950'
+                                : 'border-stone-300 dark:border-zinc-600'
+                                }`}>
                                 {isSelected && <CheckmarkCircle02Icon size={12} />}
                               </div>
                               <span className="font-medium text-xs text-left text-stone-900 dark:text-zinc-100">{opt.name}</span>
