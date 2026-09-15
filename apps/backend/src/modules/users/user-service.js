@@ -14,6 +14,7 @@ const { createHttpError } = require("../../middleware/error-handler");
 const { sendMail } = require("../../lib/mailer");
 const { env } = require("../../config/env");
 const { getWelcomeEmailTemplate } = require("../../lib/templates/welcome-email");
+const { getRoleChangeEmailTemplate } = require("../../lib/templates/role-change-email");
 const userInclude = {
   tenant: true,
   store: true
@@ -339,7 +340,10 @@ async function createUser(actor, input) {
   // Send Welcome Email if it's a Tenant Admin or Staff account
   if (role === userRoles.tenantAdmin || storeScopedRoles.includes(role)) {
     try {
-      const html = getWelcomeEmailTemplate(input.name, email, input.password, role, env.apps.adminUrl || 'http://localhost:5173');
+      const portalUrl = storeScopedRoles.includes(role) 
+        ? (env.apps.operationsUrl || 'http://localhost:5176') 
+        : (env.apps.adminUrl || 'http://localhost:5173');
+      const html = getWelcomeEmailTemplate(input.name, email, input.password, role, portalUrl);
       await sendMail({
         to: email,
         subject: "Welcome to Scan My Order",
@@ -414,6 +418,38 @@ async function updateUser(actor, id, input) {
     data,
     include: userInclude
   });
+
+  const roleChanged = data.role && data.role !== existingUser.role;
+
+  if (roleChanged) {
+    try {
+      const portalUrl = storeScopedRoles.includes(user.role)
+        ? (env.apps.operationsUrl || 'http://localhost:5176')
+        : (env.apps.adminUrl || 'http://localhost:5173');
+
+      const html = getRoleChangeEmailTemplate({
+        employeeName: user.name,
+        employeeEmail: user.email,
+        oldRole: existingUser.role,
+        newRole: user.role,
+        storeName: user.store?.name || null,
+        tenantName: user.tenant?.name || null,
+        actorName: actor.name,
+        actorRole: actor.role,
+        portalUrl,
+        employeeId: user.id
+      });
+
+      await sendMail({
+        to: user.email,
+        subject: `Official Notification: Designation & Operational Role Reassignment - ${user.tenant?.name || 'Scan My Order'}`,
+        html
+      });
+    } catch (err) {
+      console.error("Failed to send role change email:", err);
+      // Don't fail the role update if email delivery fails
+    }
+  }
 
   return serializeUser(user);
 }

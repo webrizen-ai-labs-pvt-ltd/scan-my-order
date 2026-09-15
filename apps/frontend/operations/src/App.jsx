@@ -19,6 +19,7 @@ import { StoreEdit } from './pages/store-edit';
 import { BrandSetup } from './pages/brand-setup';
 import { Subscriptions } from './pages/subscriptions';
 import { Reservations } from './pages/reservations';
+import { Employees } from './pages/employees';
 
 function App() {
   return (
@@ -63,8 +64,9 @@ function App() {
             <Route path="/dashboard/stores/:id/edit" element={<StoreEdit />} />
           </Route>
 
-          {/* Tenant Setup & Subscriptions (Tenant/Super Admin) */}
+          {/* Tenant Setup, Staff & Subscriptions (Tenant/Super Admin) */}
           <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN']} />}>
+            <Route path="/dashboard/employees" element={<Employees />} />
             <Route path="/dashboard/brand" element={<BrandSetup />} />
             <Route path="/dashboard/stores/create" element={<StoreCreate />} />
             <Route path="/dashboard/subscriptions" element={<Subscriptions />} />
