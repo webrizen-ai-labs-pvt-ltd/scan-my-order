@@ -1,118 +1,82 @@
-import { lazy, Suspense } from 'react';
 import { Link } from 'react-router-dom';
-import { useReducedMotion } from 'framer-motion';
 import { ArrowRight01Icon } from 'hugeicons-react';
 import { Button } from '@smo/ui';
 import { Reveal } from '../components/reveal';
-import { ProductMock } from '../components/product-mock';
+import { HeroStage } from '../components/hero-stage';
+import { Parallax } from '../components/parallax';
 
-// WebGL background — heavy, so split from the main bundle.
-const WebThreads = lazy(() => import('../components/web-threads'));
+const PROOF = ['No app install for guests', 'No commission on orders', 'Runs in any browser'];
 
 export function Hero() {
-  const reduce = useReducedMotion();
-
   return (
     <section className="relative overflow-hidden">
-      {/* Ambient background */}
-      {!reduce && (
-        <div className="pointer-events-none absolute inset-0 -z-10 opacity-50 dark:opacity-40">
-          <Suspense fallback={null}>
-            <WebThreads
-              color1="#EAB308"
-              color2="#FDE68A"
-              color3="#FFFFFF"
-              threadCount={5}
-              speed={0.12}
-              brightness={0.35}
-              glow={0.015}
-              grainIntensity={0.03}
-              mouseInteraction={false}
-            />
-          </Suspense>
-        </div>
-      )}
-      <div className="pointer-events-none absolute inset-0 -z-10 glow-bg" />
+      {/* Depth layers behind the content */}
+      <Parallax speed={14} className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute left-1/2 top-[-20%] h-[60rem] w-[60rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl dark:bg-primary/[0.07]" />
+      </Parallax>
+      <Parallax speed={-8} className="pointer-events-none absolute inset-0 -z-10">
+        <div className="absolute right-[-10%] top-[30%] h-[28rem] w-[28rem] rounded-full bg-amber-300/20 blur-3xl dark:bg-amber-400/10" />
+      </Parallax>
 
-      <div className="container mx-auto grid items-center gap-14 px-4 pb-24 pt-16 md:px-8 md:pt-24 lg:grid-cols-2 lg:gap-10 lg:pb-32">
+      <div className="container mx-auto grid items-center gap-12 px-4 pb-20 pt-14 md:px-8 md:pt-20 lg:grid-cols-[1.05fr_1fr] lg:gap-6 lg:pb-28 lg:pt-24">
         <div className="text-center lg:text-left">
           <Reveal immediate>
-            <span className="inline-flex items-center gap-2 border border-yellow-900/20 bg-yellow-900/10 px-3.5 py-1.5 text-xs font-medium backdrop-blur-sm dark:border-yellow-100/30 dark:bg-yellow-100/15">
-              <span className="h-1.5 w-1.5 bg-yellow-500" aria-hidden="true" />
+            <span className="glass sheen inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-medium depth-1">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+              </span>
               Now in beta · Free for early adopters
             </span>
           </Reveal>
 
           <Reveal immediate delay={0.05}>
-            <h1 className="mt-6 font-elsie text-4xl leading-[1.1] text-balance sm:text-5xl md:text-6xl xl:text-7xl">
-              Curated restaurant management{' '}
-              <span className="relative inline-block">
-                platform
-                <svg
-                  aria-hidden="true"
-                  className="absolute -bottom-1 left-0 w-full"
-                  viewBox="0 0 200 20"
-                  fill="none"
-                >
-                  <path
-                    d="M2 15C50 5 150 5 198 15"
-                    stroke="currentColor"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    className="text-yellow-400/70"
-                  />
-                </svg>
-              </span>{' '}
-              that scales with you.
+            <h1 className="mt-7 font-elsie text-[2.6rem] leading-[1.05] text-balance sm:text-6xl xl:text-7xl">
+              The restaurant OS your guests{' '}
+              <span className="relative inline-block text-transparent bg-clip-text bg-gradient-to-br from-yellow-500 via-amber-500 to-yellow-700 dark:from-yellow-300 dark:via-amber-300 dark:to-yellow-500">
+                scan into.
+              </span>
             </h1>
           </Reveal>
 
           <Reveal immediate delay={0.1}>
             <p className="mx-auto mt-6 max-w-xl text-base text-muted-foreground text-pretty md:text-lg lg:mx-0">
-              QR menus, POS, kitchen display and payments in one subscription. Bring your own payment
-              gateway and keep every rupee your guests spend.
+              QR menus, POS, kitchen display and payments — one live system, one subscription. Bring
+              your own payment gateway and keep every rupee your guests spend.
             </p>
           </Reveal>
 
-          <Reveal immediate delay={0.15} className="mt-8 flex flex-col items-center gap-3 sm:flex-row lg:justify-start sm:justify-center">
-            <Button asChild size="lg" className="w-full sm:w-auto">
+          <Reveal
+            immediate
+            delay={0.15}
+            className="mt-9 flex flex-col items-center gap-3 sm:flex-row sm:justify-center lg:justify-start"
+          >
+            <Button asChild size="lg" className="w-full depth-2 sm:w-auto">
               <Link to="/contact">
                 Apply for onboarding
                 <ArrowRight01Icon />
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="w-full sm:w-auto">
+            <Button asChild size="lg" variant="outline" className="w-full depth-1 sm:w-auto">
               <Link to="/pricing">See pricing</Link>
             </Button>
           </Reveal>
 
           <Reveal immediate delay={0.2}>
-            <ul className="mt-8 flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground lg:justify-start">
-              <li>No app install for guests</li>
-              <li>No commission on orders</li>
-              <li>Runs in any browser</li>
+            <ul className="mt-9 flex flex-wrap justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground lg:justify-start">
+              {PROOF.map((p) => (
+                <li key={p} className="inline-flex items-center gap-1.5">
+                  <span className="h-1 w-1 rounded-full bg-primary" aria-hidden="true" />
+                  {p}
+                </li>
+              ))}
             </ul>
           </Reveal>
         </div>
 
-        <Reveal immediate delay={0.15} y={24} className="px-4 pt-6 sm:px-8 lg:px-0">
-          <ProductMock />
+        <Reveal immediate delay={0.2} y={30} className="relative">
+          <HeroStage />
         </Reveal>
-      </div>
-
-      {/* Wave divider into the next section */}
-      <div className="pointer-events-none absolute bottom-0 left-0 w-full overflow-hidden leading-none" aria-hidden="true">
-        <svg viewBox="0 0 1200 120" className="block h-[50px] w-full md:h-[90px]" preserveAspectRatio="none">
-          <path
-            className="fill-background"
-            d="M0,120 L0,80 Q100,20 200,80 Q300,20 400,80 Q500,20 600,80 Q700,20 800,80 Q900,20 1000,80 Q1100,20 1200,80 L1200,120 Z"
-          />
-          <path
-            className="fill-yellow-50 dark:fill-zinc-900"
-            fillOpacity="0.6"
-            d="M0,120 L0,95 Q150,45 300,95 Q450,45 600,95 Q750,45 900,95 Q1050,45 1200,95 L1200,120 Z"
-          />
-        </svg>
       </div>
     </section>
   );

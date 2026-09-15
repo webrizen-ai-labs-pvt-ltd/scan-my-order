@@ -1,5 +1,6 @@
 import { Hero } from '../sections/hero';
 import { ReplacesStrip } from '../sections/replaces-strip';
+import { ProductTour } from '../sections/product-tour';
 import { ProblemSolution } from '../sections/problem-solution';
 import { Features } from '../sections/features';
 import { HowItWorks } from '../sections/how-it-works';
@@ -20,6 +21,7 @@ export default function HomePage() {
     <>
       <Hero />
       <ReplacesStrip />
+      <ProductTour />
       <ProblemSolution />
       <Features />
       <HowItWorks />

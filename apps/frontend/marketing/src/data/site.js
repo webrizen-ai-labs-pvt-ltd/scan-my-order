@@ -8,6 +8,7 @@ export const links = {
 };
 
 export const navLinks = [
+  { to: '/#product', label: 'Product' },
   { to: '/#features', label: 'Features' },
   { to: '/#how-it-works', label: 'How it works' },
   { to: '/pricing', label: 'Pricing' },
