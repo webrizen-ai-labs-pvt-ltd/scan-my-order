@@ -2,9 +2,9 @@
 // Edit here — sections/pages only render what's declared below.
 
 export const links = {
-  admin: import.meta.env.VITE_ADMIN_URL || 'http://localhost:5173',
+  admin: "https://operations.scanmyorder.com",
   contactEmail: import.meta.env.VITE_CONTACT_EMAIL || 'hello@scanmyorder.in',
-  ecosystem: import.meta.env.VITE_ECOSYSTEM_URL || '#',
+  ecosystem: import.meta.env.VITE_ECOSYSTEM_URL || 'https://webrizen.com',
 };
 
 export const navLinks = [
