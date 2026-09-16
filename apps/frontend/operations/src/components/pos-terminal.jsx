@@ -16,10 +16,14 @@ import {
   CheckmarkCircle02Icon,
   ArrowRight01Icon,
   Loading03Icon,
+  SparklesIcon,
+  Pot02Icon,
 } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from './receipt';
 import { PaymentBifurcationModal } from './payment-bifurcation-modal';
+import { PosOpenOrderModal } from './pos-open-order-modal';
+import { PosIngredientCustomizerModal } from './pos-ingredient-customizer-modal';
 
 /* Stable, collision-free line ids */
 let lineCounter = 0;
@@ -202,6 +206,10 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
   // Modifier Modal State
   const [modifierItem, setModifierItem] = useState(null);
   const [selectedModifiers, setSelectedModifiers] = useState({});
+
+  // Open Order & Ingredient Customizer Modal States
+  const [openOrderModalOpen, setOpenOrderModalOpen] = useState(false);
+  const [customizerItem, setCustomizerItem] = useState(null);
 
   // Checkout State
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -454,9 +462,12 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
       setAppliedPromo(null);
       return;
     }
-    const tempSubTotal = cart.reduce(
-      (acc, c) => acc + ((c.menuItem.price + c.modifiers.reduce((s, m) => s + m.price, 0)) * c.quantity), 0
-    );
+    const tempSubTotal = cart.reduce((acc, c) => {
+      const base = c.customPrice !== undefined ? c.customPrice : (c.menuItem?.price || 0);
+      const mods = (c.modifiers || []).reduce((s, m) => s + (m.price || 0), 0);
+      const ings = (c.customIngredients || []).reduce((s, i) => s + (Number(i.price) || 0), 0);
+      return acc + (base + mods + ings) * c.quantity;
+    }, 0);
     if (tempSubTotal < promo.minOrderValue) {
       pushToast(`Minimum order value for this promo is ₹${promo.minOrderValue}`, 'error');
       setAppliedPromo(null);
@@ -600,11 +611,84 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     });
   };
 
+  /* ─── Custom Dish & Ingredient Customization Handlers ────────────── */
+  const handleAddCustomDishToCart = useCallback((customDish) => {
+    const lineId = createLineId();
+    const dishName = customDish.name || customDish.customName || 'Custom Dish';
+    const dishPrice = customDish.price !== undefined ? customDish.price : (customDish.customPrice || 0);
+    const dishQuantity = Math.max(1, parseInt(customDish.quantity, 10) || 1);
+    const systemPlaceholder = {
+      id: 'custom_dish_' + Date.now(),
+      name: dishName,
+      price: dishPrice,
+      dietary: customDish.dietary || 'VEG',
+      modifierGroups: [],
+    };
+
+    setCart(prev => [
+      ...prev,
+      {
+        lineId,
+        menuItem: systemPlaceholder,
+        quantity: dishQuantity,
+        modifiers: [],
+        isCustom: true,
+        customName: dishName,
+        customPrice: dishPrice,
+        customIngredients: customDish.customIngredients || [],
+      }
+    ]);
+
+    const dishNotes = customDish.notes || customDish.kitchenNotes;
+    if (dishNotes) {
+      setCartNotes(prev => ({ ...prev, [lineId]: dishNotes }));
+    }
+
+    pushToast(`Added custom dish "${dishName}" to cart`, 'success');
+  }, [pushToast]);
+
+  const handleSaveCustomizedLine = useCallback((customizedData) => {
+    if (!customizedData?.lineId) return;
+    setCart(prev => prev.map(line => {
+      if (line.lineId === customizedData.lineId) {
+        return {
+          ...line,
+          customIngredients: customizedData.customIngredients || [],
+        };
+      }
+      return line;
+    }));
+
+    if (customizedData.notes !== undefined) {
+      setCartNotes(prev => ({
+        ...prev,
+        [customizedData.lineId]: customizedData.notes,
+      }));
+    }
+
+    pushToast('Item customized with ingredients', 'success');
+  }, [pushToast]);
+
+  const buildCartPayloadItems = useCallback(() => {
+    return cart.map((c) => ({
+      menuItemId: c.isCustom ? undefined : c.menuItem.id,
+      quantity: c.quantity,
+      modifiers: (c.modifiers || []).map(m => m.id),
+      notes: cartNotes[c.lineId] || undefined,
+      isCustom: c.isCustom || undefined,
+      customName: c.customName || undefined,
+      customPrice: c.customPrice !== undefined ? c.customPrice : undefined,
+      customIngredients: c.customIngredients && c.customIngredients.length > 0 ? c.customIngredients : undefined,
+    }));
+  }, [cart, cartNotes]);
+
   /* ─── Financial Totals ───────────────────────────────────────────── */
   const subTotal = useMemo(() =>
     cart.reduce((acc, c) => {
-      const itemTotal = c.menuItem.price + c.modifiers.reduce((s, m) => s + m.price, 0);
-      return acc + itemTotal * c.quantity;
+      const base = c.customPrice !== undefined ? c.customPrice : (c.menuItem?.price || 0);
+      const mods = (c.modifiers || []).reduce((s, m) => s + (m.price || 0), 0);
+      const ings = (c.customIngredients || []).reduce((s, i) => s + (Number(i.price) || 0), 0);
+      return acc + (base + mods + ings) * c.quantity;
     }, 0), [cart]);
 
   const discountAmount = useMemo(() => {
@@ -648,12 +732,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         customerName: customerName.trim() || undefined,
         tableId: orderType === 'DINE_IN' ? selectedTableId : undefined,
         promoCode: appliedPromo ? appliedPromo.code : undefined,
-        items: cart.map((c) => ({
-          menuItemId: c.menuItem.id,
-          quantity: c.quantity,
-          modifiers: c.modifiers.map(m => m.id),
-          notes: cartNotes[c.lineId] || undefined,
-        })),
+        items: buildCartPayloadItems(),
       };
       const res = await api.post(`/stores/${selectedStoreId}/orders`, payload);
       const orderId = res.data.data.order.id;
@@ -693,12 +772,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         origin: 'POS',
         tableId: orderType === 'DINE_IN' ? selectedTableId : undefined,
         promoCode: appliedPromo ? appliedPromo.code : undefined,
-        items: cart.map((c) => ({
-          menuItemId: c.menuItem.id,
-          quantity: c.quantity,
-          modifiers: c.modifiers.map(m => m.id),
-          notes: cartNotes[c.lineId] || undefined,
-        })),
+        items: buildCartPayloadItems(),
       };
       const res = await api.post(`/stores/${selectedStoreId}/orders`, payload);
       orderId = res.data.data.order.id;
@@ -728,12 +802,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
           origin: 'POS',
           tableId: orderType === 'DINE_IN' ? selectedTableId : undefined,
           promoCode: appliedPromo ? appliedPromo.code : undefined,
-          items: cart.map((c) => ({
-            menuItemId: c.menuItem.id,
-            quantity: c.quantity,
-            modifiers: c.modifiers.map(m => m.id),
-            notes: cartNotes[c.lineId] || undefined,
-          })),
+          items: buildCartPayloadItems(),
         };
         const res = await api.post(`/stores/${selectedStoreId}/orders`, payload);
         settledOrder = res.data.data.order;
@@ -1007,6 +1076,16 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
 
         {/* 2. Category Cards Showcase */}
         <div className="shrink-0 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none select-none">
+          <button
+            type="button"
+            onClick={() => setOpenOrderModalOpen(true)}
+            className="shrink-0 inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold whitespace-nowrap transition-all duration-200 shadow-xs bg-amber-500/15 border border-amber-500/40 hover:border-amber-500 text-amber-900 dark:text-amber-200 hover:bg-amber-500/25 active:scale-95"
+            title="Create custom dish or open order with raw materials"
+          >
+            <PlusSignIcon size={14} className="text-amber-600 dark:text-amber-400" />
+            <span>Open Dish / Custom</span>
+          </button>
+
           {menu.map(cat => {
             const active = selectedCategoryId === cat.id && !isSearching;
             const count = cat.items?.length || 0;
@@ -1254,7 +1333,10 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
             </div>
           ) : (
             cart.map(c => {
-              const lineTotal = (c.menuItem.price + c.modifiers.reduce((s, m) => s + m.price, 0)) * c.quantity;
+              const basePrice = c.customPrice !== undefined ? c.customPrice : (c.menuItem?.price || 0);
+              const modTotal = (c.modifiers || []).reduce((s, m) => s + (m.price || 0), 0);
+              const ingTotal = (c.customIngredients || []).reduce((s, i) => s + (Number(i.price) || 0), 0);
+              const lineTotal = (basePrice + modTotal + ingTotal) * c.quantity;
               const isNoteOpen = activeNoteId === c.lineId;
 
               return (
@@ -1264,7 +1346,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                 >
                   <div className="flex items-center gap-2">
                     <div className="size-9 rounded-lg overflow-hidden shrink-0 bg-stone-200/60 dark:bg-zinc-700/50 flex items-center justify-center text-xs">
-                      {c.menuItem.image ? (
+                      {c.menuItem?.image ? (
                         <img src={c.menuItem.image} alt="" className="size-full object-cover" />
                       ) : (
                         <span>🍽️</span>
@@ -1272,17 +1354,41 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <h4 className="text-xs font-bold text-stone-900 dark:text-zinc-100 truncate">
-                        {c.menuItem.name}
-                      </h4>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h4 className="text-xs font-bold text-stone-900 dark:text-zinc-100 truncate">
+                          {c.customName || c.menuItem?.name}
+                        </h4>
+                        {c.isCustom && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                            Custom Dish
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[10px] text-stone-500 dark:text-zinc-400 truncate flex items-center gap-1">
-                        <span>₹{c.menuItem.price}</span>
-                        {c.modifiers.length > 0 && (
+                        <span>₹{basePrice}</span>
+                        {c.modifiers?.length > 0 && (
                           <span className="text-amber-700 dark:text-amber-400 font-medium">
                             • {c.modifiers.map(m => m.name).join(', ')}
                           </span>
                         )}
                       </div>
+
+                      {/* Custom Ingredients Display */}
+                      {c.customIngredients && c.customIngredients.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {c.customIngredients.map((ing, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 font-medium"
+                            >
+                              <span>+{ing.name}</span>
+                              <span className="opacity-75">({ing.quantity}{ing.unit})</span>
+                              {Number(ing.price) > 0 && <span>• ₹{ing.price}</span>}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
                       {cartNotes[c.lineId] && (
                         <p className="text-[10px] italic text-amber-700 dark:text-amber-400 truncate mt-0.5">
                           “{cartNotes[c.lineId]}”
@@ -1315,6 +1421,25 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                         <PlusSignIcon size={12} />
                       </button>
                     </div>
+
+                    {/* Customize Ingredients button */}
+                    <button
+                      type="button"
+                      title="Customize ingredients & raw materials"
+                      onClick={() => setCustomizerItem({
+                        lineId: c.lineId,
+                        name: c.customName || c.menuItem?.name,
+                        customIngredients: c.customIngredients || [],
+                        notes: cartNotes[c.lineId] || '',
+                      })}
+                      className={`shrink-0 size-6 rounded-md flex items-center justify-center transition-colors ${
+                        c.customIngredients && c.customIngredients.length > 0
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
+                          : 'text-stone-400 hover:bg-stone-100 dark:hover:bg-zinc-800'
+                      }`}
+                    >
+                      <Pot02Icon size={13} />
+                    </button>
 
                     <button
                       type="button"
@@ -1607,6 +1732,23 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         isSubmitting={isSubmitting}
         isVerifying={isVerifying}
         onVerifyPayment={handleModalVerifyPayment}
+      />
+
+      {/* ─── POS OPEN ORDER MODAL (CUSTOM DISH) ─── */}
+      <PosOpenOrderModal
+        isOpen={openOrderModalOpen}
+        onClose={() => setOpenOrderModalOpen(false)}
+        storeId={selectedStoreId}
+        onAddDish={handleAddCustomDishToCart}
+      />
+
+      {/* ─── POS INGREDIENT CUSTOMIZER MODAL ─── */}
+      <PosIngredientCustomizerModal
+        isOpen={!!customizerItem}
+        onClose={() => setCustomizerItem(null)}
+        storeId={selectedStoreId}
+        item={customizerItem}
+        onSave={handleSaveCustomizedLine}
       />
     </div>
   );

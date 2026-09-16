@@ -455,7 +455,7 @@ export const Employees = () => {
           <div className="md:col-span-3">
             <label className={LABEL_CLASS}>Role</label>
             <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className={CONTROL_CLASS} className="rounded-none rounded-l-full">
+              <SelectTrigger className={`${CONTROL_CLASS} rounded-none rounded-l-full`}>
                 <SelectValue placeholder="All Roles" />
               </SelectTrigger>
               <SelectContent>
@@ -485,7 +485,7 @@ export const Employees = () => {
           <div className="md:col-span-3">
             <label className={LABEL_CLASS}>Store Location</label>
             <Select value={storeFilter} onValueChange={setStoreFilter}>
-              <SelectTrigger className={CONTROL_CLASS} className="rounded-none">
+              <SelectTrigger className={`${CONTROL_CLASS} rounded-none`}>
                 <SelectValue placeholder="All Stores" />
               </SelectTrigger>
               <SelectContent>
@@ -505,7 +505,7 @@ export const Employees = () => {
           <div className="md:col-span-2">
             <label className={LABEL_CLASS}>Status</label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className={CONTROL_CLASS} className="rounded-none rounded-r-full">
+              <SelectTrigger className={`${CONTROL_CLASS} rounded-none rounded-r-full`}>
                 <SelectValue placeholder="All Statuses" />
               </SelectTrigger>
               <SelectContent>

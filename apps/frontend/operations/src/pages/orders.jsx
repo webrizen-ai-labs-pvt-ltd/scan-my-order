@@ -8,7 +8,8 @@ import {
   Badge, Dialog, DialogContent, DialogHeader, DialogTitle,
   Skeleton
 } from '@smo/ui';
-import { Search01Icon, FilterIcon, PrinterIcon, Download01Icon, Store01Icon } from 'hugeicons-react';
+import { Search01Icon, FilterIcon, PrinterIcon, Download01Icon, Store01Icon, Edit02Icon } from 'hugeicons-react';
+import { OrderItemsEditModal } from '../components/order-items-edit-modal';
 
 const ORDER_STATUSES = ['DRAFT', 'PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED', 'SETTLED', 'CANCELLED'];
 const PAYMENT_MODELS = ['PREPAID', 'POSTPAID'];
@@ -16,6 +17,8 @@ const ORIGINS = ['POS', 'QR_MENU', 'KIOSK', 'AGGREGATOR'];
 
 export const Orders = () => {
   const { user } = useAuthStore();
+  const isManager = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState(user?.store?.id || null);
   const [currentStore, setCurrentStore] = useState(user?.store || null);
@@ -369,11 +372,32 @@ export const Orders = () => {
                   {selectedOrder.items.map((item, idx) => (
                     <div key={idx} className="flex justify-between text-sm">
                       <div>
-                        <div className="font-medium">{item.quantity}x {item.menuItem.name}</div>
+                        <div className="font-medium flex items-center gap-1.5 flex-wrap">
+                          <span>{item.quantity}x {item.customName || item.menuItem?.name}</span>
+                          {item.isCustom && (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                              Custom Dish
+                            </span>
+                          )}
+                        </div>
                         {item.modifiers?.length > 0 && (
                           <div className="text-xs text-zinc-500 pl-4 mt-0.5">
-                            {item.modifiers.map(m => m.modifierOption.name).join(', ')}
+                            {item.modifiers.map(m => m.modifierOption?.name || m.name).join(', ')}
                           </div>
+                        )}
+                        {item.customIngredients && item.customIngredients.length > 0 && (
+                          <div className="text-xs pl-4 mt-1 flex flex-wrap gap-1">
+                            {item.customIngredients.map((ing, ingIdx) => (
+                              <span key={ingIdx} className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded text-[10px] font-medium">
+                                +{ing.name} ({ing.quantity}{ing.unit})
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {item.kitchenNotes && (
+                          <p className="text-[11px] italic text-amber-700 dark:text-amber-400 pl-4 mt-0.5">
+                            “{item.kitchenNotes}”
+                          </p>
                         )}
                       </div>
                       <div className="font-medium">₹{item.priceAtOrder * item.quantity}</div>
@@ -403,16 +427,43 @@ export const Orders = () => {
                 </div>
               </div>
               
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setIsDetailsOpen(false)}>Close</Button>
-                <Button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handlePrint}>
-                  <PrinterIcon size={18} className="mr-2" /> Print Receipt
-                </Button>
+              <div className="flex flex-col gap-2">
+                {isManager && selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'SETTLED' && (
+                  <Button
+                    variant="outline"
+                    className="w-full border-amber-400/80 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 font-semibold"
+                    onClick={() => {
+                      setEditingOrder(selectedOrder);
+                    }}
+                  >
+                    <Edit02Icon size={16} className="mr-2 text-amber-600" />
+                    Edit Items (Manager)
+                  </Button>
+                )}
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setIsDetailsOpen(false)}>Close</Button>
+                  <Button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handlePrint}>
+                    <PrinterIcon size={18} className="mr-2" /> Print Receipt
+                  </Button>
+                </div>
               </div>
             </div>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Manager Order Items Edit Modal */}
+      <OrderItemsEditModal
+        isOpen={!!editingOrder}
+        onClose={() => setEditingOrder(null)}
+        storeId={selectedStoreId}
+        order={editingOrder}
+        onOrderUpdated={(updatedOrder) => {
+          setSelectedOrder(updatedOrder);
+          setEditingOrder(null);
+          fetchOrders(pagination.current);
+        }}
+      />
     </div>
   );
 };

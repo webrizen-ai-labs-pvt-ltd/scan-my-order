@@ -4,12 +4,13 @@ const { asyncHandler } = require("../../middleware/async-handler");
 const { authenticate } = require("../../middleware/auth");
 const { 
   createOrder, 
-  getActiveOrders,
-  getKdsOrders,
+  getActiveOrders, 
+  getKdsOrders, 
   updateOrderStatus, 
-  handleRazorpayWebhook,
-  getOrderById,
-  getOrderHistory
+  updateOrderItems,
+  handleRazorpayWebhook, 
+  getOrderById, 
+  getOrderHistory 
 } = require("./order-service");
 const { subscribeToStore } = require("./sse-service");
 
@@ -76,6 +77,12 @@ router.patch("/:id/status", asyncHandler(async (req, res) => {
     cashAmount,
     onlineAmount
   });
+  res.json(createApiResponse(result));
+}));
+
+// PUT /api/stores/:storeId/orders/:id/items (Manager Update Order Items)
+router.put("/:id/items", asyncHandler(async (req, res) => {
+  const result = await updateOrderItems(req.user, req.params.storeId, req.params.id, req.body);
   res.json(createApiResponse(result));
 }));
 

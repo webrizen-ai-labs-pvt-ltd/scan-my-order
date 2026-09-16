@@ -92,7 +92,7 @@ export const KDS = () => {
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (['ORDER_PROCESSING', 'ORDER_READY', 'ORDER_CANCELLED'].includes(data.type)) {
+          if (['ORDER_PROCESSING', 'ORDER_READY', 'ORDER_CANCELLED', 'ORDER_UPDATED'].includes(data.type)) {
             fetchOrders(selectedStoreId, true);
           }
         } catch(e) {}
@@ -156,15 +156,20 @@ export const KDS = () => {
     const itemMap = {};
     orders.forEach(order => {
       order.items.forEach(item => {
-        // Create a unique key for the item + modifiers
+        // Create a unique key for the item + modifiers + custom ingredients
         const modKey = (item.modifiers || []).map(m => m.modifierOption?.name).sort().join('|');
-        const key = `${item.menuItem.id}-${modKey}`;
+        const ingKey = (item.customIngredients || []).map(i => `${i.name}:${i.quantity}`).sort().join('|');
+        const itemName = item.customName || item.menuItem?.name || 'Item';
+        const key = `${item.isCustom ? 'custom_' + itemName : (item.menuItem?.id || 'item')}-${modKey}-${ingKey}`;
         if (!itemMap[key]) {
           itemMap[key] = {
+            name: itemName,
+            isCustom: item.isCustom,
             menuItem: item.menuItem,
             modifiers: item.modifiers || [],
+            customIngredients: item.customIngredients || [],
             quantity: 0,
-            dietary: item.menuItem.dietary
+            dietary: item.menuItem?.dietary || 'VEG'
           };
         }
         itemMap[key].quantity += item.quantity;
@@ -225,7 +230,14 @@ export const KDS = () => {
               </div>
               
               <div className="flex-1">
-                <h3 className="font-semibold text-lg leading-tight text-white mb-0.5">{item.menuItem?.name}</h3>
+                <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                  <h3 className="font-semibold text-lg leading-tight text-white">{item.customName || item.menuItem?.name}</h3>
+                  {item.isCustom && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      CUSTOM DISH
+                    </span>
+                  )}
+                </div>
                 
                 {item.modifiers?.length > 0 && (
                   <ul className="space-y-1 mt-1">
@@ -236,6 +248,21 @@ export const KDS = () => {
                       </li>
                     ))}
                   </ul>
+                )}
+
+                {item.customIngredients && item.customIngredients.length > 0 && (
+                  <div className="mt-2 bg-emerald-950/40 p-2.5 rounded-md border border-emerald-900/50">
+                    <span className="font-bold text-emerald-400 block uppercase text-[10px] tracking-wider mb-1">
+                      Chef Recipe / Custom Ingredients:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {item.customIngredients.map((ing, ingIdx) => (
+                        <span key={ingIdx} className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold">
+                          +{ing.name} ({ing.quantity}{ing.unit})
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 )}
                 
                 {item.kitchenNotes && (
@@ -411,13 +438,13 @@ export const KDS = () => {
                                       : 'bg-zinc-300 border-zinc-400'
                                 }`}
                             />
-                            <span className="text-xl font-bold text-white leading-none line-clamp-1">{itemGroup.menuItem?.name}</span>
+                            <span className="text-xl font-bold text-white leading-none line-clamp-1">{itemGroup.name || itemGroup.menuItem?.name}</span>
                         </div>
                         <div className="w-12 h-12 bg-yellow-500 text-yellow-950 font-black rounded-lg flex items-center justify-center text-2xl shadow-sm shrink-0 ml-4">
                           {itemGroup.quantity}
                         </div>
                       </div>
-                      <div className="flex-1 p-4 bg-zinc-900">
+                      <div className="flex-1 p-4 bg-zinc-900 space-y-3">
                         {itemGroup.modifiers?.length > 0 ? (
                           <div className="space-y-2">
                             <span className="text-xs uppercase tracking-widest font-bold text-zinc-500">Modifiers</span>
@@ -430,8 +457,23 @@ export const KDS = () => {
                               ))}
                             </ul>
                           </div>
-                        ) : (
-                          <div className="text-sm font-bold text-zinc-600 italic mt-2">No modifiers</div>
+                        ) : null}
+
+                        {itemGroup.customIngredients?.length > 0 && (
+                          <div className="space-y-1.5">
+                            <span className="text-xs uppercase tracking-widest font-bold text-emerald-400">Custom Ingredients</span>
+                            <div className="flex flex-wrap gap-1">
+                              {itemGroup.customIngredients.map((ing, ingIdx) => (
+                                <span key={ingIdx} className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded text-xs font-semibold">
+                                  +{ing.name} ({ing.quantity}{ing.unit})
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {!itemGroup.modifiers?.length && !itemGroup.customIngredients?.length && (
+                          <div className="text-sm font-bold text-zinc-600 italic">Standard preparation</div>
                         )}
                       </div>
                     </div>

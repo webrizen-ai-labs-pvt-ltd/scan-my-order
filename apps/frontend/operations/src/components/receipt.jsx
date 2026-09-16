@@ -41,18 +41,33 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           <span className="w-16 text-right">Amt</span>
         </div>
         {order.items.map((item, idx) => {
-           const itemTotal = item.priceAtOrder + item.modifiers.reduce((sum, m) => sum + m.priceAtOrder, 0);
+           const modTotal = (item.modifiers || []).reduce((sum, m) => sum + (m.priceAtOrder || 0), 0);
+           const ingTotal = (item.customIngredients || []).reduce((sum, ing) => sum + (Number(ing.price) || 0), 0);
+           const itemTotal = item.priceAtOrder + modTotal + ingTotal;
            return (
             <div key={idx} className="mb-1">
               <div className="flex justify-between">
-                <span className="flex-1 pr-2">{item.menuItem.name}</span>
+                <span className="flex-1 pr-2">
+                  {item.customName || item.menuItem?.name}
+                  {item.isCustom && ' *'}
+                </span>
                 <span className="w-10 text-center">{item.quantity}</span>
                 <span className="w-16 text-right">{(itemTotal * item.quantity).toFixed(2)}</span>
               </div>
-              {item.modifiers.length > 0 && (
+              {item.modifiers?.length > 0 && (
                 <div className="text-xs pl-2 text-zinc-600">
                   {item.modifiers.map(m => (
-                    <div key={m.id}>+ {m.modifierOption.name} ({(m.priceAtOrder).toFixed(2)})</div>
+                    <div key={m.id}>+ {m.modifierOption?.name} ({(m.priceAtOrder || 0).toFixed(2)})</div>
+                  ))}
+                </div>
+              )}
+              {item.customIngredients && item.customIngredients.length > 0 && (
+                <div className="text-xs pl-2 text-zinc-600">
+                  {item.customIngredients.map((ing, iIdx) => (
+                    <div key={iIdx}>
+                      + {ing.name} ({ing.quantity}{ing.unit})
+                      {Number(ing.price) > 0 ? ` (${Number(ing.price).toFixed(2)})` : ''}
+                    </div>
                   ))}
                 </div>
               )}

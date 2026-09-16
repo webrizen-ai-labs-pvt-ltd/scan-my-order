@@ -7,13 +7,125 @@ const { decrypt } = require("../../lib/encryption");
 const { broadcastToStore, broadcastToCustomer } = require("./sse-service");
 const { evaluateMenuItemAvailability } = require("../inventory/inventory-service");
 
+// Helper: Decode custom metadata stored in kitchenNotes
+function decodeKitchenNotes(rawNotes) {
+  if (!rawNotes) {
+    return { customName: null, customIngredients: [], kitchenNotes: null, readableNotes: null };
+  }
+  if (typeof rawNotes === 'string' && rawNotes.startsWith('__CUSTOM__:')) {
+    try {
+      const jsonStr = rawNotes.slice('__CUSTOM__:'.length);
+      const meta = JSON.parse(jsonStr);
+      const ingList = (meta.customIngredients || []).map(i => `+${i.quantity}${i.unit} ${i.name}`).join(', ');
+      const readable = [meta.customName, ingList ? `[${ingList}]` : '', meta.userNote].filter(Boolean).join(' | ');
+      return {
+        customName: meta.customName || null,
+        customIngredients: meta.customIngredients || [],
+        kitchenNotes: meta.userNote || null,
+        readableNotes: readable
+      };
+    } catch (e) {
+      return { customName: null, customIngredients: [], kitchenNotes: rawNotes, readableNotes: rawNotes };
+    }
+  }
+  return { customName: null, customIngredients: [], kitchenNotes: rawNotes, readableNotes: rawNotes };
+}
+
+// Helper: Encode custom metadata into kitchenNotes string
+function encodeKitchenNotes(customName, customIngredients, userNote) {
+  if (!customName && (!customIngredients || customIngredients.length === 0)) {
+    return userNote || null;
+  }
+  const meta = {
+    customName: customName || null,
+    customIngredients: customIngredients || [],
+    userNote: userNote || ""
+  };
+  return `__CUSTOM__:${JSON.stringify(meta)}`;
+}
+
+// Helper: Serialize order item with first-class custom fields
+function serializeOrderItem(item) {
+  if (!item) return item;
+  const decoded = decodeKitchenNotes(item.kitchenNotes);
+  return {
+    ...item,
+    customName: decoded.customName,
+    customIngredients: decoded.customIngredients,
+    kitchenNotes: decoded.kitchenNotes,
+    readableNotes: decoded.readableNotes,
+    displayName: decoded.customName || item.menuItem?.name || 'Item'
+  };
+}
+
+// Helper: Serialize full order with items
+function serializeOrder(order) {
+  if (!order) return order;
+  return {
+    ...order,
+    items: (order.items || []).map(serializeOrderItem)
+  };
+}
+
+// Helper: Get or automatically provision a store's system "Open Custom Dish" MenuItem
+async function getOrCreateSystemOpenItem(prisma, storeId) {
+  let openItem = await prisma.menuItem.findFirst({
+    where: {
+      storeId,
+      name: "Open Custom Dish"
+    }
+  });
+
+  if (!openItem) {
+    let category = await prisma.menuCategory.findFirst({
+      where: {
+        storeId,
+        name: "Custom & Open Orders"
+      }
+    });
+
+    if (!category) {
+      category = await prisma.menuCategory.create({
+        data: {
+          storeId,
+          name: "Custom & Open Orders",
+          description: "System category for bespoke open items and dynamic custom creations",
+          sortOrder: 999
+        }
+      });
+    }
+
+    openItem = await prisma.menuItem.create({
+      data: {
+        storeId,
+        categoryId: category.id,
+        name: "Open Custom Dish",
+        description: "Bespoke dish created with custom ingredients on the fly",
+        price: 0,
+        dietary: "VEG",
+        isManuallyDisabled: false,
+        isSystemDisabled: false
+      }
+    });
+  }
+
+  return openItem;
+}
+
 // Helper to deduce price from menu and calculate totals
 async function buildCartItems(prisma, storeId, itemsInput) {
   let totalAmount = 0;
   const items = [];
 
+  // Identify open / custom dishes that lack a menuItemId
+  let openItemRecord = null;
+  const hasCustomDishes = itemsInput.some(i => i.isCustom || !i.menuItemId);
+  if (hasCustomDishes) {
+    openItemRecord = await getOrCreateSystemOpenItem(prisma, storeId);
+  }
+
   // Batch fetch all required menu items and modifier options in 1 round trip
-  const menuItemIds = [...new Set(itemsInput.map(i => i.menuItemId).filter(Boolean))];
+  const menuItemIds = [...new Set(itemsInput.map(i => (i.isCustom || !i.menuItemId) ? openItemRecord?.id : i.menuItemId).filter(Boolean))];
   const allModIds = [...new Set(itemsInput.flatMap(i => i.modifiers || []).filter(Boolean))];
 
   const [menuItemsList, modifierOptionsList] = await Promise.all([
@@ -34,13 +146,15 @@ async function buildCartItems(prisma, storeId, itemsInput) {
   const modifierOptionsMap = new Map(modifierOptionsList.map(o => [o.id, o]));
   
   for (const item of itemsInput) {
-    const menuItem = menuItemsMap.get(item.menuItemId);
+    const isCustom = Boolean(item.isCustom || !item.menuItemId);
+    const targetMenuItemId = isCustom ? openItemRecord?.id : item.menuItemId;
+    const menuItem = menuItemsMap.get(targetMenuItemId);
     
-    if (!menuItem || menuItem.storeId !== storeId || menuItem.isManuallyDisabled || menuItem.isSystemDisabled) {
-      throw createHttpError(400, `MenuItem ${item.menuItemId} is not available`);
+    if (!menuItem || menuItem.storeId !== storeId || (!isCustom && (menuItem.isManuallyDisabled || menuItem.isSystemDisabled))) {
+      throw createHttpError(400, `MenuItem ${targetMenuItemId} is not available`);
     }
     
-    let itemPrice = menuItem.price;
+    let itemPrice = isCustom && item.customPrice !== undefined ? Number(item.customPrice) : menuItem.price;
     const modifiers = [];
     
     if (item.modifiers && item.modifiers.length > 0) {
@@ -58,15 +172,30 @@ async function buildCartItems(prisma, storeId, itemsInput) {
         });
       }
     }
+
+    // Add extra charges from custom ingredients if any
+    if (item.customIngredients && Array.isArray(item.customIngredients)) {
+      for (const ing of item.customIngredients) {
+        if (ing.price && Number(ing.price) > 0) {
+          itemPrice += Number(ing.price);
+        }
+      }
+    }
     
     const quantity = item.quantity || 1;
     totalAmount += itemPrice * quantity;
+
+    const encodedNotes = encodeKitchenNotes(
+      isCustom ? (item.customName || 'Open Custom Dish') : item.customName,
+      item.customIngredients || [],
+      item.kitchenNotes || ''
+    );
     
     items.push({
       menuItemId: menuItem.id,
       quantity,
-      kitchenNotes: item.kitchenNotes || null,
-      priceAtOrder: menuItem.price, // Base price snapshot
+      kitchenNotes: encodedNotes,
+      priceAtOrder: itemPrice, // Base price snapshot + ingredients
       modifiers: {
         create: modifiers
       }
@@ -570,7 +699,6 @@ async function verifyRazorpayPayment(actor, storeId, orderId, manual = false, is
 
 // 3. LIFECYCLE MANAGEMENT
 async function deductInventory(prisma, order) {
-  // Simple deduction loop for V1
   const items = await prisma.orderItem.findMany({
     where: { orderId: order.id },
     include: {
@@ -582,32 +710,15 @@ async function deductInventory(prisma, order) {
   });
   
   for (const item of items) {
-    // Deduct base item
-    for (const rec of item.menuItem.recipe) {
-      await prisma.stockTransaction.create({
-        data: {
-          materialId: rec.rawMaterialId,
-          type: 'CONSUME',
-          quantity: rec.quantity * item.quantity,
-          reference: `Order ${order.id}`
-        }
-      });
-      await prisma.rawMaterial.update({
-        where: { id: rec.rawMaterialId },
-        data: { currentStock: { decrement: rec.quantity * item.quantity } }
-      });
-      await evaluateMenuItemAvailability(prisma, rec.rawMaterialId);
-    }
-    
-    // Deduct modifiers
-    for (const mod of item.modifiers) {
-      for (const rec of mod.modifierOption.recipe) {
+    // Deduct base item recipe if any
+    if (item.menuItem?.recipe) {
+      for (const rec of item.menuItem.recipe) {
         await prisma.stockTransaction.create({
           data: {
             materialId: rec.rawMaterialId,
             type: 'CONSUME',
             quantity: rec.quantity * item.quantity,
-            reference: `Order ${order.id} Mod`
+            reference: `Order ${order.id}`
           }
         });
         await prisma.rawMaterial.update({
@@ -617,7 +728,243 @@ async function deductInventory(prisma, order) {
         await evaluateMenuItemAvailability(prisma, rec.rawMaterialId);
       }
     }
+    
+    // Deduct modifiers
+    for (const mod of item.modifiers) {
+      if (mod.modifierOption?.recipe) {
+        for (const rec of mod.modifierOption.recipe) {
+          await prisma.stockTransaction.create({
+            data: {
+              materialId: rec.rawMaterialId,
+              type: 'CONSUME',
+              quantity: rec.quantity * item.quantity,
+              reference: `Order ${order.id} Mod`
+            }
+          });
+          await prisma.rawMaterial.update({
+            where: { id: rec.rawMaterialId },
+            data: { currentStock: { decrement: rec.quantity * item.quantity } }
+          });
+          await evaluateMenuItemAvailability(prisma, rec.rawMaterialId);
+        }
+      }
+    }
+
+    // Deduct custom ingredients
+    const decoded = decodeKitchenNotes(item.kitchenNotes);
+    if (decoded.customIngredients && Array.isArray(decoded.customIngredients)) {
+      for (const ing of decoded.customIngredients) {
+        if (ing.rawMaterialId && Number(ing.quantity) > 0) {
+          const consumeQty = Number(ing.quantity) * item.quantity;
+          await prisma.stockTransaction.create({
+            data: {
+              materialId: ing.rawMaterialId,
+              type: 'CONSUME',
+              quantity: consumeQty,
+              reference: `Order ${order.id} Ingredient: ${ing.name || 'Custom'}`
+            }
+          });
+          await prisma.rawMaterial.update({
+            where: { id: ing.rawMaterialId },
+            data: { currentStock: { decrement: consumeQty } }
+          });
+          await evaluateMenuItemAvailability(prisma, ing.rawMaterialId);
+        }
+      }
+    }
   }
+}
+
+// Helper: Revert inventory deductions when items are updated
+async function revertInventoryDeduction(prisma, orderId) {
+  const items = await prisma.orderItem.findMany({
+    where: { orderId },
+    include: {
+      menuItem: { include: { recipe: true } },
+      modifiers: {
+        include: { modifierOption: { include: { recipe: true } } }
+      }
+    }
+  });
+
+  for (const item of items) {
+    if (item.menuItem?.recipe) {
+      for (const rec of item.menuItem.recipe) {
+        const restoreQty = rec.quantity * item.quantity;
+        await prisma.stockTransaction.create({
+          data: {
+            materialId: rec.rawMaterialId,
+            type: 'RESTOCK',
+            quantity: restoreQty,
+            reference: `Revert Order ${orderId} (Manager Item Edit)`
+          }
+        });
+        await prisma.rawMaterial.update({
+          where: { id: rec.rawMaterialId },
+          data: { currentStock: { increment: restoreQty } }
+        });
+        await evaluateMenuItemAvailability(prisma, rec.rawMaterialId);
+      }
+    }
+
+    for (const mod of item.modifiers) {
+      if (mod.modifierOption?.recipe) {
+        for (const rec of mod.modifierOption.recipe) {
+          const restoreQty = rec.quantity * item.quantity;
+          await prisma.stockTransaction.create({
+            data: {
+              materialId: rec.rawMaterialId,
+              type: 'RESTOCK',
+              quantity: restoreQty,
+              reference: `Revert Order ${orderId} Mod (Manager Item Edit)`
+            }
+          });
+          await prisma.rawMaterial.update({
+            where: { id: rec.rawMaterialId },
+            data: { currentStock: { increment: restoreQty } }
+          });
+          await evaluateMenuItemAvailability(prisma, rec.rawMaterialId);
+        }
+      }
+    }
+
+    const decoded = decodeKitchenNotes(item.kitchenNotes);
+    if (decoded.customIngredients && Array.isArray(decoded.customIngredients)) {
+      for (const ing of decoded.customIngredients) {
+        if (ing.rawMaterialId && Number(ing.quantity) > 0) {
+          const restoreQty = Number(ing.quantity) * item.quantity;
+          await prisma.stockTransaction.create({
+            data: {
+              materialId: ing.rawMaterialId,
+              type: 'RESTOCK',
+              quantity: restoreQty,
+              reference: `Revert Order ${orderId} Ingredient: ${ing.name || 'Custom'}`
+            }
+          });
+          await prisma.rawMaterial.update({
+            where: { id: ing.rawMaterialId },
+            data: { currentStock: { increment: restoreQty } }
+          });
+          await evaluateMenuItemAvailability(prisma, ing.rawMaterialId);
+        }
+      }
+    }
+  }
+}
+
+// 4. MANAGER UPDATE ORDER ITEMS (POST-PLACEMENT EDITING)
+async function updateOrderItems(actor, storeId, orderId, input) {
+  const allowedRoles = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'];
+  if (!allowedRoles.includes(actor.role)) {
+    throw createHttpError(403, "Access denied. Only Store Managers and Administrators can modify items in placed orders.");
+  }
+  await verifyStoreAccess(actor, storeId);
+
+  const prisma = getPrismaClient();
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      promoCode: true
+    }
+  });
+
+  if (!order || order.storeId !== storeId) {
+    throw createHttpError(404, "Order not found");
+  }
+
+  if (order.status === 'CANCELLED') {
+    throw createHttpError(400, "Cannot modify items in a cancelled order");
+  }
+
+  const { items: itemsInput } = input;
+  if (!itemsInput || !Array.isArray(itemsInput) || itemsInput.length === 0) {
+    throw createHttpError(400, "Order must contain at least one item");
+  }
+
+  const { items: newItemsData, totalAmount: newSubTotal } = await buildCartItems(prisma, storeId, itemsInput);
+
+  // Recalculate promo discount if applicable
+  let discountAmount = 0;
+  if (order.promoCodeId && order.promoCode) {
+    const promo = order.promoCode;
+    if (newSubTotal >= promo.minOrderValue) {
+      if (promo.discountType === 'PERCENTAGE') {
+        discountAmount = Math.round(newSubTotal * (promo.discountValue / 100));
+        if (promo.maxDiscount && discountAmount > promo.maxDiscount) {
+          discountAmount = promo.maxDiscount;
+        }
+      } else {
+        discountAmount = promo.discountValue;
+      }
+      if (discountAmount > newSubTotal) discountAmount = newSubTotal;
+    }
+  }
+
+  // Recalculate taxes
+  const store = await prisma.store.findUnique({ where: { id: storeId } });
+  let taxAmount = 0;
+  if (store.taxRules && Array.isArray(store.taxRules)) {
+    store.taxRules.forEach(tax => {
+      taxAmount += Math.round(newSubTotal * (tax.rate / 100));
+    });
+  }
+
+  const newTotalAmount = newSubTotal - discountAmount + taxAmount;
+
+  // Inventory reconciliation:
+  const wasDeducted = ['PROCESSING', 'READY', 'SERVED', 'COMPLETED', 'BILL_REQUESTED'].includes(order.status);
+  if (wasDeducted) {
+    await revertInventoryDeduction(prisma, order.id);
+  }
+
+  // Replace order items atomically in transaction
+  await prisma.$transaction(async (tx) => {
+    // Delete existing items (modifiers cascade delete)
+    await tx.orderItem.deleteMany({
+      where: { orderId: order.id }
+    });
+
+    // Create new items
+    for (const itm of newItemsData) {
+      await tx.orderItem.create({
+        data: {
+          orderId: order.id,
+          menuItemId: itm.menuItemId,
+          quantity: itm.quantity,
+          kitchenNotes: itm.kitchenNotes,
+          priceAtOrder: itm.priceAtOrder,
+          modifiers: itm.modifiers
+        }
+      });
+    }
+
+    // Update order totals
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        subTotal: newSubTotal,
+        taxAmount,
+        discountAmount,
+        totalAmount: newTotalAmount,
+        updatedAt: new Date()
+      }
+    });
+  });
+
+  // Re-deduct inventory with updated items if order was already in processing
+  if (wasDeducted) {
+    await deductInventory(prisma, { id: order.id });
+  }
+
+  const updatedOrder = await getOrderById(storeId, order.id);
+
+  // Broadcast real-time SSE updates to POS, KDS, Waiter, and Customer
+  broadcastToStore(storeId, 'ORDER_UPDATED', updatedOrder);
+  if (order.customerId) {
+    broadcastToCustomer(order.customerId, 'ORDER_UPDATED', updatedOrder);
+  }
+
+  return updatedOrder;
 }
 
 async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = false, tenderDetails = null) {
@@ -701,7 +1048,7 @@ async function getKdsOrders(actor, storeId) {
     orderBy: { createdAt: 'asc' }
   });
   
-  return orders;
+  return orders.map(serializeOrder);
 }
 
 // 5. STAFF INBOX & POS ACTIVE ORDERS
@@ -716,7 +1063,7 @@ async function getActiveOrders(actor, storeId, statuses = []) {
     where.status = { notIn: ['SETTLED', 'CANCELLED'] }; // default to all active
   }
   
-  return await prisma.order.findMany({
+  const orders = await prisma.order.findMany({
     where,
     include: {
       table: true,
@@ -732,6 +1079,8 @@ async function getActiveOrders(actor, storeId, statuses = []) {
     },
     orderBy: { createdAt: 'desc' }
   });
+
+  return orders.map(serializeOrder);
 }
 
 async function getOrderHistory(actor, storeId, filters = {}) {
@@ -789,7 +1138,7 @@ async function getOrderHistory(actor, storeId, filters = {}) {
   ]);
   
   return {
-    orders,
+    orders: orders.map(serializeOrder),
     pagination: {
       total,
       pages: Math.ceil(total / limit),
@@ -818,7 +1167,7 @@ async function getOrderById(storeId, orderId) {
   if (!order || order.storeId !== storeId) {
     throw createHttpError(404, "Order not found");
   }
-  return order;
+  return serializeOrder(order);
 }
 
 // 6. TABLE SESSION SETTLEMENT & BILLING
@@ -1206,6 +1555,7 @@ module.exports = {
   createOrder,
   handleRazorpayWebhook,
   updateOrderStatus,
+  updateOrderItems,
   getKdsOrders,
   getActiveOrders,
   generatePaymentLink,

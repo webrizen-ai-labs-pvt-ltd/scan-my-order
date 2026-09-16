@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import api from '../lib/api';
 import { Card, CardContent, Button, Skeleton } from '@smo/ui';
-import { Money01Icon, QrCodeIcon, Search01Icon, Cancel01Icon, Tick02Icon, PrinterIcon, UserGroupIcon } from 'hugeicons-react';
+import { Money01Icon, QrCodeIcon, Search01Icon, Cancel01Icon, Tick02Icon, PrinterIcon, UserGroupIcon, Edit02Icon } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from './receipt';
 import { PaymentBifurcationModal } from './payment-bifurcation-modal';
+import { OrderItemsEditModal } from './order-items-edit-modal';
+import { useAuthStore } from '../store/authStore';
 
 /* ─── Global Orders SWR Cache ─────────────────────────────────────── */
 const activeOrdersCache = {
@@ -13,6 +15,10 @@ const activeOrdersCache = {
 };
 
 export const POSActiveOrders = ({ selectedStoreId, token }) => {
+  const { user } = useAuthStore();
+  const isManager = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role);
+  const [editingOrder, setEditingOrder] = useState(null);
+
   const cachedOrders = selectedStoreId ? activeOrdersCache.orders.get(selectedStoreId) : null;
   const cachedStoreData = selectedStoreId ? activeOrdersCache.storeData.get(selectedStoreId) : null;
 
@@ -627,18 +633,34 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
                   <div className="p-4 flex-1 overflow-y-auto max-h-[220px] space-y-3">
                     {group.orders.map((order, ordIdx) => (
                       <div key={order.id} className={group.orders.length > 1 ? "border-b pb-2 last:border-b-0 border-zinc-100 dark:border-zinc-800" : ""}>
-                        {group.orders.length > 1 && (
-                          <div className="text-[10px] uppercase font-bold text-zinc-400 mb-1 flex justify-between">
-                            <span>Batch #{ordIdx + 1}</span>
+                        <div className="text-[10px] uppercase font-bold text-zinc-400 mb-1.5 flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span>{group.orders.length > 1 ? `Batch #${ordIdx + 1}` : `Order #${order.id.slice(-4).toUpperCase()}`}</span>
                             <span>{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
-                        )}
+                          {isManager && (
+                            <button
+                              type="button"
+                              onClick={() => setEditingOrder(order)}
+                              className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-700 dark:text-amber-400 hover:text-amber-900 dark:hover:text-amber-200 px-2 py-0.5 rounded-full bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 transition-all cursor-pointer"
+                              title="Manager: Edit Order Items"
+                            >
+                              <Edit02Icon size={11} />
+                              <span>Edit Items</span>
+                            </button>
+                          )}
+                        </div>
                         {order.items.map((item, idx) => (
                           <div key={idx} className="flex flex-col text-sm mb-1.5 last:mb-0">
                             <div className="flex justify-between items-start">
                               <span className="text-zinc-800 dark:text-zinc-200 leading-tight">
                                 <span className="font-semibold text-zinc-500 w-6 inline-block">{item.quantity}x</span> 
-                                <span className="font-medium">{item.menuItem?.name}</span>
+                                <span className="font-medium">{item.customName || item.menuItem?.name}</span>
+                                {item.isCustom && (
+                                  <span className="ml-1.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
+                                    Custom Dish
+                                  </span>
+                                )}
                               </span>
                               <span className="text-zinc-500 font-medium">₹{item.priceAtOrder * item.quantity}</span>
                             </div>
@@ -650,6 +672,20 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
                                   </span>
                                 ))}
                               </div>
+                            )}
+                            {item.customIngredients && item.customIngredients.length > 0 && (
+                              <div className="text-xs text-zinc-500 pl-6 mt-1 flex flex-wrap gap-1">
+                                {item.customIngredients.map((ing, ingIdx) => (
+                                  <span key={ingIdx} className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded text-[10px] font-medium">
+                                    +{ing.name} ({ing.quantity}{ing.unit})
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            {item.kitchenNotes && (
+                              <p className="text-[10px] italic text-amber-700 dark:text-amber-400 pl-6 mt-0.5 truncate">
+                                “{item.kitchenNotes}”
+                              </p>
                             )}
                           </div>
                         ))}
@@ -803,6 +839,18 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
         isSubmitting={isSubmittingPayment}
         isVerifying={isVerifying}
         onVerifyPayment={handleModalVerifyPayment}
+      />
+
+      {/* ─── MANAGER ORDER ITEMS EDIT MODAL ─── */}
+      <OrderItemsEditModal
+        isOpen={!!editingOrder}
+        onClose={() => setEditingOrder(null)}
+        storeId={selectedStoreId}
+        order={editingOrder}
+        onOrderUpdated={(_updatedOrder) => {
+          setEditingOrder(null);
+          fetchOrders(selectedStoreId, true);
+        }}
       />
     </div>
   );
