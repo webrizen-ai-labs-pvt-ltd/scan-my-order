@@ -57,10 +57,10 @@ export default function PricingPage() {
       </section>
 
       {/* Comparison */}
-      <section className="border-t bg-yellow-50/40 dark:bg-zinc-900/40">
+      <section className="relative">
         <div className="container mx-auto px-4 py-20 md:px-8 md:py-28">
           <SectionHeading eyebrow="Compare" title="What’s in each plan." />
-          <Reveal className="mt-12 overflow-x-auto soft-border bg-card shadow-soft-in dark:shadow-soft-in-dark">
+          <Reveal className="mt-12 overflow-x-auto glass sheen depth-2 rounded-[var(--radius)]">
             <table className="w-full min-w-[640px] text-sm">
               <caption className="sr-only">Feature comparison across plans</caption>
               <thead>
@@ -102,7 +102,7 @@ export default function PricingPage() {
         <SectionHeading eyebrow="Before you decide" title="Common billing questions." />
         <div className="mx-auto mt-12 grid max-w-4xl gap-5 md:grid-cols-2">
           {PRICING_FAQS.map((f, i) => (
-            <Reveal key={f.q} delay={i * 0.05} className="soft-border bg-card p-6 shadow-soft-in dark:shadow-soft-in-dark">
+            <Reveal key={f.q} delay={i * 0.05} className="glass sheen depth-2 rounded-[var(--radius)] p-6">
               <h3 className="font-semibold">{f.q}</h3>
               <p className="mt-2 text-sm text-muted-foreground text-pretty">{f.a}</p>
             </Reveal>

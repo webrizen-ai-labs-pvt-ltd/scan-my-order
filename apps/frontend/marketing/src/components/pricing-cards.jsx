@@ -5,12 +5,21 @@ import { Button } from '@smo/ui';
 import { cn } from '@smo/ui/lib/utils';
 import { pricing } from '../data/site';
 import { RevealGroup, RevealItem } from '../components/reveal';
+import { Tilt, TiltLayer } from '../components/tilt';
+import { Panel } from '../components/panel';
 
 const formatINR = (n) => n.toLocaleString('en-IN');
 
+// The highlighted plan sits forward in Z; neighbours angle toward it.
+const POSE = {
+  left: 'lg:[transform:perspective(1600px)_rotateY(8deg)_translateZ(-30px)] lg:origin-right',
+  center: 'lg:[transform:perspective(1600px)_translateZ(30px)]',
+  right: 'lg:[transform:perspective(1600px)_rotateY(-8deg)_translateZ(-30px)] lg:origin-left',
+};
+
 function IntervalToggle({ value, onChange }) {
   return (
-    <div role="radiogroup" aria-label="Billing interval" className="inline-flex soft-border bg-card p-1">
+    <div role="radiogroup" aria-label="Billing interval" className="glass sheen depth-1 inline-flex rounded-full p-1">
       {pricing.intervals.map((i) => {
         const active = value === i.key;
         return (
@@ -21,9 +30,9 @@ function IntervalToggle({ value, onChange }) {
             aria-checked={active}
             onClick={() => onChange(i.key)}
             className={cn(
-              'relative min-h-[40px] px-4 text-sm font-medium transition-colors duration-200',
-              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring',
-              active ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+              'relative min-h-[40px] rounded-full px-4 text-sm font-medium transition-all duration-200',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              active ? 'bg-primary text-primary-foreground depth-1' : 'text-muted-foreground hover:text-foreground'
             )}
           >
             {i.label}
@@ -70,6 +79,7 @@ function Price({ plan, interval }) {
 
 export function PricingCards({ className }) {
   const [interval, setInterval] = useState('MONTHLY');
+  const poses = ['left', 'center', 'right'];
 
   return (
     <div className={className}>
@@ -77,44 +87,53 @@ export function PricingCards({ className }) {
         <IntervalToggle value={interval} onChange={setInterval} />
       </div>
 
-      <RevealGroup className="mt-10 grid gap-5 lg:grid-cols-3" stagger={0.08}>
-        {pricing.plans.map((plan) => (
-          <RevealItem
-            key={plan.key}
-            className={cn(
-              'relative flex flex-col p-7 soft-border bg-card shadow-soft-in dark:shadow-soft-in-dark',
-              plan.highlighted && 'border-yellow-500/60 ring-1 ring-yellow-500/40 lg:-my-3 lg:py-10'
-            )}
-          >
-            {plan.badge && (
-              <span className="absolute -top-3 left-7 bg-primary px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary-foreground">
-                {plan.badge}
-              </span>
-            )}
-            <h3 className="text-lg font-semibold">{plan.name}</h3>
-            <p className="mt-1 text-sm text-muted-foreground">{plan.tagline}</p>
+      <RevealGroup className="mt-12 grid gap-6 lg:grid-cols-3 lg:gap-4" stagger={0.08}>
+        {pricing.plans.map((plan, i) => (
+          <RevealItem key={plan.key}>
+            <div className={cn('h-full', POSE[poses[i]])}>
+              <Tilt max={5} lift={plan.highlighted ? 20 : 12} className="h-full">
+                <Panel
+                  depth={plan.highlighted ? 3 : 2}
+                  className={cn(
+                    'relative flex h-full flex-col p-7',
+                    plan.highlighted && 'border-primary/50 glow ring-1 ring-primary/40'
+                  )}
+                >
+                  {plan.badge && (
+                    <TiltLayer depth={40} className="absolute -top-3 left-7">
+                      <span className="rounded-full bg-primary px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-primary-foreground depth-1">
+                        {plan.badge}
+                      </span>
+                    </TiltLayer>
+                  )}
+                  <TiltLayer depth={16}>
+                    <h3 className="text-lg font-semibold">{plan.name}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{plan.tagline}</p>
+                    <Price plan={plan} interval={interval} />
+                  </TiltLayer>
 
-            <Price plan={plan} interval={interval} />
+                  <TiltLayer depth={28} className="mt-6">
+                    <Button asChild className="w-full depth-1" variant={plan.highlighted ? 'default' : 'outline'}>
+                      <Link to="/contact">{plan.cta}</Link>
+                    </Button>
+                  </TiltLayer>
 
-            <Button asChild className="mt-6 w-full" variant={plan.highlighted ? 'default' : 'outline'}>
-              <Link to="/contact">{plan.cta}</Link>
-            </Button>
-
-            <ul className="mt-7 space-y-2.5 border-t pt-6 text-sm">
-              {plan.features.map((f) => (
-                <li key={f} className="flex items-start gap-2.5">
-                  <Tick02Icon size={16} className="mt-0.5 shrink-0 text-yellow-700 dark:text-yellow-400" aria-hidden="true" />
-                  {f}
-                </li>
-              ))}
-            </ul>
+                  <ul className="mt-7 space-y-2.5 border-t border-border/60 pt-6 text-sm">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2.5">
+                        <Tick02Icon size={16} className="mt-0.5 shrink-0 text-yellow-700 dark:text-yellow-400" aria-hidden="true" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </Panel>
+              </Tilt>
+            </div>
           </RevealItem>
         ))}
       </RevealGroup>
 
-      <p className="mt-8 text-center text-xs text-muted-foreground">
-        Prices exclude GST. {pricing.betaNote}
-      </p>
+      <p className="mt-8 text-center text-xs text-muted-foreground">Prices exclude GST. {pricing.betaNote}</p>
     </div>
   );
 }

@@ -1,21 +1,38 @@
+import { motion, useReducedMotion } from 'framer-motion';
 import { Cancel01Icon } from 'hugeicons-react';
 import { replaces } from '../data/site';
-import { Reveal } from '../components/reveal';
 
+/**
+ * A tilted ribbon that scrolls the list of tools one subscription replaces.
+ * Duplicated once so the marquee loops seamlessly; static under reduced motion.
+ */
 export function ReplacesStrip() {
+  const reduce = useReducedMotion();
+  const items = [...replaces, ...replaces];
+
   return (
-    <section className="border-y bg-yellow-50/60 dark:bg-zinc-900/60">
-      <Reveal className="container mx-auto flex flex-col items-center gap-4 px-4 py-8 md:flex-row md:justify-between md:px-8">
-        <p className="text-sm font-medium text-muted-foreground">One subscription replaces</p>
-        <ul className="flex flex-wrap justify-center gap-x-6 gap-y-3 text-sm">
-          {replaces.map((tool) => (
-            <li key={tool} className="inline-flex items-center gap-1.5">
-              <Cancel01Icon size={14} className="text-yellow-700 dark:text-yellow-400" aria-hidden="true" />
-              <span className="line-through decoration-yellow-500/70 decoration-[1.5px]">{tool}</span>
-            </li>
-          ))}
-        </ul>
-      </Reveal>
+    <section className="relative -my-4 overflow-hidden py-10" aria-label="Tools Scan My Order replaces">
+      <div className="scene">
+        <div className="glass sheen depth-2 mx-[-4%] flex items-center gap-8 py-4 [transform:rotateX(8deg)_rotateZ(-1.5deg)] [transform-origin:50%_50%]">
+          <p className="hidden shrink-0 pl-[6%] text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground sm:block">
+            Replaces
+          </p>
+          <div className="relative flex-1 overflow-hidden [mask-image:linear-gradient(to_right,transparent,#000_8%,#000_92%,transparent)]">
+            <motion.ul
+              className="flex w-max gap-10 pr-10"
+              animate={reduce ? undefined : { x: ['0%', '-50%'] }}
+              transition={{ duration: 28, ease: 'linear', repeat: Infinity }}
+            >
+              {items.map((tool, i) => (
+                <li key={`${tool}-${i}`} className="inline-flex items-center gap-2 whitespace-nowrap text-sm" aria-hidden={i >= replaces.length}>
+                  <Cancel01Icon size={14} className="text-yellow-700 dark:text-yellow-400" aria-hidden="true" />
+                  <span className="line-through decoration-primary/70 decoration-[1.5px]">{tool}</span>
+                </li>
+              ))}
+            </motion.ul>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
