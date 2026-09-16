@@ -1075,7 +1075,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
         </div>
 
         {/* 2. Category Cards Showcase */}
-        <div className="shrink-0 flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none select-none">
+        <div className="shrink-0 flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar select-none">
           <button
             type="button"
             onClick={() => setOpenOrderModalOpen(true)}
@@ -1096,16 +1096,16 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                 type="button"
                 onClick={() => { setSelectedCategoryId(cat.id); setSearchQuery(''); }}
                 className={`shrink-0 inline-flex items-center gap-2 rounded-full pl-4 pr-1.5 py-1.5 text-sm font-semibold whitespace-nowrap transition-all duration-200 shadow-xs ${active
-                    ? 'bg-amber-400 dark:bg-amber-400 text-amber-950 shadow-md'
-                    : 'bg-white dark:bg-zinc-900 border border-stone-200/90 dark:border-zinc-800 text-stone-700 dark:text-zinc-300 hover:border-amber-400/60 dark:hover:border-amber-400/40 hover:bg-stone-50/70 dark:hover:bg-zinc-800/50'
+                  ? 'bg-amber-400 dark:bg-amber-400 text-amber-950 shadow-md'
+                  : 'bg-white dark:bg-zinc-900 border border-stone-200/90 dark:border-zinc-800 text-stone-700 dark:text-zinc-300 hover:border-amber-400/60 dark:hover:border-amber-400/40 hover:bg-stone-50/70 dark:hover:bg-zinc-800/50'
                   }`}
               >
                 <span className="truncate max-w-[9rem]">{cat.name}</span>
 
                 <span
                   className={`inline-flex items-center justify-center min-w-6 h-6 px-1.5 rounded-full text-[11px] font-bold tabular-nums ${active
-                      ? 'bg-amber-950/15 text-amber-950'
-                      : 'bg-stone-100 dark:bg-zinc-800 text-stone-500 dark:text-zinc-400'
+                    ? 'bg-amber-950/15 text-amber-950'
+                    : 'bg-stone-100 dark:bg-zinc-800 text-stone-500 dark:text-zinc-400'
                     }`}
                 >
                   {count}
@@ -1117,144 +1117,143 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
 
         {/* 3. Product Cards Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-4 gap-3 auto-rows-max">
-  {selectedCategoryItems.map(item => {
-    const isDisabled = item.isManuallyDisabled || item.isSystemDisabled;
-    const line = getCartLineForItem(item);
-    const inCart = Boolean(line);
+          {selectedCategoryItems.map(item => {
+            const isDisabled = item.isManuallyDisabled || item.isSystemDisabled;
+            const line = getCartLineForItem(item);
+            const inCart = Boolean(line);
 
-    return (
-      <div
-        key={item.id}
-        role="button"
-        tabIndex={isDisabled ? -1 : 0}
-        onClick={() => !isDisabled && initiateAddToCart(item)}
-        onKeyDown={(e) => {
-          if (isDisabled) return;
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            initiateAddToCart(item);
-          }
-        }}
-        className={`group relative h-48 rounded-2xl overflow-hidden border cursor-pointer select-none transition-all duration-200
+            return (
+              <div
+                key={item.id}
+                role="button"
+                tabIndex={isDisabled ? -1 : 0}
+                onClick={() => !isDisabled && initiateAddToCart(item)}
+                onKeyDown={(e) => {
+                  if (isDisabled) return;
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    initiateAddToCart(item);
+                  }
+                }}
+                className={`group relative h-48 rounded-2xl overflow-hidden border cursor-pointer select-none transition-all duration-200
           ${isDisabled
-            ? 'opacity-60 grayscale cursor-not-allowed border-stone-200/80 dark:border-zinc-800/80'
-            : inCart
-              ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/10'
-              : 'border-stone-200/80 dark:border-zinc-800/80 hover:border-amber-400/70 dark:hover:border-amber-400/50 hover:shadow-xl hover:shadow-stone-900/10 dark:hover:shadow-black/30'
-          }`}
-      >
-        {/* ── Image layer (full bleed) ───────────────────────────── */}
-        <div className="absolute inset-0 bg-gradient-to-br from-stone-100 via-stone-50 to-stone-200 dark:from-zinc-800 dark:via-zinc-850 dark:to-zinc-900">
-          {item.image ? (
-            <img
-              src={item.image}
-              alt={item.name}
-              className="h-full w-full object-cover"
-              onError={(e) => {
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-              }}
-            />
-          ) : null}
-          <div className={`${item.image ? 'hidden' : ''} w-full h-full`}>
-            <ItemPlaceholder dietary={item.dietary} name={item.name} />
-          </div>
-        </div>
-
-        {/* ── Bottom scrim: transparent → dark ───────────────────── */}
-        <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-black/85 via-black/45 to-transparent pointer-events-none" />
-
-        {/* ── Top badges ─────────────────────────────────────────── */}
-        <span
-          title={item.dietary}
-          className={`absolute top-2.5 left-2.5 size-3 rounded-full border-2 border-white/90 shadow-sm z-10 ${
-            item.dietary === 'VEG'
-              ? 'bg-emerald-500'
-              : item.dietary === 'NON_VEG'
-                ? 'bg-rose-500'
-                : item.dietary === 'VEGAN'
-                  ? 'bg-teal-400'
-                  : item.dietary === 'EGG'
-                    ? 'bg-amber-400'
-                    : 'bg-stone-300'
-          }`}
-        />
-
-        {inCart && !isDisabled && (
-          <span className="absolute top-2.5 right-2.5 z-10 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-950 bg-amber-400 px-2 py-0.5 rounded-full shadow-sm">
-            In cart
-          </span>
-        )}
-
-        {/* ── Bottom content over scrim ──────────────────────────── */}
-        <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col gap-2">
-          {item.modifierGroups?.length > 0 && !isDisabled && (
-            <span className="self-start text-[9px] font-black tracking-wider uppercase text-amber-200 bg-amber-500/25 border border-amber-300/30 backdrop-blur-sm px-1.5 py-0.5 rounded-md">
-              Options
-            </span>
-          )}
-
-          <h4 className="font-bold text-[13px] leading-snug text-white truncate drop-shadow-sm">
-            {item.name}
-          </h4>
-
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-black text-[15px] text-white tabular-nums tracking-tight drop-shadow-sm">
-              <span className="text-[11px] font-bold text-white/70 mr-0.5">₹</span>
-              {item.price}
-            </span>
-
-            {!isDisabled && (
-              inCart && !item.modifierGroups?.length ? (
-                <div
-                  onClick={e => e.stopPropagation()}
-                  className="flex items-center gap-0.5 bg-amber-400 text-amber-950 rounded-full p-0.5 shadow-md ring-1 ring-white/20"
-                >
-                  <button
-                    type="button"
-                    onClick={e => quickRemove(item, e)}
-                    className="size-6 rounded-full flex items-center justify-center hover:bg-amber-950/15 active:scale-90 transition-all"
-                  >
-                    <MinusSignIcon size={12} />
-                  </button>
-                  <span className="text-xs font-black px-1.5 tabular-nums min-w-5 text-center">
-                    {line.quantity}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={e => quickAdd(item, e)}
-                    className="size-6 rounded-full flex items-center justify-center hover:bg-amber-950/15 active:scale-90 transition-all"
-                  >
-                    <PlusSignIcon size={12} />
-                  </button>
+                    ? 'opacity-60 grayscale cursor-not-allowed border-stone-200/80 dark:border-zinc-800/80'
+                    : inCart
+                      ? 'border-amber-400 ring-2 ring-amber-400/40 shadow-lg shadow-amber-500/10'
+                      : 'border-stone-200/80 dark:border-zinc-800/80 hover:border-amber-400/70 dark:hover:border-amber-400/50 hover:shadow-xl hover:shadow-stone-900/10 dark:hover:shadow-black/30'
+                  }`}
+              >
+                {/* ── Image layer (full bleed) ───────────────────────────── */}
+                <div className="absolute inset-0 bg-gradient-to-br from-stone-100 via-stone-50 to-stone-200 dark:from-zinc-800 dark:via-zinc-850 dark:to-zinc-900">
+                  {item.image ? (
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      className="h-full w-full object-cover"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                      }}
+                    />
+                  ) : null}
+                  <div className={`${item.image ? 'hidden' : ''} w-full h-full`}>
+                    <ItemPlaceholder dietary={item.dietary} name={item.name} />
+                  </div>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={e => { e.stopPropagation(); initiateAddToCart(item); }}
-                  aria-label={`Add ${item.name}`}
-                  className="h-7 px-3 rounded-full bg-white/95 hover:bg-amber-400 text-stone-900 hover:text-amber-950 text-[11px] font-bold flex items-center gap-1 backdrop-blur-sm shadow-md active:scale-95 transition-all duration-200"
-                >
-                  <PlusSignIcon size={13} />
-                  Add
-                </button>
-              )
-            )}
-          </div>
-        </div>
 
-        {/* ── Sold out overlay ───────────────────────────────────── */}
-        {isDisabled && (
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-20">
-            <span className="text-[10px] font-black tracking-widest text-white uppercase bg-rose-600 px-2.5 py-1 rounded-md shadow-sm">
-              Sold Out
-            </span>
-          </div>
-        )}
-      </div>
-    );
-  })}
-</div>
+                {/* ── Bottom scrim: transparent → dark ───────────────────── */}
+                <div className="absolute inset-x-0 bottom-0 h-3/4 bg-gradient-to-t from-black/85 via-black/45 to-transparent pointer-events-none" />
+
+                {/* ── Top badges ─────────────────────────────────────────── */}
+                <span
+                  title={item.dietary}
+                  className={`absolute top-2.5 left-2.5 size-3 rounded-full border-2 border-white/90 shadow-sm z-10 ${item.dietary === 'VEG'
+                      ? 'bg-emerald-500'
+                      : item.dietary === 'NON_VEG'
+                        ? 'bg-rose-500'
+                        : item.dietary === 'VEGAN'
+                          ? 'bg-teal-400'
+                          : item.dietary === 'EGG'
+                            ? 'bg-amber-400'
+                            : 'bg-stone-300'
+                    }`}
+                />
+
+                {inCart && !isDisabled && (
+                  <span className="absolute top-2.5 right-2.5 z-10 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-wider text-amber-950 bg-amber-400 px-2 py-0.5 rounded-full shadow-sm">
+                    In cart
+                  </span>
+                )}
+
+                {/* ── Bottom content over scrim ──────────────────────────── */}
+                <div className="absolute inset-x-0 bottom-0 p-3 flex flex-col gap-2">
+                  {item.modifierGroups?.length > 0 && !isDisabled && (
+                    <span className="self-start text-[9px] font-black tracking-wider uppercase text-amber-200 bg-amber-500/25 border border-amber-300/30 backdrop-blur-sm px-1.5 py-0.5 rounded-md">
+                      Options
+                    </span>
+                  )}
+
+                  <h4 className="font-bold text-[13px] leading-snug text-white truncate drop-shadow-sm">
+                    {item.name}
+                  </h4>
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-black text-[15px] text-white tabular-nums tracking-tight drop-shadow-sm">
+                      <span className="text-[11px] font-bold text-white/70 mr-0.5">₹</span>
+                      {item.price}
+                    </span>
+
+                    {!isDisabled && (
+                      inCart && !item.modifierGroups?.length ? (
+                        <div
+                          onClick={e => e.stopPropagation()}
+                          className="flex items-center gap-0.5 bg-amber-400 text-amber-950 rounded-full p-0.5 shadow-md ring-1 ring-white/20"
+                        >
+                          <button
+                            type="button"
+                            onClick={e => quickRemove(item, e)}
+                            className="size-6 rounded-full flex items-center justify-center hover:bg-amber-950/15 active:scale-90 transition-all"
+                          >
+                            <MinusSignIcon size={12} />
+                          </button>
+                          <span className="text-xs font-black px-1.5 tabular-nums min-w-5 text-center">
+                            {line.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={e => quickAdd(item, e)}
+                            className="size-6 rounded-full flex items-center justify-center hover:bg-amber-950/15 active:scale-90 transition-all"
+                          >
+                            <PlusSignIcon size={12} />
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); initiateAddToCart(item); }}
+                          aria-label={`Add ${item.name}`}
+                          className="h-7 px-3 rounded-full bg-white/95 hover:bg-amber-400 text-stone-900 hover:text-amber-950 text-[11px] font-bold flex items-center gap-1 backdrop-blur-sm shadow-md active:scale-95 transition-all duration-200"
+                        >
+                          <PlusSignIcon size={13} />
+                          Add
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Sold out overlay ───────────────────────────────────── */}
+                {isDisabled && (
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-20">
+                    <span className="text-[10px] font-black tracking-widest text-white uppercase bg-rose-600 px-2.5 py-1 rounded-md shadow-sm">
+                      Sold Out
+                    </span>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ─── RIGHT: CART SIDEBAR ─── */}
@@ -1432,11 +1431,10 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
                         customIngredients: c.customIngredients || [],
                         notes: cartNotes[c.lineId] || '',
                       })}
-                      className={`shrink-0 size-6 rounded-md flex items-center justify-center transition-colors ${
-                        c.customIngredients && c.customIngredients.length > 0
+                      className={`shrink-0 size-6 rounded-md flex items-center justify-center transition-colors ${c.customIngredients && c.customIngredients.length > 0
                           ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300'
                           : 'text-stone-400 hover:bg-stone-100 dark:hover:bg-zinc-800'
-                      }`}
+                        }`}
                     >
                       <Pot02Icon size={13} />
                     </button>

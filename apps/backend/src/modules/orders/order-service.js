@@ -978,10 +978,21 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
   if (!order || order.storeId !== storeId) {
     throw createHttpError(404, "Order not found");
   }
+
+  const validStatuses = ['DRAFT', 'PENDING_VERIFICATION', 'PENDING_PAYMENT', 'PROCESSING', 'READY', 'SERVED', 'SETTLED', 'CANCELLED'];
+  if (!validStatuses.includes(newStatus)) {
+    throw createHttpError(400, `Invalid order status: ${newStatus}`);
+  }
   
-  // State machine rules
-  if (newStatus === 'PROCESSING' && (order.status === 'PENDING_VERIFICATION' || order.status === 'PENDING_PAYMENT')) {
-    // Waiter approved QR POSTPAID order, or Razorpay webhook confirmed PREPAID order
+  // Inventory reconciliation on status change:
+  const wasDeducted = ['PROCESSING', 'READY', 'SERVED', 'SETTLED'].includes(order.status);
+  const willBeDeducted = ['PROCESSING', 'READY', 'SERVED', 'SETTLED'].includes(newStatus);
+
+  if (newStatus === 'CANCELLED' && wasDeducted) {
+    // Revert inventory when order is cancelled
+    await revertInventoryDeduction(prisma, order.id);
+  } else if (willBeDeducted && !wasDeducted) {
+    // Deduct inventory if moving from DRAFT, PENDING_VERIFICATION, PENDING_PAYMENT, or CANCELLED to active/settled
     await deductInventory(prisma, order);
   }
   
@@ -1002,16 +1013,30 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
   
   const updatedOrder = await prisma.order.update({
     where: { id: orderId },
-    data: updateData
+    data: updateData,
+    include: {
+      table: true,
+      items: {
+        include: {
+          menuItem: true,
+          modifiers: {
+            include: { modifierOption: true }
+          }
+        }
+      }
+    }
   });
   
-  // Broadcast
+  // Broadcast updates across the store (KDS, POS, Waiter, Customer)
   broadcastToStore(storeId, `ORDER_${newStatus}`, updatedOrder);
+  broadcastToStore(storeId, 'ORDER_UPDATED', updatedOrder);
   if (updatedOrder.customerId) {
     broadcastToCustomer(updatedOrder.customerId, `ORDER_${newStatus}`, updatedOrder);
+    broadcastToCustomer(updatedOrder.customerId, 'ORDER_UPDATED', updatedOrder);
   }
   if (updatedOrder.sessionId) {
     broadcastToCustomer(updatedOrder.sessionId, `ORDER_${newStatus}`, updatedOrder);
+    broadcastToCustomer(updatedOrder.sessionId, 'ORDER_UPDATED', updatedOrder);
   }
   
   return updatedOrder;

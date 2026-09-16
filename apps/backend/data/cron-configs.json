@@ -1,0 +1,54 @@
+{
+  "cmt5g9r9c0005ebh8kn4dezdx": {
+    "TABLE_SESSION_RECONCILIATION": {
+      "lastRunAt": "2026-09-16T18:30:07.122Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
+      "lastRunDurationMs": 7119
+    },
+    "STALE_ORDERS_EXPIRATION": {
+      "lastRunAt": "2026-09-16T18:30:05.688Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "No stale orders found older than 2h.",
+      "lastRunDurationMs": 5681
+    },
+    "DAILY_SALES_DIGEST": {
+      "lastRunAt": "2026-09-16T18:25:26.333Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "Generated sales digest for 1 store(s): 0 total order(s) settled, ₹0.00 revenue.",
+      "lastRunDurationMs": 26318
+    },
+    "EXPIRED_PROMO_ARCHIVAL": {
+      "lastRunAt": "2026-09-16T18:30:06.405Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "All active promotional codes are valid.",
+      "lastRunDurationMs": 6397
+    }
+  },
+  "cmu1mjo6y0006s0507dgz8zg3": {
+    "STALE_ORDERS_EXPIRATION": {
+      "lastRunAt": "2026-09-16T18:30:04.316Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "No stale orders found older than 2h.",
+      "lastRunDurationMs": 4311
+    },
+    "TABLE_SESSION_RECONCILIATION": {
+      "lastRunAt": "2026-09-16T18:30:07.737Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
+      "lastRunDurationMs": 7731
+    },
+    "DAILY_SALES_DIGEST": {
+      "lastRunAt": "2026-09-16T18:25:25.719Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "Generated sales digest for 1 store(s): 0 total order(s) settled, ₹0.00 revenue.",
+      "lastRunDurationMs": 25703
+    },
+    "EXPIRED_PROMO_ARCHIVAL": {
+      "lastRunAt": "2026-09-16T18:30:05.165Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "All active promotional codes are valid.",
+      "lastRunDurationMs": 5158
+    }
+  }
+}
