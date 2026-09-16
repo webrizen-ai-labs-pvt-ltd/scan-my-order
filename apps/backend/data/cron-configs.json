@@ -1,10 +1,10 @@
 {
   "cmt5g9r9c0005ebh8kn4dezdx": {
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-16T18:30:07.122Z",
+      "lastRunAt": "2026-09-16T18:45:03.453Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 7119
+      "lastRunDurationMs": 3440
     },
     "STALE_ORDERS_EXPIRATION": {
       "lastRunAt": "2026-09-16T18:30:05.688Z",
@@ -33,10 +33,10 @@
       "lastRunDurationMs": 4311
     },
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-16T18:30:07.737Z",
+      "lastRunAt": "2026-09-16T18:45:04.170Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 7731
+      "lastRunDurationMs": 4157
     },
     "DAILY_SALES_DIGEST": {
       "lastRunAt": "2026-09-16T18:25:25.719Z",
