@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   AlertCircleIcon,
   CheckmarkBadge01Icon,
@@ -647,6 +647,7 @@ export const LiveTableFloorPlan = ({
   className = ''
 }) => {
   const [selectedTable, setSelectedTable] = useState(null);
+  const [isResolvingCall, setIsResolvingCall] = useState(false);
   const [filterStatus, setFilterStatus] = useState('ALL');
   const [viewMode, setViewMode] = useState('floor'); // 'floor' | 'schedule' | 'grid'
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -654,6 +655,16 @@ export const LiveTableFloorPlan = ({
 
   const tables = floorStatus?.tables || [];
   const layoutTables = useMemo(() => computeFloorLayout(tables), [tables]);
+
+  // Keep selectedTable in sync with real-time updates from floorStatus
+  useEffect(() => {
+    if (selectedTable) {
+      const freshTable = tables.find((t) => t.id === selectedTable.id);
+      if (freshTable) {
+        setSelectedTable((prev) => (prev ? { ...prev, ...freshTable } : null));
+      }
+    }
+  }, [tables]);
 
   // Compute status summary counts
   const statusCounts = useMemo(() => {
@@ -1262,10 +1273,44 @@ export const LiveTableFloorPlan = ({
                     </div>
                     {onResolveWaiterCall && (
                       <Button
-                        onClick={() => onResolveWaiterCall(selectedTable.activeWaiterCalls[0].id)}
-                        variant="link"
+                        onClick={async () => {
+                          if (isResolvingCall) return;
+                          const callId = selectedTable.activeWaiterCalls[0]?.id;
+                          if (!callId) return;
+                          try {
+                            setIsResolvingCall(true);
+                            await onResolveWaiterCall(callId);
+                            // Optimistically clear the alert and update table status immediately
+                            setSelectedTable((prev) => {
+                              if (!prev) return null;
+                              let newStatus = 'AVAILABLE';
+                              if (prev.currentOrder) {
+                                if (prev.currentOrder.status === 'READY') newStatus = 'READY';
+                                else if (prev.currentOrder.status === 'PROCESSING') newStatus = 'PROCESSING';
+                                else if (prev.currentOrder.status === 'SERVED') newStatus = 'SERVED';
+                                else newStatus = 'OCCUPIED';
+                              } else if (prev.activeReservation) {
+                                newStatus = 'RESERVED';
+                              }
+                              return {
+                                ...prev,
+                                hasWaiterCall: false,
+                                activeWaiterCalls: [],
+                                status: newStatus
+                              };
+                            });
+                          } catch (err) {
+                            console.error('Resolve call error:', err);
+                          } finally {
+                            setIsResolvingCall(false);
+                          }
+                        }}
+                        disabled={isResolvingCall}
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 h-8 rounded-lg shadow-sm flex items-center gap-1.5 shrink-0 transition-all"
                       >
-                        Resolve Call
+                        <Tick02Icon size={14} />
+                        {isResolvingCall ? 'Resolving...' : 'Resolve Call'}
                       </Button>
                     )}
                   </div>

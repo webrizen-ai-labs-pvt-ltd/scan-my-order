@@ -6,7 +6,7 @@ const { decrypt } = require("../../lib/encryption");
 const { billingGuard } = require("../../middleware/billing-guard");
 const { publicMenuCache } = require("../../lib/cache");
 const { createOrder, handleRazorpayWebhook } = require("../orders/order-service");
-const { createWaiterCall } = require("../waiter-calls/waiter-call-service");
+const { createWaiterCall, getTableCallStatus, cancelWaiterCall } = require("../waiter-calls/waiter-call-service");
 const { createFeedback } = require("../feedback/feedback-service");
 
 const router = express.Router();
@@ -262,6 +262,18 @@ router.get("/stores/:storeId/orders/:id", asyncHandler(async (req, res) => {
 router.post("/stores/:storeId/calls", asyncHandler(async (req, res) => {
   const result = await createWaiterCall(req.params.storeId, req.body);
   res.status(201).json(createApiResponse(result));
+}));
+
+// GET /api/public/stores/:storeId/tables/:tableNum/calls/status
+router.get("/stores/:storeId/tables/:tableNum/calls/status", asyncHandler(async (req, res) => {
+  const result = await getTableCallStatus(req.params.storeId, req.params.tableNum);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/public/stores/:storeId/calls/:id/cancel
+router.post("/stores/:storeId/calls/:id/cancel", asyncHandler(async (req, res) => {
+  const result = await cancelWaiterCall(req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
 }));
 
 // POST /api/public/stores/:storeId/feedback

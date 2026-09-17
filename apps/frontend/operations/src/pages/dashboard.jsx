@@ -20,8 +20,59 @@ import {
   Layers01Icon,
   DashboardSquare01Icon,
   Tick02Icon,
+  Cancel01Icon,
   Calendar01Icon
 } from 'hugeicons-react';
+
+// Toast component for notifications
+const Toast = ({ message, type, onClose }) => {
+  const [isVisible, setIsVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsVisible(false);
+      onClose();
+    }, 3000);
+
+    return () => clearTimeout(timer);
+  }, [onClose]);
+
+  if (!isVisible) return null;
+
+  const bgColor = type === 'success'
+    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+    : type === 'error'
+      ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+      : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
+
+  const textColor = type === 'success'
+    ? 'text-green-800 dark:text-green-400'
+    : type === 'error'
+      ? 'text-red-800 dark:text-red-400'
+      : 'text-blue-800 dark:text-blue-400';
+
+  const iconColor = type === 'success'
+    ? 'text-green-500'
+    : type === 'error'
+      ? 'text-red-500'
+      : 'text-blue-500';
+
+  return (
+    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 p-4 rounded-lg border ${bgColor} shadow-lg animate-slide-in`}>
+      {type === 'success' ? (
+        <Tick02Icon size={20} className={iconColor} />
+      ) : type === 'error' ? (
+        <Cancel01Icon size={20} className={iconColor} />
+      ) : (
+        <Clock01Icon size={20} className={iconColor} />
+      )}
+      <span className={`text-sm font-medium ${textColor}`}>{message}</span>
+      <button onClick={() => { setIsVisible(false); onClose(); }} className="ml-2">
+        <Cancel01Icon size={16} className="text-zinc-400 hover:text-zinc-600" />
+      </button>
+    </div>
+  );
+};
 
 export const Dashboard = () => {
   const { user, token } = useAuthStore();
@@ -33,6 +84,7 @@ export const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
   const [activeFloorView, setActiveFloorView] = useState('live_floor'); // 'live_floor' | 'pipeline'
+  const [toast, setToast] = useState(null);
 
   // Fetch available stores if multi-store user
   useEffect(() => {
@@ -103,8 +155,12 @@ export const Dashboard = () => {
             'ORDER_SETTLED',
             'ORDER_CANCELLED',
             'WAITER_CALL_CREATED',
+            'WAITER_CALL_DISPATCHED',
+            'WAITER_CALL_ESCALATED',
+            'WAITER_CALL_ESCALATED_MANAGER',
             'WAITER_CALL_ACKNOWLEDGED',
-            'WAITER_CALL_RESOLVED'
+            'WAITER_CALL_RESOLVED',
+            'WAITER_CALL_CANCELLED'
           ];
 
           if (relevantEvents.includes(data.type)) {
@@ -133,9 +189,13 @@ export const Dashboard = () => {
     if (!selectedStoreId || !callId) return;
     try {
       await api.patch(`/stores/${selectedStoreId}/calls/${callId}/resolve`);
-      fetchFloorStatus(selectedStoreId, true);
+      setToast({ message: 'Table assistance call marked as resolved!', type: 'success' });
+      await fetchFloorStatus(selectedStoreId, true);
     } catch (err) {
       console.error('Failed to resolve waiter call:', err);
+      const errMsg = err.response?.data?.message || 'Failed to resolve call';
+      setToast({ message: errMsg, type: 'error' });
+      throw err;
     }
   };
 
@@ -169,6 +229,13 @@ export const Dashboard = () => {
 
   return (
     <div className="space-y-6 pb-12">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       {/* Top Header & Store Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>

@@ -2,10 +2,30 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
-import { Tick02Icon, Cancel01Icon, Store01Icon, Clock01Icon, Money01Icon, QrCodeIcon, CheckmarkBadge01Icon, PrinterIcon } from 'hugeicons-react';
+import { Tick02Icon, Cancel01Icon, Store01Icon, Clock01Icon, Money01Icon, QrCodeIcon, CheckmarkBadge01Icon, PrinterIcon, AlertCircleIcon, CheckmarkCircle02Icon } from 'hugeicons-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from '../components/receipt';
 import { PaymentBifurcationModal } from '../components/payment-bifurcation-modal';
+
+// Synthesized audio chime for new incoming waiter calls
+const playChime = () => {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
+    gain.gain.setValueAtTime(0.2, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.5);
+  } catch (e) {
+    // Safely ignore if user has not interacted with the browser yet
+  }
+};
 
 // Toast component for notifications
 const Toast = ({ message, type, onClose }) => {
@@ -122,8 +142,85 @@ export const WaiterTasks = () => {
   const [receiptOrder, setReceiptOrder] = useState(null);
   const receiptRef = useRef();
 
+  // Active Waiter Calls & Availability State
+  const [waiterCalls, setWaiterCalls] = useState([]);
+  const [waiterAvailability, setWaiterAvailability] = useState('AVAILABLE');
+  const [callActionLoading, setCallActionLoading] = useState(null);
+  const [nowTime, setNowTime] = useState(Date.now());
+
+  // 1-second interval to tick countdown timers smoothly
+  useEffect(() => {
+    const timer = setInterval(() => setNowTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
+  };
+
+  const fetchWaiterCalls = useCallback(async (storeIdToFetch) => {
+    if (!storeIdToFetch) return;
+    try {
+      const res = await api.get(`/stores/${storeIdToFetch}/waiter-calls`);
+      if (res.data?.success) {
+        setWaiterCalls(res.data.data || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch waiter calls", e);
+    }
+  }, []);
+
+  const fetchWaiterAvailability = useCallback(async (storeIdToFetch) => {
+    if (!storeIdToFetch) return;
+    try {
+      const res = await api.get(`/stores/${storeIdToFetch}/waiter-calls/availability`);
+      if (res.data?.success && res.data.data?.status) {
+        setWaiterAvailability(res.data.data.status);
+      }
+    } catch (e) {
+      // Fallback to default AVAILABLE
+    }
+  }, []);
+
+  const toggleAvailability = async () => {
+    const nextStatus = waiterAvailability === 'AVAILABLE' ? 'BUSY' : 'AVAILABLE';
+    try {
+      setWaiterAvailability(nextStatus);
+      await api.post(`/stores/${selectedStoreId}/waiter-calls/availability`, { status: nextStatus });
+      showToast(nextStatus === 'AVAILABLE' ? 'You are now marked Available for calls' : 'You are now marked Busy / On Break', 'info');
+    } catch (e) {
+      showToast('Failed to update availability status', 'error');
+    }
+  };
+
+  const handleAcknowledgeCall = async (callId) => {
+    setCallActionLoading(callId);
+    try {
+      const res = await api.patch(`/stores/${selectedStoreId}/waiter-calls/${callId}/acknowledge`);
+      if (res.data?.success) {
+        showToast('Assistance acknowledged! On your way.', 'success');
+        fetchWaiterCalls(selectedStoreId);
+      }
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to acknowledge call', 'error');
+    } finally {
+      setCallActionLoading(null);
+    }
+  };
+
+  const handleResolveCall = async (callId) => {
+    setCallActionLoading(callId);
+    try {
+      const res = await api.patch(`/stores/${selectedStoreId}/waiter-calls/${callId}/resolve`);
+      if (res.data?.success) {
+        showToast('Table assistance completed!', 'success');
+        fetchWaiterCalls(selectedStoreId);
+      }
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Failed to resolve call', 'error');
+    } finally {
+      setCallActionLoading(null);
+    }
   };
 
   const fetchOrders = useCallback(async (storeIdToFetch, silent = false) => {
@@ -171,6 +268,8 @@ export const WaiterTasks = () => {
   useEffect(() => {
     if (selectedStoreId) {
       fetchOrders(selectedStoreId);
+      fetchWaiterCalls(selectedStoreId);
+      fetchWaiterAvailability(selectedStoreId);
       
       api.get(`/stores/${selectedStoreId}`).then(res => {
         if (res.data.success) setStoreData(res.data.data);
@@ -216,6 +315,36 @@ export const WaiterTasks = () => {
                  setQrUrl(null);
               }
             }
+
+            // Real-time Waiter Call SSE Events
+            if ([
+              'WAITER_CALL_CREATED',
+              'WAITER_CALL_DISPATCHED',
+              'WAITER_CALL_ESCALATED',
+              'WAITER_CALL_ESCALATED_MANAGER',
+              'WAITER_CALL_ACKNOWLEDGED',
+              'WAITER_CALL_RESOLVED',
+              'WAITER_CALL_CANCELLED'
+            ].includes(data.type)) {
+              fetchWaiterCalls(selectedStoreId);
+
+              if (['WAITER_CALL_CREATED', 'WAITER_CALL_DISPATCHED', 'WAITER_CALL_ESCALATED'].includes(data.type)) {
+                const assignedId = data.data?.assignedWaiterId || data.data?.dispatch?.assignedWaiterId;
+                if (assignedId === user?.id) {
+                  playChime();
+                  showToast(`Table ${data.data?.tableNumber || ''} requested assistance! You are assigned.`, 'info');
+                }
+              } else if (data.type === 'WAITER_CALL_ESCALATED_MANAGER') {
+                if (['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role)) {
+                  playChime();
+                  showToast(data.data?.message || 'Urgent table call escalated to manager!', 'error');
+                }
+              }
+            }
+
+            if (data.type === 'WAITER_AVAILABILITY_CHANGED' && data.data?.waiterId === user?.id) {
+              setWaiterAvailability(data.data.status);
+            }
           } catch (e) {
             // Silently ignore
           }
@@ -228,7 +357,7 @@ export const WaiterTasks = () => {
         if (eventSource) eventSource.close();
       };
     }
-  }, [selectedStoreId, token, fetchOrders]);
+  }, [selectedStoreId, token, fetchOrders, fetchWaiterCalls, fetchWaiterAvailability, user]);
 
   const updateStatus = async (orderId, status) => {
     setActionLoading(orderId);
@@ -697,9 +826,34 @@ export const WaiterTasks = () => {
         </div>
       )}
 
-      {/* Header moved to WaiterLayout */}
-      <div className="flex justify-end items-center mb-6">
-        <div className="flex items-center gap-4 w-full md:justify-end justify-between">
+      {/* Header with Waiter Status & Controls */}
+      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
+        {/* Availability Toggle */}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleAvailability}
+            className={`h-9 px-3 gap-2 font-medium border text-xs transition-all shadow-sm ${
+              waiterAvailability === 'AVAILABLE'
+                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100'
+                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800 hover:bg-amber-100'
+            }`}
+            title="Click to toggle between Available and Busy / Break"
+          >
+            <span className={`w-2.5 h-2.5 rounded-full ${waiterAvailability === 'AVAILABLE' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+            <span>Status: <strong>{waiterAvailability === 'AVAILABLE' ? 'Available' : 'Busy / Break'}</strong></span>
+          </Button>
+
+          {waiterCalls.length > 0 && (
+            <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 animate-pulse">
+              <AlertCircleIcon size={14} />
+              {waiterCalls.length} Table {waiterCalls.length === 1 ? 'Call' : 'Calls'} Active
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-xs">
             <span className={`w-2 h-2 rounded-full ${connectionStatus === 'connected'
                 ? 'bg-green-500 animate-pulse'
@@ -733,6 +887,165 @@ export const WaiterTasks = () => {
           <button onClick={() => setError('')} className="ml-auto">
             <Cancel01Icon size={16} className="text-red-400 hover:text-red-600" />
           </button>
+        </div>
+      )}
+
+      {/* Active Table Assistance Requests Section */}
+      {waiterCalls.length > 0 && (
+        <div className="mb-6 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-transparent border border-amber-300/60 dark:border-amber-700/60 rounded-2xl p-4 shadow-md">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+              </span>
+              <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+                Active Table Assistance Requests
+                <span className="text-xs bg-amber-500 text-black px-2 py-0.5 rounded-full font-extrabold">
+                  {waiterCalls.length}
+                </span>
+              </h3>
+            </div>
+            <span className="text-xs text-zinc-500 dark:text-zinc-400 hidden sm:inline">
+              Auto-escalates to next server in 60s if unacknowledged
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {waiterCalls.map((call) => {
+              const isAssignedToMe = call.assignedWaiterId === user?.id;
+              const isManagerAlert = call.escalationLevel === 2;
+              const isAcknowledged = call.status === 'ACKNOWLEDGED';
+
+              // Calculate countdown remaining seconds
+              const assignedTimestamp = call.assignedAt ? new Date(call.assignedAt).getTime() : new Date(call.createdAt).getTime();
+              const elapsedSeconds = Math.floor((nowTime - assignedTimestamp) / 1000);
+              const remainingSec = Math.max(0, 60 - elapsedSeconds);
+
+              // Category icons & labels
+              const getCallMeta = (type) => {
+                switch (type) {
+                  case 'WATER':
+                    return { icon: '💧', label: 'Water Request', color: 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200' };
+                  case 'BILL':
+                    return { icon: '💳', label: 'Request Bill', color: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200' };
+                  case 'CUTLERY':
+                    return { icon: '🍴', label: 'Extra Cutlery', color: 'bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 border-orange-200' };
+                  case 'CLEAN_TABLE':
+                    return { icon: '🧹', label: 'Clean Table', color: 'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-200' };
+                  default:
+                    return { icon: '🔔', label: 'Call Server', color: 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200' };
+                }
+              };
+
+              const meta = getCallMeta(call.type);
+
+              return (
+                <div
+                  key={call.id}
+                  className={`relative p-3.5 rounded-xl border transition-all shadow-sm flex flex-col justify-between ${
+                    isAssignedToMe
+                      ? 'bg-amber-500/10 border-amber-500 dark:border-amber-400 ring-2 ring-amber-500/30'
+                      : isManagerAlert
+                        ? 'bg-red-500/10 border-red-400 dark:border-red-600 ring-2 ring-red-500/30'
+                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'
+                  }`}
+                >
+                  <div>
+                    {/* Header: Table & Service Type */}
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-base text-zinc-900 dark:text-zinc-50">
+                          Table {call.table?.tableNumber || 'N/A'}
+                        </span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${meta.color}`}>
+                          {meta.icon} {meta.label}
+                        </span>
+                      </div>
+
+                      {isAcknowledged ? (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 border border-emerald-300 dark:border-emerald-800">
+                          <CheckmarkCircle02Icon size={12} /> On the way
+                        </span>
+                      ) : (
+                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
+                          remainingSec <= 15
+                            ? 'bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 animate-pulse border border-red-300'
+                            : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300'
+                        }`}>
+                          <Clock01Icon size={12} /> {remainingSec}s
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Customer note if any */}
+                    {call.note && (
+                      <p className="text-xs italic text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800/60 px-2.5 py-1.5 rounded-lg mb-2.5">
+                        "{call.note}"
+                      </p>
+                    )}
+
+                    {/* Assignment & Escalation status */}
+                    <div className="text-xs mb-3 flex items-center justify-between text-zinc-500 dark:text-zinc-400">
+                      {isAssignedToMe ? (
+                        <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                          👉 Assigned to You
+                        </span>
+                      ) : isManagerAlert ? (
+                        <span className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
+                          ⚠️ Escalated: Floor Lead Alert
+                        </span>
+                      ) : (
+                        <span>Assigned to: <strong className="text-zinc-700 dark:text-zinc-200">{call.assignedWaiterName || 'Available Staff'}</strong></span>
+                      )}
+
+                      {call.escalationLevel > 0 && !isManagerAlert && (
+                        <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
+                          Escalation Lv {call.escalationLevel}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60">
+                    {!isAcknowledged ? (
+                      <Button
+                        size="sm"
+                        onClick={() => handleAcknowledgeCall(call.id)}
+                        disabled={callActionLoading === call.id}
+                        className="flex-1 h-8 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-black shadow-sm"
+                      >
+                        {callActionLoading === call.id ? 'Updating...' : 'On My Way'}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => handleResolveCall(call.id)}
+                        disabled={callActionLoading === call.id}
+                        className="flex-1 h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                      >
+                        {callActionLoading === call.id ? 'Completing...' : 'Done / Resolved'}
+                      </Button>
+                    )}
+
+                    {!isAcknowledged && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleResolveCall(call.id)}
+                        disabled={callActionLoading === call.id}
+                        className="h-8 text-xs px-2.5 text-zinc-600 dark:text-zinc-300"
+                        title="Mark as completed directly"
+                      >
+                        Done
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 

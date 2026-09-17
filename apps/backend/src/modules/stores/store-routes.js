@@ -67,6 +67,7 @@ router.use("/:storeId/tables", tableRoutes);
 router.use("/:storeId/orders", orderRoutes);
 router.use("/:storeId/kds", kdsRoutes);
 router.use("/:storeId/calls", waiterCallRoutes);
+router.use("/:storeId/waiter-calls", waiterCallRoutes);
 router.use("/:storeId/feedback", feedbackRoutes);
 router.use("/:storeId/promos", promoRoutes);
 router.use("/:storeId/reservations", reservationRoutes);

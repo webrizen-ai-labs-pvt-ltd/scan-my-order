@@ -20,6 +20,7 @@ import {
   UserGroupIcon
 } from 'hugeicons-react';
 import { FullWidthDivider } from '../components/full-width-divider';
+import { CallWaiterModal } from '../components/call-waiter-modal';
 
 // Accessible FSSAI-style dietary badge
 const DietaryBadge = ({ type }) => {
@@ -74,9 +75,19 @@ export const StoreMenuPage = () => {
   const [pinError, setPinError] = useState('');
   const [sessionPinBanner, setSessionPinBanner] = useState('');
 
+  // Call Waiter Modal State
+  const [showCallWaiter, setShowCallWaiter] = useState(false);
+  const [isCallActive, setIsCallActive] = useState(false);
+
   const { token, setAuth } = useAuthStore();
 
   const categoryRefs = useRef({});
+
+  const resolvedTable = useMemo(() => {
+    if (!store?.tables || !tableNumber) return null;
+    const num = parseInt(tableNumber, 10);
+    return store.tables.find(t => t.tableNumber === num) || null;
+  }, [store?.tables, tableNumber]);
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -467,7 +478,7 @@ export const StoreMenuPage = () => {
               </div>
 
               {tableNumber ? (
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                   <div className="flex items-center gap-1.5 rounded-full border border-emerald-500/30 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 shadow-sm backdrop-blur-md dark:border-emerald-400/30 dark:bg-emerald-500/20 dark:text-emerald-300">
                     <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500 dark:bg-emerald-400" />
                     Table {tableNumber}
@@ -477,6 +488,22 @@ export const StoreMenuPage = () => {
                       PIN: {activeTablePin}
                     </div>
                   )}
+                  <button
+                    type="button"
+                    onClick={() => setShowCallWaiter(true)}
+                    className={`flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-bold shadow-sm transition-all cursor-pointer ${
+                      isCallActive
+                        ? 'border-yellow-500 bg-yellow-500 text-zinc-950 ring-2 ring-yellow-500/30 animate-pulse'
+                        : 'border-yellow-500/50 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-800 dark:text-yellow-300'
+                    }`}
+                    title="Call a waiter"
+                  >
+                    <span>🔔</span>
+                    <span>{isCallActive ? 'Waiter Paged' : 'Call Waiter'}</span>
+                    {isCallActive && (
+                      <span className="h-2 w-2 rounded-full bg-zinc-950 dark:bg-zinc-900 animate-ping" />
+                    )}
+                  </button>
                 </div>
               ) : (
                 <div className="shrink-0 rounded-full border border-amber-500/30 bg-amber-50 px-2.5 py-1.5 text-[11px] font-medium text-amber-700 backdrop-blur-md dark:border-amber-400/30 dark:bg-amber-500/20 dark:text-amber-300">
@@ -935,6 +962,38 @@ export const StoreMenuPage = () => {
               </p>
             </div>
           </div>
+        )}
+
+        {/* Floating Call Waiter Button for Diners */}
+        {tableNumber && !isCheckoutOpen && (
+          <button
+            type="button"
+            onClick={() => setShowCallWaiter(true)}
+            className={`fixed bottom-24 right-4 z-40 flex items-center gap-2 rounded-full px-3.5 py-2.5 shadow-xl transition-all duration-200 border cursor-pointer ${
+              isCallActive
+                ? 'bg-yellow-500 text-zinc-950 border-yellow-400 font-bold ring-4 ring-yellow-500/30 animate-pulse'
+                : 'bg-zinc-900/90 hover:bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 border-zinc-700/50 backdrop-blur-md'
+            }`}
+            title="Call a waiter"
+          >
+            <span className="text-base">{isCallActive ? '🔔' : '🛎️'}</span>
+            <span className="text-xs font-semibold">{isCallActive ? 'Waiter Paged' : 'Call Waiter'}</span>
+            {isCallActive && (
+              <span className="h-2 w-2 rounded-full bg-zinc-950 dark:bg-zinc-900 animate-ping" />
+            )}
+          </button>
+        )}
+
+        {/* Call Waiter Modal */}
+        {tableNumber && (
+          <CallWaiterModal
+            open={showCallWaiter}
+            onClose={() => setShowCallWaiter(false)}
+            storeId={store.id}
+            tableNumber={tableNumber}
+            tableId={resolvedTable?.id}
+            onCallActiveChange={setIsCallActive}
+          />
         )}
 
         {/* Live Orders Floating Button & Panel */}
