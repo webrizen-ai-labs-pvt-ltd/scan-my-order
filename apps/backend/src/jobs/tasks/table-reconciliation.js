@@ -54,21 +54,27 @@ async function runTableReconciliationJob({ storeId, tenantId, params = {} }) {
   }
 
   // 2. Reconcile overdue reservations
-  const resWhere = {
-    status: 'CONFIRMED',
-    startsAt: { lt: reservationCutoff }
-  };
-  if (storeId) {
-    resWhere.storeId = storeId;
-  } else if (tenantId) {
-    resWhere.store = { tenantId };
-  }
+  if (prisma.tableReservation) {
+    try {
+      const resWhere = {
+        status: 'CONFIRMED',
+        startsAt: { lt: reservationCutoff }
+      };
+      if (storeId) {
+        resWhere.storeId = storeId;
+      } else if (tenantId) {
+        resWhere.store = { tenantId };
+      }
 
-  const overdueRes = await prisma.tableReservation.updateMany({
-    where: resWhere,
-    data: { status: 'NO_SHOW' }
-  });
-  reservationsNoShowCount = overdueRes.count;
+      const overdueRes = await prisma.tableReservation.updateMany({
+        where: resWhere,
+        data: { status: 'NO_SHOW' }
+      });
+      reservationsNoShowCount = overdueRes.count;
+    } catch (e) {
+      console.warn('[Table Reconciliation] TableReservation reconciliation skipped:', e.message || e);
+    }
+  }
 
   const summary = `Reconciled ${sessionsClosedCount} inactive table session(s) and flagged ${reservationsNoShowCount} overdue reservation(s) as No-Show.`;
 

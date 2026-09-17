@@ -17,6 +17,7 @@ async function getTables(actor, storeId) {
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
   const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
+  // 1. Fetch tables with core relations
   const rawTables = await prisma.table.findMany({
     where: { storeId },
     include: {
@@ -37,18 +38,34 @@ async function getTables(actor, storeId) {
         },
         orderBy: { createdAt: 'desc' },
         take: 1
-      },
-      reservations: {
+      }
+    },
+    orderBy: { tableNumber: 'asc' }
+  });
+
+  // 2. Safely look up reservations for today if model exists in Prisma client
+  const reservationsByTable = new Map();
+  if (prisma.tableReservation) {
+    try {
+      const activeReservations = await prisma.tableReservation.findMany({
         where: {
+          storeId,
           status: { in: ['CONFIRMED', 'SEATED'] },
           startsAt: { lte: todayEnd },
           endsAt: { gte: todayStart }
         },
         orderBy: { startsAt: 'asc' }
+      });
+      for (const res of activeReservations) {
+        if (!reservationsByTable.has(res.tableId)) {
+          reservationsByTable.set(res.tableId, []);
+        }
+        reservationsByTable.get(res.tableId).push(res);
       }
-    },
-    orderBy: { tableNumber: 'asc' }
-  });
+    } catch (e) {
+      console.warn('[Table Service] Reservations lookup skipped:', e.message || e);
+    }
+  }
 
   const result = rawTables.map(tbl => {
     const activeOrder = tbl.orders[0] || null;
@@ -56,7 +73,8 @@ async function getTables(actor, storeId) {
     const isOccupied = Boolean(activeOrder || activeSession);
 
     // Check if table is currently reserved (within 45 min buffer or right now)
-    const currentOrNextReservation = (tbl.reservations || []).find(r => new Date(r.endsAt).getTime() >= now.getTime()) || null;
+    const tableReservations = reservationsByTable.get(tbl.id) || [];
+    const currentOrNextReservation = tableReservations.find(r => new Date(r.endsAt).getTime() >= now.getTime()) || null;
     const isReserved = Boolean(
       currentOrNextReservation &&
       new Date(currentOrNextReservation.startsAt).getTime() <= (now.getTime() + 45 * 60 * 1000) &&

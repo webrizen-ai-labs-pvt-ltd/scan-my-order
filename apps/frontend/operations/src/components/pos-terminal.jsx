@@ -119,13 +119,20 @@ function fetchStoreBundle(storeId) {
   if (_inflightStores.has(storeId)) return _inflightStores.get(storeId);
 
   const promise = (async () => {
-    const [menuRes, tablesRes, storeRes, promosRes] = await Promise.all([
+    const results = await Promise.allSettled([
       api.get(`/stores/${storeId}/menu`),
       api.get(`/stores/${storeId}/tables`),
       api.get(`/stores/${storeId}`),
       api.get(`/stores/${storeId}/promos`),
     ]);
-    return { menuRes, tablesRes, storeRes, promosRes };
+
+    const menuRes = results[0].status === 'fulfilled' ? results[0].value : null;
+    const tablesRes = results[1].status === 'fulfilled' ? results[1].value : null;
+    const storeRes = results[2].status === 'fulfilled' ? results[2].value : null;
+    const promosRes = results[3].status === 'fulfilled' ? results[3].value : null;
+    const menuError = results[0].status === 'rejected' ? results[0].reason : null;
+
+    return { menuRes, tablesRes, storeRes, promosRes, menuError };
   })();
 
   _inflightStores.set(storeId, promise);
@@ -302,7 +309,7 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
 
     (async () => {
       try {
-        const { menuRes, tablesRes, storeRes, promosRes } =
+        const { menuRes, tablesRes, storeRes, promosRes, menuError } =
           await fetchStoreBundle(selectedStoreId);
         if (cancelled) return;
 
@@ -310,23 +317,33 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
           const freshMenu = menuRes.data.data || [];
           setMenu(freshMenu);
           writeCache(selectedStoreId, 'menu', freshMenu);
+          setError(null);
+        } else if (!snap.hasAny && !snap.menu) {
+          const errDetail = menuError?.response?.data?.error?.message || menuError?.message || 'Failed to fetch menu data';
+          setError(errDetail);
         }
+
         if (tablesRes?.data?.success) {
           const freshTables = (tablesRes.data.data || []).filter(t => t.isActive);
           setTables(freshTables);
           writeCache(selectedStoreId, 'tables', freshTables);
         }
+
         if (storeRes?.data?.success) {
           setStoreData(storeRes.data.data);
           writeCache(selectedStoreId, 'store', storeRes.data.data);
         }
+
         if (promosRes?.data?.success) {
           const freshPromos = promosRes.data.data || [];
           setPromos(freshPromos);
           writeCache(selectedStoreId, 'promos', freshPromos);
         }
       } catch (err) {
-        if (!cancelled && !snap.hasAny) setError('Failed to fetch data');
+        if (!cancelled && !snap.hasAny) {
+          const errDetail = err?.response?.data?.error?.message || err?.message || 'Failed to fetch data';
+          setError(errDetail);
+        }
         console.error('POS revalidation failed:', err);
       } finally {
         if (!cancelled) {
@@ -933,7 +950,50 @@ export const POSTerminal = ({ selectedStoreId, token }) => {
     );
   }
 
-  if (error && menu.length === 0) return <div className="text-rose-500 p-6 font-bold">{error}</div>;
+  if (error && menu.length === 0) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center p-6 text-center bg-stone-100/60 dark:bg-zinc-950">
+        <div className="max-w-md w-full bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-2xl p-8 shadow-sm flex flex-col items-center">
+          <div className="size-14 rounded-full bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/50 flex items-center justify-center text-rose-600 dark:text-rose-400 mb-4">
+            <Cancel01Icon size={26} />
+          </div>
+          <h3 className="text-base font-bold text-stone-900 dark:text-zinc-100 mb-1">
+            Unable to Load POS Terminal
+          </h3>
+          <p className="text-xs text-stone-500 dark:text-zinc-400 mb-6 leading-relaxed">
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setIsInitialLoading(true);
+              fetchStoreBundle(selectedStoreId).then(({ menuRes, tablesRes, storeRes, promosRes, menuError }) => {
+                if (menuRes?.data?.success) {
+                  const freshMenu = menuRes.data.data || [];
+                  setMenu(freshMenu);
+                  writeCache(selectedStoreId, 'menu', freshMenu);
+                  setError(null);
+                } else {
+                  setError(menuError?.response?.data?.error?.message || menuError?.message || 'Failed to fetch menu data');
+                }
+                if (tablesRes?.data?.success) setTables((tablesRes.data.data || []).filter(t => t.isActive));
+                if (storeRes?.data?.success) setStoreData(storeRes.data.data);
+                if (promosRes?.data?.success) setPromos(promosRes.data.data || []);
+              }).catch(err => {
+                setError(err?.response?.data?.error?.message || err?.message || 'Failed to load POS data');
+              }).finally(() => {
+                setIsInitialLoading(false);
+              });
+            }}
+            className="w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition-colors shadow-xs cursor-pointer"
+          >
+            Retry Loading
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full grid grid-cols-[1fr_360px] 2xl:grid-cols-[1fr_390px] gap-3 p-3 overflow-hidden relative bg-stone-100/60 dark:bg-zinc-950">

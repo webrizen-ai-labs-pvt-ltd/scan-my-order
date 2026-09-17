@@ -184,11 +184,14 @@ async function getStoreById(actor, storeId) {
     if (actor.role === userRoles.tenantAdmin && actor.tenantId !== store.tenantId) {
       throw createHttpError(403, "Forbidden");
     }
-    if (
-      [userRoles.storeManager, userRoles.waiter, userRoles.cashier, userRoles.kitchenStaff].includes(actor.role) &&
-      actor.storeId !== store.id
-    ) {
-      throw createHttpError(403, "Forbidden");
+    if (actor.role === userRoles.storeManager) {
+      if (actor.storeId !== store.id && actor.tenantId !== store.tenantId) {
+        throw createHttpError(403, "Forbidden");
+      }
+    } else if ([userRoles.waiter, userRoles.cashier, userRoles.kitchenStaff].includes(actor.role)) {
+      if (actor.storeId !== store.id && (!actor.tenantId || actor.tenantId !== store.tenantId)) {
+        throw createHttpError(403, "Forbidden");
+      }
     }
   }
 

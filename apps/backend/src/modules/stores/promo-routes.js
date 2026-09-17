@@ -11,8 +11,8 @@ const {
 
 const router = express.Router({ mergeParams: true });
 
-// Read promos (Allowed for cashier, waiter, and managers in POS)
-router.get("/", authorizeRoles('SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'CASHIER', 'WAITER'), asyncHandler(async (req, res) => {
+// Read promos (Allowed for any authenticated store staff in POS)
+router.get("/", asyncHandler(async (req, res) => {
   const result = await getPromoCodes(req.params.storeId);
   res.json(createApiResponse(result));
 }));

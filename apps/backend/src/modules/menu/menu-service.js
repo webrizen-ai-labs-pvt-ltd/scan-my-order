@@ -5,34 +5,44 @@ const { storeTenantCache, publicMenuCache } = require("../../lib/cache");
 
 // Helper to check if actor has access to modify a store's data
 async function verifyStoreAccess(actor, storeId) {
-  if (actor.role === userRoles.superAdmin) return;
+  if (!actor || actor.role === userRoles.superAdmin) return;
   
-  if (actor.role === userRoles.tenantAdmin) {
-    let tenantId = storeTenantCache.get(storeId);
-    if (!tenantId) {
-      const prisma = getPrismaClient();
-      const store = await prisma.store.findUnique({
-        where: { id: storeId },
-        select: { tenantId: true }
-      });
-      if (!store) {
-        throw createHttpError(404, "Store not found");
-      }
-      tenantId = store.tenantId;
-      storeTenantCache.set(storeId, tenantId);
+  let tenantId = storeTenantCache.get(storeId);
+  if (!tenantId) {
+    const prisma = getPrismaClient();
+    const store = await prisma.store.findUnique({
+      where: { id: storeId },
+      select: { tenantId: true }
+    });
+    if (!store) {
+      throw createHttpError(404, "Store not found");
     }
+    tenantId = store.tenantId;
+    storeTenantCache.set(storeId, tenantId);
+  }
 
+  // Tenant Admin: must belong to the same tenant
+  if (actor.role === userRoles.tenantAdmin) {
     if (tenantId !== actor.tenantId) {
       throw createHttpError(403, "Forbidden");
     }
     return;
   }
   
-  if ([userRoles.storeManager, userRoles.cashier, userRoles.waiter, userRoles.kitchenStaff].includes(actor.role)) {
-    if (actor.storeId !== storeId) {
-      throw createHttpError(403, "Forbidden");
+  // Store Manager: access if explicitly assigned to store OR if belonging to the store's tenant
+  if (actor.role === userRoles.storeManager) {
+    if (actor.storeId === storeId || (actor.tenantId && actor.tenantId === tenantId)) {
+      return;
     }
-    return;
+    throw createHttpError(403, "Forbidden");
+  }
+
+  // Cashier, Waiter, Kitchen Staff: access if assigned to store OR belonging to the store's tenant without conflicting store assignment
+  if ([userRoles.cashier, userRoles.waiter, userRoles.kitchenStaff].includes(actor.role)) {
+    if (actor.storeId === storeId || (!actor.storeId && actor.tenantId && actor.tenantId === tenantId)) {
+      return;
+    }
+    throw createHttpError(403, "Forbidden");
   }
   
   throw createHttpError(403, "Forbidden");
