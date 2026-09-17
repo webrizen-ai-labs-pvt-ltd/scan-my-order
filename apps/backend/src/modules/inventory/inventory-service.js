@@ -1,16 +1,22 @@
 const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
+const { rawMaterialsCache, invalidateMaterialsCache } = require("../../lib/cache");
 
 // Raw Materials
 async function getMaterials(actor, storeId) {
   await verifyStoreAccess(actor, storeId);
-  const prisma = getPrismaClient();
   
-  return await prisma.rawMaterial.findMany({
+  const cached = rawMaterialsCache.get(storeId);
+  if (cached) return cached;
+
+  const prisma = getPrismaClient();
+  const materials = await prisma.rawMaterial.findMany({
     where: { storeId },
     orderBy: { name: 'asc' }
   });
+  rawMaterialsCache.set(storeId, materials);
+  return materials;
 }
 
 async function createMaterial(actor, storeId, input) {
@@ -22,7 +28,7 @@ async function createMaterial(actor, storeId, input) {
     throw createHttpError(400, "name and unit are required");
   }
   
-  return await prisma.rawMaterial.create({
+  const created = await prisma.rawMaterial.create({
     data: {
       storeId,
       name,
@@ -31,6 +37,8 @@ async function createMaterial(actor, storeId, input) {
       currentStock: 0 // initially 0, needs RESTOCK transaction to add stock
     }
   });
+  invalidateMaterialsCache(storeId);
+  return created;
 }
 
 // Recipes
@@ -248,6 +256,7 @@ async function addStockTransaction(actor, storeId, input) {
     return txn;
   });
   
+  invalidateMaterialsCache(storeId);
   return result;
 }
 

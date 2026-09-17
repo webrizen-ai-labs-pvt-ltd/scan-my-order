@@ -1,9 +1,16 @@
 const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
+const { tablesStatusCache, invalidateTablesCache } = require("../../lib/cache");
 
 async function getTables(actor, storeId) {
   await verifyStoreAccess(actor, storeId);
+  
+  const cached = tablesStatusCache.get(storeId);
+  if (cached) {
+    return cached;
+  }
+
   const prisma = getPrismaClient();
   
   const now = new Date();
@@ -43,7 +50,7 @@ async function getTables(actor, storeId) {
     orderBy: { tableNumber: 'asc' }
   });
 
-  return rawTables.map(tbl => {
+  const result = rawTables.map(tbl => {
     const activeOrder = tbl.orders[0] || null;
     const activeSession = tbl.sessions?.[0] || null;
     const isOccupied = Boolean(activeOrder || activeSession);
@@ -85,6 +92,9 @@ async function getTables(actor, storeId) {
       updatedAt: tbl.updatedAt
     };
   });
+
+  tablesStatusCache.set(storeId, result);
+  return result;
 }
 
 async function createTable(actor, storeId, input) {
@@ -110,13 +120,15 @@ async function createTable(actor, storeId, input) {
     throw createHttpError(409, `Table number ${tableNumber} already exists`);
   }
   
-  return await prisma.table.create({
+  const created = await prisma.table.create({
     data: {
       storeId,
       tableNumber,
       capacity: capacity ? parseInt(capacity, 10) : 4
     }
   });
+  invalidateTablesCache(storeId);
+  return created;
 }
 
 async function updateTable(actor, storeId, tableId, input) {
@@ -151,10 +163,12 @@ async function updateTable(actor, storeId, tableId, input) {
     updateData.isActive = Boolean(input.isActive);
   }
 
-  return await prisma.table.update({
+  const updated = await prisma.table.update({
     where: { id: tableId },
     data: updateData
   });
+  invalidateTablesCache(storeId);
+  return updated;
 }
 
 async function deleteTable(actor, storeId, tableId) {
@@ -167,9 +181,11 @@ async function deleteTable(actor, storeId, tableId) {
   }
   
   // Alternatively, just mark isActive = false if you want soft delete
-  return await prisma.table.delete({
+  const res = await prisma.table.delete({
     where: { id: tableId }
   });
+  invalidateTablesCache(storeId);
+  return res;
 }
 
 module.exports = {

@@ -28,7 +28,7 @@ async function verifyStoreAccess(actor, storeId) {
     return;
   }
   
-  if ([userRoles.storeManager].includes(actor.role)) {
+  if ([userRoles.storeManager, userRoles.cashier, userRoles.waiter, userRoles.kitchenStaff].includes(actor.role)) {
     if (actor.storeId !== storeId) {
       throw createHttpError(403, "Forbidden");
     }
@@ -48,6 +48,11 @@ async function getFullMenu(actor, storeId) {
   // If actor is provided, do access check
   if (actor) await verifyStoreAccess(actor, storeId);
   
+  const cached = publicMenuCache.get(storeId);
+  if (cached) {
+    return cached;
+  }
+
   const prisma = getPrismaClient();
   const categories = await prisma.menuCategory.findMany({
     where: { storeId },
@@ -68,6 +73,7 @@ async function getFullMenu(actor, storeId) {
     }
   });
   
+  publicMenuCache.set(storeId, categories);
   return categories;
 }
 

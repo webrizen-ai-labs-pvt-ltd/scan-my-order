@@ -11,25 +11,24 @@ const {
 
 const router = express.Router({ mergeParams: true });
 
-// Require specific permissions to manage promos
-router.use(authorizeRoles('SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'));
-
-router.post("/", asyncHandler(async (req, res) => {
-  const result = await createPromoCode(req.params.storeId, req.body);
-  res.status(201).json(createApiResponse(result));
-}));
-
-router.get("/", asyncHandler(async (req, res) => {
+// Read promos (Allowed for cashier, waiter, and managers in POS)
+router.get("/", authorizeRoles('SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'CASHIER', 'WAITER'), asyncHandler(async (req, res) => {
   const result = await getPromoCodes(req.params.storeId);
   res.json(createApiResponse(result));
 }));
 
-router.patch("/:id", asyncHandler(async (req, res) => {
+// Mutations require manager or admin permissions
+router.post("/", authorizeRoles('SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'), asyncHandler(async (req, res) => {
+  const result = await createPromoCode(req.params.storeId, req.body);
+  res.status(201).json(createApiResponse(result));
+}));
+
+router.patch("/:id", authorizeRoles('SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'), asyncHandler(async (req, res) => {
   const result = await updatePromoCode(req.params.storeId, req.params.id, req.body);
   res.json(createApiResponse(result));
 }));
 
-router.delete("/:id", asyncHandler(async (req, res) => {
+router.delete("/:id", authorizeRoles('SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'), asyncHandler(async (req, res) => {
   const result = await deletePromoCode(req.params.storeId, req.params.id);
   res.json(createApiResponse(result));
 }));

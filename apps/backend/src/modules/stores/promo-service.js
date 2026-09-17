@@ -1,5 +1,6 @@
 const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
+const { promoCodesCache, invalidatePromosCache } = require("../../lib/cache");
 
 async function createPromoCode(storeId, data) {
   const prisma = getPrismaClient();
@@ -18,15 +19,20 @@ async function createPromoCode(storeId, data) {
       code: data.code.toUpperCase()
     }
   });
+  invalidatePromosCache(storeId);
   return promo;
 }
 
 async function getPromoCodes(storeId) {
+  const cached = promoCodesCache.get(storeId);
+  if (cached) return cached;
+
   const prisma = getPrismaClient();
   const promos = await prisma.promoCode.findMany({
     where: { storeId },
     orderBy: { createdAt: 'desc' }
   });
+  promoCodesCache.set(storeId, promos);
   return promos;
 }
 
@@ -44,6 +50,7 @@ async function updatePromoCode(storeId, promoId, data) {
     throw createHttpError(404, "Promo code not found");
   }
   
+  invalidatePromosCache(storeId);
   return prisma.promoCode.findUnique({ where: { id: promoId } });
 }
 
@@ -56,6 +63,7 @@ async function deletePromoCode(storeId, promoId) {
   if (promo.count === 0) {
     throw createHttpError(404, "Promo code not found");
   }
+  invalidatePromosCache(storeId);
   return { message: "Promo code deleted" };
 }
 

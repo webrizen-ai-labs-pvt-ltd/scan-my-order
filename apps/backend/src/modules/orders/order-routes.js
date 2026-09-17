@@ -5,6 +5,7 @@ const { authenticate } = require("../../middleware/auth");
 const { 
   createOrder, 
   getActiveOrders, 
+  getOrderStats,
   getKdsOrders, 
   updateOrderStatus, 
   updateOrderItems,
@@ -31,6 +32,12 @@ router.get("/stream", (req, res) => {
 });
 
 // === STAFF ROUTES ===
+
+// GET /api/stores/:storeId/orders/stats (Fast real-time stats for POS polling)
+router.get("/stats", asyncHandler(async (req, res) => {
+  const result = await getOrderStats(req.user, req.params.storeId);
+  res.json(createApiResponse(result));
+}));
 
 // GET /api/stores/:storeId/orders
 router.get("/", asyncHandler(async (req, res) => {

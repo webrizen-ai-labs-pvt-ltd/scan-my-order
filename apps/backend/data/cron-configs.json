@@ -1,16 +1,16 @@
 {
   "cmt5g9r9c0005ebh8kn4dezdx": {
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-16T18:45:03.453Z",
+      "lastRunAt": "2026-09-17T14:45:01.746Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 3440
+      "lastRunDurationMs": 1736
     },
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-16T18:30:05.688Z",
+      "lastRunAt": "2026-09-17T14:30:05.851Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 5681
+      "lastRunDurationMs": 5845
     },
     "DAILY_SALES_DIGEST": {
       "lastRunAt": "2026-09-16T18:25:26.333Z",
@@ -27,16 +27,16 @@
   },
   "cmu1mjo6y0006s0507dgz8zg3": {
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-16T18:30:04.316Z",
+      "lastRunAt": "2026-09-17T14:30:02.693Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 4311
+      "lastRunDurationMs": 2688
     },
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-16T18:45:04.170Z",
+      "lastRunAt": "2026-09-17T14:45:02.192Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 4157
+      "lastRunDurationMs": 2181
     },
     "DAILY_SALES_DIGEST": {
       "lastRunAt": "2026-09-16T18:25:25.719Z",

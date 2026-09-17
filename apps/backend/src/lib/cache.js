@@ -64,12 +64,50 @@ class MemoryCache {
 const authUserCache = new MemoryCache(300000, 2000); // 5 min TTL
 const storeTenantCache = new MemoryCache(300000, 1000); // 5 min TTL
 const tenantSubscriptionCache = new MemoryCache(60000, 1000); // 60s TTL
-const publicMenuCache = new MemoryCache(30000, 500); // 30s TTL
+const publicMenuCache = new MemoryCache(60000, 500); // 60s TTL
+const storeMetadataCache = new MemoryCache(60000, 500); // 60s TTL
+const tablesStatusCache = new MemoryCache(15000, 500); // 15s TTL
+const rawMaterialsCache = new MemoryCache(30000, 500); // 30s TTL
+const promoCodesCache = new MemoryCache(30000, 500); // 30s TTL
+const openItemRecordCache = new MemoryCache(300000, 500); // 5 min TTL
+
+function invalidateMenuCache(storeId) {
+  if (storeId) publicMenuCache.del(storeId);
+}
+
+function invalidateTablesCache(storeId) {
+  if (storeId) tablesStatusCache.del(storeId);
+}
+
+function invalidateStoreCache(storeId) {
+  if (storeId) {
+    storeMetadataCache.del(storeId);
+    storeTenantCache.del(storeId);
+  }
+}
+
+function invalidateMaterialsCache(storeId) {
+  if (storeId) rawMaterialsCache.del(storeId);
+}
+
+function invalidatePromosCache(storeId) {
+  if (storeId) promoCodesCache.del(storeId);
+}
 
 module.exports = {
   MemoryCache,
   authUserCache,
   storeTenantCache,
   tenantSubscriptionCache,
-  publicMenuCache
+  publicMenuCache,
+  storeMetadataCache,
+  tablesStatusCache,
+  rawMaterialsCache,
+  promoCodesCache,
+  openItemRecordCache,
+  invalidateMenuCache,
+  invalidateTablesCache,
+  invalidateStoreCache,
+  invalidateMaterialsCache,
+  invalidatePromosCache
 };

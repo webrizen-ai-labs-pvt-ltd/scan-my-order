@@ -6,6 +6,12 @@ const { verifyStoreAccess } = require("../menu/menu-service");
 const { decrypt } = require("../../lib/encryption");
 const { broadcastToStore, broadcastToCustomer } = require("./sse-service");
 const { evaluateMenuItemAvailability } = require("../inventory/inventory-service");
+const { 
+  openItemRecordCache, 
+  invalidateMaterialsCache, 
+  invalidateMenuCache, 
+  invalidateTablesCache 
+} = require("../../lib/cache");
 
 // Helper: Decode custom metadata stored in kitchenNotes
 function decodeKitchenNotes(rawNotes) {
@@ -69,6 +75,9 @@ function serializeOrder(order) {
 
 // Helper: Get or automatically provision a store's system "Open Custom Dish" MenuItem
 async function getOrCreateSystemOpenItem(prisma, storeId) {
+  const cached = openItemRecordCache.get(storeId);
+  if (cached) return cached;
+
   let openItem = await prisma.menuItem.findFirst({
     where: {
       storeId,
@@ -107,6 +116,10 @@ async function getOrCreateSystemOpenItem(prisma, storeId) {
         isSystemDisabled: false
       }
     });
+  }
+
+  if (openItem) {
+    openItemRecordCache.set(storeId, openItem);
   }
 
   return openItem;
@@ -377,6 +390,15 @@ async function createOrder(storeId, actor, origin, input) {
     broadcastToStore(storeId, 'ORDER_PROCESSING', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PROCESSING', order);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_PROCESSING', order);
+  } else if (status === 'SETTLED') {
+    await deductInventory(prisma, order);
+    broadcastToStore(storeId, 'ORDER_SETTLED', order);
+    if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_SETTLED', order);
+    if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_SETTLED', order);
+  }
+
+  if (tableId) {
+    invalidateTablesCache(storeId);
   }
   
   // If prepaid, we need to generate a Razorpay order
@@ -708,44 +730,37 @@ async function deductInventory(prisma, order) {
       }
     }
   });
-  
+
+  const transactions = [];
+  const materialDeltas = new Map(); // materialId -> total consumed quantity
+
   for (const item of items) {
     // Deduct base item recipe if any
     if (item.menuItem?.recipe) {
       for (const rec of item.menuItem.recipe) {
-        await prisma.stockTransaction.create({
-          data: {
-            materialId: rec.rawMaterialId,
-            type: 'CONSUME',
-            quantity: rec.quantity * item.quantity,
-            reference: `Order ${order.id}`
-          }
+        const consumeQty = rec.quantity * item.quantity;
+        transactions.push({
+          materialId: rec.rawMaterialId,
+          type: 'CONSUME',
+          quantity: consumeQty,
+          reference: `Order ${order.id}`
         });
-        await prisma.rawMaterial.update({
-          where: { id: rec.rawMaterialId },
-          data: { currentStock: { decrement: rec.quantity * item.quantity } }
-        });
-        await evaluateMenuItemAvailability(prisma, rec.rawMaterialId);
+        materialDeltas.set(rec.rawMaterialId, (materialDeltas.get(rec.rawMaterialId) || 0) + consumeQty);
       }
     }
-    
+
     // Deduct modifiers
     for (const mod of item.modifiers) {
       if (mod.modifierOption?.recipe) {
         for (const rec of mod.modifierOption.recipe) {
-          await prisma.stockTransaction.create({
-            data: {
-              materialId: rec.rawMaterialId,
-              type: 'CONSUME',
-              quantity: rec.quantity * item.quantity,
-              reference: `Order ${order.id} Mod`
-            }
+          const consumeQty = rec.quantity * item.quantity;
+          transactions.push({
+            materialId: rec.rawMaterialId,
+            type: 'CONSUME',
+            quantity: consumeQty,
+            reference: `Order ${order.id} Mod`
           });
-          await prisma.rawMaterial.update({
-            where: { id: rec.rawMaterialId },
-            data: { currentStock: { decrement: rec.quantity * item.quantity } }
-          });
-          await evaluateMenuItemAvailability(prisma, rec.rawMaterialId);
+          materialDeltas.set(rec.rawMaterialId, (materialDeltas.get(rec.rawMaterialId) || 0) + consumeQty);
         }
       }
     }
@@ -756,54 +771,77 @@ async function deductInventory(prisma, order) {
       for (const ing of decoded.customIngredients) {
         if (ing.rawMaterialId && Number(ing.quantity) > 0) {
           const consumeQty = Number(ing.quantity) * item.quantity;
-          await prisma.stockTransaction.create({
-            data: {
-              materialId: ing.rawMaterialId,
-              type: 'CONSUME',
-              quantity: consumeQty,
-              reference: `Order ${order.id} Ingredient: ${ing.name || 'Custom'}`
-            }
+          transactions.push({
+            materialId: ing.rawMaterialId,
+            type: 'CONSUME',
+            quantity: consumeQty,
+            reference: `Order ${order.id} Ingredient: ${ing.name || 'Custom'}`
           });
-          await prisma.rawMaterial.update({
-            where: { id: ing.rawMaterialId },
-            data: { currentStock: { decrement: consumeQty } }
-          });
-          await evaluateMenuItemAvailability(prisma, ing.rawMaterialId);
+          materialDeltas.set(ing.rawMaterialId, (materialDeltas.get(ing.rawMaterialId) || 0) + consumeQty);
         }
       }
+    }
+  }
+
+  if (transactions.length > 0) {
+    // 1. Batch insert stock transactions in single query
+    await prisma.stockTransaction.createMany({ data: transactions });
+
+    // 2. Decrement raw material stock in parallel
+    await Promise.all(
+      Array.from(materialDeltas.entries()).map(([materialId, qty]) =>
+        prisma.rawMaterial.update({
+          where: { id: materialId },
+          data: { currentStock: { decrement: qty } }
+        })
+      )
+    );
+
+    // 3. Batch evaluate availability once per unique raw material
+    await Promise.all(
+      Array.from(materialDeltas.keys()).map(materialId =>
+        evaluateMenuItemAvailability(prisma, materialId)
+      )
+    );
+
+    // Invalidate caches
+    const storeId = order.storeId || (await prisma.order.findUnique({ where: { id: order.id }, select: { storeId: true } }))?.storeId;
+    if (storeId) {
+      invalidateMaterialsCache(storeId);
+      invalidateMenuCache(storeId);
     }
   }
 }
 
 // Helper: Revert inventory deductions when items are updated
 async function revertInventoryDeduction(prisma, orderId) {
-  const items = await prisma.orderItem.findMany({
-    where: { orderId },
-    include: {
-      menuItem: { include: { recipe: true } },
-      modifiers: {
-        include: { modifierOption: { include: { recipe: true } } }
+  const [order, items] = await Promise.all([
+    prisma.order.findUnique({ where: { id: orderId }, select: { storeId: true } }),
+    prisma.orderItem.findMany({
+      where: { orderId },
+      include: {
+        menuItem: { include: { recipe: true } },
+        modifiers: {
+          include: { modifierOption: { include: { recipe: true } } }
+        }
       }
-    }
-  });
+    })
+  ]);
+
+  const transactions = [];
+  const materialDeltas = new Map(); // materialId -> total restocked quantity
 
   for (const item of items) {
     if (item.menuItem?.recipe) {
       for (const rec of item.menuItem.recipe) {
         const restoreQty = rec.quantity * item.quantity;
-        await prisma.stockTransaction.create({
-          data: {
-            materialId: rec.rawMaterialId,
-            type: 'RESTOCK',
-            quantity: restoreQty,
-            reference: `Revert Order ${orderId} (Manager Item Edit)`
-          }
+        transactions.push({
+          materialId: rec.rawMaterialId,
+          type: 'RESTOCK',
+          quantity: restoreQty,
+          reference: `Revert Order ${orderId} (Manager Item Edit)`
         });
-        await prisma.rawMaterial.update({
-          where: { id: rec.rawMaterialId },
-          data: { currentStock: { increment: restoreQty } }
-        });
-        await evaluateMenuItemAvailability(prisma, rec.rawMaterialId);
+        materialDeltas.set(rec.rawMaterialId, (materialDeltas.get(rec.rawMaterialId) || 0) + restoreQty);
       }
     }
 
@@ -811,19 +849,13 @@ async function revertInventoryDeduction(prisma, orderId) {
       if (mod.modifierOption?.recipe) {
         for (const rec of mod.modifierOption.recipe) {
           const restoreQty = rec.quantity * item.quantity;
-          await prisma.stockTransaction.create({
-            data: {
-              materialId: rec.rawMaterialId,
-              type: 'RESTOCK',
-              quantity: restoreQty,
-              reference: `Revert Order ${orderId} Mod (Manager Item Edit)`
-            }
+          transactions.push({
+            materialId: rec.rawMaterialId,
+            type: 'RESTOCK',
+            quantity: restoreQty,
+            reference: `Revert Order ${orderId} Mod (Manager Item Edit)`
           });
-          await prisma.rawMaterial.update({
-            where: { id: rec.rawMaterialId },
-            data: { currentStock: { increment: restoreQty } }
-          });
-          await evaluateMenuItemAvailability(prisma, rec.rawMaterialId);
+          materialDeltas.set(rec.rawMaterialId, (materialDeltas.get(rec.rawMaterialId) || 0) + restoreQty);
         }
       }
     }
@@ -833,21 +865,42 @@ async function revertInventoryDeduction(prisma, orderId) {
       for (const ing of decoded.customIngredients) {
         if (ing.rawMaterialId && Number(ing.quantity) > 0) {
           const restoreQty = Number(ing.quantity) * item.quantity;
-          await prisma.stockTransaction.create({
-            data: {
-              materialId: ing.rawMaterialId,
-              type: 'RESTOCK',
-              quantity: restoreQty,
-              reference: `Revert Order ${orderId} Ingredient: ${ing.name || 'Custom'}`
-            }
+          transactions.push({
+            materialId: ing.rawMaterialId,
+            type: 'RESTOCK',
+            quantity: restoreQty,
+            reference: `Revert Order ${orderId} Ingredient: ${ing.name || 'Custom'}`
           });
-          await prisma.rawMaterial.update({
-            where: { id: ing.rawMaterialId },
-            data: { currentStock: { increment: restoreQty } }
-          });
-          await evaluateMenuItemAvailability(prisma, ing.rawMaterialId);
+          materialDeltas.set(ing.rawMaterialId, (materialDeltas.get(ing.rawMaterialId) || 0) + restoreQty);
         }
       }
+    }
+  }
+
+  if (transactions.length > 0) {
+    // 1. Batch insert restock transactions in single query
+    await prisma.stockTransaction.createMany({ data: transactions });
+
+    // 2. Increment raw material stock in parallel
+    await Promise.all(
+      Array.from(materialDeltas.entries()).map(([materialId, qty]) =>
+        prisma.rawMaterial.update({
+          where: { id: materialId },
+          data: { currentStock: { increment: qty } }
+        })
+      )
+    );
+
+    // 3. Batch evaluate availability once per unique material
+    await Promise.all(
+      Array.from(materialDeltas.keys()).map(materialId =>
+        evaluateMenuItemAvailability(prisma, materialId)
+      )
+    );
+
+    if (order?.storeId) {
+      invalidateMaterialsCache(order.storeId);
+      invalidateMenuCache(order.storeId);
     }
   }
 }
@@ -1038,6 +1091,9 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
     broadcastToCustomer(updatedOrder.sessionId, `ORDER_${newStatus}`, updatedOrder);
     broadcastToCustomer(updatedOrder.sessionId, 'ORDER_UPDATED', updatedOrder);
   }
+
+  // Invalidate table status cache on relevant status transitions
+  invalidateTablesCache(storeId);
   
   return updatedOrder;
 }
@@ -1274,6 +1330,7 @@ async function settleTableSession(actor, storeId, tableSessionId, isSystem = fal
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_SETTLED', settledOrder);
   }
   broadcastToStore(actualStoreId, 'TABLE_SESSION_SETTLED', { tableSessionId, tableId: session.tableId });
+  invalidateTablesCache(actualStoreId);
 
   return { success: true, tableSessionId, settledOrdersCount: activeOrders.length, session: updatedSession };
 }
@@ -1576,6 +1633,34 @@ async function getTableSessionStatus(storeId, tableNumber) {
   };
 }
 
+// 6. FAST ORDER STATS (INDEXED COUNTS FOR REALTIME POS DASHBOARD)
+async function getOrderStats(actor, storeId) {
+  if (actor) {
+    await verifyStoreAccess(actor, storeId);
+  }
+  const prisma = getPrismaClient();
+
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const [totalToday, activeCount] = await Promise.all([
+    prisma.order.count({
+      where: {
+        storeId,
+        createdAt: { gte: startOfDay }
+      }
+    }),
+    prisma.order.count({
+      where: {
+        storeId,
+        status: { notIn: ['SETTLED', 'CANCELLED'] }
+      }
+    })
+  ]);
+
+  return { totalToday, activeCount };
+}
+
 module.exports = {
   createOrder,
   handleRazorpayWebhook,
@@ -1583,6 +1668,7 @@ module.exports = {
   updateOrderItems,
   getKdsOrders,
   getActiveOrders,
+  getOrderStats,
   generatePaymentLink,
   checkPaymentStatus,
   verifyRazorpayPayment,

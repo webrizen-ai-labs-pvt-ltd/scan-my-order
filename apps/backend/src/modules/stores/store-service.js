@@ -2,6 +2,7 @@ const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { userRoles } = require("../../constants/roles");
 const { DEFAULT_IMAGES } = require("@smo/shared");
+const { storeMetadataCache, invalidateStoreCache } = require("../../lib/cache");
 
 // Helper to format store and provide default images
 function serializeStore(store) {
@@ -164,15 +165,18 @@ async function getStores(actor, query = {}) {
 }
 
 async function getStoreById(actor, storeId) {
-  const prisma = getPrismaClient();
-
-  const store = await prisma.store.findUnique({
-    where: { id: storeId },
-    include: { tenant: true }
-  });
-
+  let store = storeMetadataCache.get(storeId);
   if (!store) {
-    throw createHttpError(404, "Store not found");
+    const prisma = getPrismaClient();
+    store = await prisma.store.findUnique({
+      where: { id: storeId },
+      include: { tenant: true }
+    });
+
+    if (!store) {
+      throw createHttpError(404, "Store not found");
+    }
+    storeMetadataCache.set(storeId, store);
   }
 
   // Scope check
@@ -280,6 +284,7 @@ async function updateStore(actor, storeId, input) {
     return updatedStore;
   });
 
+  invalidateStoreCache(storeId);
   return serializeStore(store);
 }
 
@@ -297,6 +302,7 @@ async function deleteStore(actor, storeId) {
     where: { id: storeId }
   });
 
+  invalidateStoreCache(storeId);
   return { success: true };
 }
 

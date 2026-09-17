@@ -150,13 +150,12 @@ export const POS = () => {
     const fetchCounts = () => {
       if (isFirstLoad) setStatsLoading(true);
       api
-        .get(`/stores/${selectedStoreId}/orders`)
+        .get(`/stores/${selectedStoreId}/orders/stats`)
         .then(res => {
           if (cancelled) return;
-          if (res.data.success) {
-            const orders = res.data.data || [];
-            const active = orders.filter(o => !['SETTLED', 'CANCELLED'].includes(o.status));
-            setStats({ totalToday: orders.length, activeCount: active.length });
+          if (res.data.success && res.data.data) {
+            const { totalToday = 0, activeCount = 0 } = res.data.data;
+            setStats({ totalToday, activeCount });
           }
         })
         .catch(() => {})
