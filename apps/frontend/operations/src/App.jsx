@@ -20,6 +20,7 @@ import { BrandSetup } from './pages/brand-setup';
 import { Subscriptions } from './pages/subscriptions';
 import { Reservations } from './pages/reservations';
 import { Employees } from './pages/employees';
+import { TableAnalytics } from './pages/table-analytics';
 
 function App() {
   return (
@@ -70,6 +71,7 @@ function App() {
             <Route path="/dashboard/brand" element={<BrandSetup />} />
             <Route path="/dashboard/stores/create" element={<StoreCreate />} />
             <Route path="/dashboard/subscriptions" element={<Subscriptions />} />
+            <Route path="/dashboard/table-analytics" element={<TableAnalytics />} />
           </Route>
         </Route>
       </Route>

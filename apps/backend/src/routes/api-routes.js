@@ -7,6 +7,7 @@ const tenantRoutes = require("../modules/tenants/tenant-routes");
 const publicRoutes = require("../modules/public/public-routes");
 const dashboardRoutes = require("../modules/dashboard/dashboard-routes");
 const maintenanceRoutes = require("../modules/maintenance/maintenance-routes");
+const analyticsRoutes = require("../modules/analytics/analytics-routes");
 
 const router = express.Router();
 
@@ -18,5 +19,6 @@ router.use("/tenants", tenantRoutes);
 router.use("/public", publicRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/maintenance", maintenanceRoutes);
+router.use("/analytics", analyticsRoutes);
 
 module.exports = router;

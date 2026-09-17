@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../lib/api';
+import { useAuthStore } from '../store/authStore';
 import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import { Card, CardContent, Button, Input, Skeleton } from '@smo/ui';
@@ -12,11 +14,14 @@ import {
   DocumentCodeIcon,
   Loading03Icon,
   Cancel01Icon,
+  Analytics01Icon,
 } from 'hugeicons-react';
 
 const sortByNumber = (a, b) => a.tableNumber - b.tableNumber;
 
 export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
+  const { user } = useAuthStore();
+  const isSuperOrTenantAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'TENANT_ADMIN';
   // `tables === null` means "never loaded" → only then do we show skeletons.
   const [tables, setTables] = useState(null);
   const [error, setError] = useState('');
@@ -302,6 +307,18 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
         </div>
 
         <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto">
+          {isSuperOrTenantAdmin && (
+            <Link to="/dashboard/table-analytics">
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-xs text-yellow-600 dark:text-yellow-400 border-yellow-500/30 hover:bg-yellow-500/10"
+              >
+                <Analytics01Icon size={16} /> Table Analytics
+              </Button>
+            </Link>
+          )}
+
           {!isInitialLoading && tables.length > 0 && (
             <Button
               variant="link"

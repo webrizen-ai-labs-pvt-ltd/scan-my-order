@@ -159,7 +159,12 @@ async function getStores(actor, query = {}) {
 
   const stores = await prisma.store.findMany({ 
     where,
-    include: { tenant: true }
+    include: { 
+      tenant: true,
+      _count: {
+        select: { tables: true }
+      }
+    }
   });
   return stores.map(serializeStore);
 }
