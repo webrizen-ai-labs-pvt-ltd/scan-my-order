@@ -31,6 +31,7 @@ import {
   ChartBarLineIcon,
   ZapIcon,
   Xls01Icon,
+  Pdf01Icon,
 } from 'hugeicons-react';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
@@ -612,7 +613,7 @@ export const TableAnalytics = () => {
             disabled={isExporting || loading || !analytics}
             className="rounded-none rounded-r-full"
           >
-            <Download01Icon size={12} />
+            <Pdf01Icon size={12} />
             <span>PDF</span>
           </Button>
         </div>
