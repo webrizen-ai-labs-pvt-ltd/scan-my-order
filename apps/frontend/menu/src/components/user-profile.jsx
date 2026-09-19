@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { Logout01Icon } from 'hugeicons-react';
+import { Logout01Icon, Coins01Icon } from 'hugeicons-react';
 
-export const UserProfile = () => {
+export const UserProfile = ({ walletBalance, onOpenWallet }) => {
   const { user, logout } = useAuthStore();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef(null);
@@ -35,11 +35,26 @@ export const UserProfile = () => {
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-48 origin-top-right rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-xl animate-in fade-in zoom-in-95 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="absolute right-0 mt-2 w-52 origin-top-right rounded-2xl border border-zinc-200 bg-white p-1.5 shadow-xl animate-in fade-in zoom-in-95 dark:border-zinc-800 dark:bg-zinc-900">
           <div className="mb-1 border-b border-zinc-100 px-3 pb-2 pt-1 dark:border-zinc-800/80">
             <p className="truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">{user.name}</p>
             <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{user.email}</p>
           </div>
+
+          {walletBalance !== undefined && (
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                if (onOpenWallet) onOpenWallet();
+              }}
+              className="flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-400 transition mb-1 text-left"
+            >
+              <span className="flex items-center gap-1.5">
+                <Coins01Icon size={15} className="text-amber-500 shrink-0" /> Store Credits
+              </span>
+              <span className="font-bold">₹{Number(walletBalance).toFixed(2)}</span>
+            </button>
+          )}
           
           <button
             onClick={() => {

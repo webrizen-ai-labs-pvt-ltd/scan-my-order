@@ -2,7 +2,7 @@ const express = require("express");
 const { createApiResponse } = require("@smo/shared");
 const { asyncHandler } = require("../../middleware/async-handler");
 const { authenticate } = require("../../middleware/auth");
-const { bootstrapSuperAdmin, login, loginWithGoogle } = require("./auth-service");
+const { bootstrapSuperAdmin, customerRegister, login, loginWithGoogle } = require("./auth-service");
 const { generateAuthOptions, generateRegistrationOptions, verifyAuth, verifyRegistration, listPasskeys, deletePasskey } = require("./passkey-service");
 
 const router = express.Router();
@@ -15,6 +15,11 @@ router.post("/bootstrap-super-admin", asyncHandler(async (req, res) => {
 router.post("/login", asyncHandler(async (req, res) => {
   const result = await login(req.body);
   res.json(createApiResponse(result));
+}));
+
+router.post("/customer-register", asyncHandler(async (req, res) => {
+  const result = await customerRegister(req.body);
+  res.status(201).json(createApiResponse(result));
 }));
 
 router.post("/google", asyncHandler(async (req, res) => {

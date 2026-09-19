@@ -266,7 +266,25 @@ async function createOrder(storeId, actor, origin, input) {
      });
   }
 
-  const totalAmount = subTotal - discountAmount + taxAmount;
+  // Store Loyalty Credit Wallet Redemption
+  let walletDiscount = 0;
+  if (input.applyWalletCredits && actor) {
+    try {
+      const { previewWalletRedemption } = require("../loyalty/loyalty-service");
+      const preview = await previewWalletRedemption(actor.id, storeId, subTotal, Number(input.walletCredits || 0));
+      if (preview.eligible && preview.appliedCredits > 0) {
+        if (appliedPromoCodeId && !preview.allowPromoStacking) {
+          throw createHttpError(400, "Store credits cannot be combined with promo codes at this store.");
+        }
+        walletDiscount = preview.appliedCredits;
+      }
+    } catch (err) {
+      if (err.statusCode) throw err;
+      console.warn("[Loyalty Preview Notice]", err.message);
+    }
+  }
+
+  const totalAmount = Math.max(0, subTotal - discountAmount - walletDiscount + taxAmount);
   
   const { paymentMethod, cashAmount, onlineAmount } = input;
   let resolvedPaymentMethod = null;
@@ -359,6 +377,7 @@ async function createOrder(storeId, actor, origin, input) {
       status,
       subTotal,
       discountAmount,
+      walletDiscount,
       taxAmount,
       promoCodeId: appliedPromoCodeId,
       totalAmount,
@@ -380,6 +399,16 @@ async function createOrder(storeId, actor, origin, input) {
     }
   });
   
+  // Deduct applied wallet credits from customer balance
+  if (walletDiscount > 0 && actor) {
+    try {
+      const { applyWalletCreditsOnOrder } = require("../loyalty/loyalty-service");
+      await applyWalletCreditsOnOrder(prisma, actor.id, storeId, order.id, walletDiscount);
+    } catch (err) {
+      console.error("[Loyalty Debit Error]", err.message);
+    }
+  }
+  
   // Broadcast if it needs verification or went to processing
   if (status === 'PENDING_VERIFICATION') {
     broadcastToStore(storeId, 'ORDER_PENDING_VERIFICATION', order);
@@ -395,6 +424,12 @@ async function createOrder(storeId, actor, origin, input) {
     broadcastToStore(storeId, 'ORDER_SETTLED', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_SETTLED', order);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_SETTLED', order);
+    try {
+      const { creditOrderCashback } = require("../loyalty/loyalty-service");
+      await creditOrderCashback(order.id);
+    } catch (err) {
+      console.error("[Loyalty Cashback Error]", err.message);
+    }
   }
 
   if (tableId) {
@@ -1079,6 +1114,42 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
       }
     }
   });
+
+  // Award cashback if transitioning to SETTLED, or refund wallet credits if cancelled
+  if (newStatus === 'SETTLED') {
+    try {
+      const { creditOrderCashback } = require("../loyalty/loyalty-service");
+      await creditOrderCashback(orderId);
+    } catch (e) {
+      console.error("[Loyalty Cashback Error on Status]", e.message);
+    }
+  } else if (newStatus === 'CANCELLED' && order.walletDiscount > 0 && order.customerId) {
+    try {
+      const refundCredits = order.walletDiscount;
+      await prisma.$transaction(async (tx) => {
+        const w = await tx.customerStoreWallet.update({
+          where: { customerId_storeId: { customerId: order.customerId, storeId } },
+          data: {
+            balance: { increment: refundCredits },
+            totalSpent: { decrement: refundCredits }
+          }
+        });
+        await tx.customerWalletTransaction.create({
+          data: {
+            walletId: w.id,
+            orderId: order.id,
+            type: 'ORDER_REFUND',
+            amount: refundCredits,
+            balanceAfter: w.balance,
+            description: `Refund of credits for cancelled Order #${order.id.slice(-6).toUpperCase()}`
+          }
+        });
+      });
+      broadcastToCustomer(order.customerId, 'CUSTOMER_WALLET_UPDATED', { storeId, balanceRefunded: refundCredits });
+    } catch (err) {
+      console.error("[Loyalty Refund Error on Cancel]", err.message);
+    }
+  }
   
   // Broadcast updates across the store (KDS, POS, Waiter, Customer)
   broadcastToStore(storeId, `ORDER_${newStatus}`, updatedOrder);
@@ -1328,6 +1399,12 @@ async function settleTableSession(actor, storeId, tableSessionId, isSystem = fal
     broadcastToStore(actualStoreId, 'ORDER_SETTLED', settledOrder);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_SETTLED', settledOrder);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_SETTLED', settledOrder);
+    try {
+      const { creditOrderCashback } = require("../loyalty/loyalty-service");
+      await creditOrderCashback(order.id);
+    } catch (e) {
+      console.error("[Loyalty Cashback Error on Session]", e.message);
+    }
   }
   broadcastToStore(actualStoreId, 'TABLE_SESSION_SETTLED', { tableSessionId, tableId: session.tableId });
   invalidateTablesCache(actualStoreId);

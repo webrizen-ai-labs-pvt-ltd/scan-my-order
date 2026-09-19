@@ -193,9 +193,57 @@ async function loginWithGoogle(input) {
   };
 }
 
+async function customerRegister(input) {
+  const prisma = getPrismaClient();
+  const email = normalizeEmail(input.email);
+  if (!email || !input.password) {
+    throw createHttpError(400, "Email and password are required");
+  }
+
+  let tenant = null;
+  if (input.tenantSlug) {
+    tenant = await prisma.tenant.findUnique({ where: { slug: input.tenantSlug } });
+  }
+
+  const whereClause = {
+    email,
+    status: { not: userStatuses.deleted }
+  };
+  if (tenant) {
+    whereClause.tenantId = tenant.id;
+  }
+
+  const existing = await prisma.user.findFirst({ where: whereClause });
+  if (existing) {
+    throw createHttpError(409, "An account with this email already exists. Please log in.");
+  }
+
+  const user = await prisma.user.create({
+    data: {
+      email,
+      name: input.name || email.split("@")[0],
+      phone: input.phone || null,
+      passwordHash: await hashPassword(input.password),
+      role: userRoles.customer,
+      status: userStatuses.active,
+      tenantId: tenant ? tenant.id : null
+    },
+    include: {
+      tenant: true,
+      store: true
+    }
+  });
+
+  return {
+    token: createUserToken(user),
+    user: serializeUser(user)
+  };
+}
+
 module.exports = {
   bootstrapSuperAdmin,
   createUserToken,
+  customerRegister,
   login,
   loginWithGoogle
 };

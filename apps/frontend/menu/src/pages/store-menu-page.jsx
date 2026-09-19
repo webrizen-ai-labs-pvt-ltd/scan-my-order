@@ -5,7 +5,7 @@ import { getSessionId } from '../lib/session';
 import { useCartStore } from '../store/cart-store';
 import { useAuthStore } from '../store/authStore';
 import { GoogleLogin } from '@react-oauth/google';
-import { Skeleton, Button, Input, AnimatedThemeToggler } from '@smo/ui';
+import { Skeleton, Button, Input, AnimatedThemeToggler, Sheet, SheetContent, SheetTitle } from '@smo/ui';
 import { UserProfile } from '../components/user-profile';
 import { LiveOrders } from '../components/live-orders';
 import {
@@ -22,8 +22,11 @@ import {
   ArrowRight01Icon,
   Tag01Icon,
   HotelBellIcon,
+  Coins01Icon,
+  GiftIcon,
 } from 'hugeicons-react';
 import { CallWaiterModal } from '../components/call-waiter-modal';
+import { CustomerWalletModal } from '../components/customer-wallet-modal';
 
 // ─── Dietary Badge (FSSAI-style, refined) ────────────────────────────────────
 const DietaryBadge = ({ type, size = 'sm' }) => {
@@ -217,6 +220,11 @@ export const StoreMenuPage = () => {
   const [showCallWaiter, setShowCallWaiter] = useState(false);
   const [isCallActive, setIsCallActive] = useState(false);
 
+  // Store Loyalty & Wallet State
+  const [walletData, setWalletData] = useState(null);
+  const [showWalletModal, setShowWalletModal] = useState(false);
+  const [useWalletCredits, setUseWalletCredits] = useState(false);
+
   // Scroll state for compact header
   const [isScrolled, setIsScrolled] = useState(false);
 
@@ -236,6 +244,25 @@ export const StoreMenuPage = () => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
   };
+
+  const fetchWalletData = useCallback(async (currentStoreId) => {
+    const sId = currentStoreId || store?.id;
+    if (!sId) return;
+    try {
+      const res = await api.get(`/public/stores/${sId}/wallet/me`);
+      if (res.data.success) {
+        setWalletData(res.data.data);
+      }
+    } catch (err) {
+      console.warn('Failed to load store wallet:', err);
+    }
+  }, [store?.id]);
+
+  useEffect(() => {
+    if (store?.id) {
+      fetchWalletData(store.id);
+    }
+  }, [store?.id, token, fetchWalletData]);
 
   const fetchMenuData = async () => {
     setLoading(true);
@@ -261,12 +288,13 @@ export const StoreMenuPage = () => {
                 setActiveTablePin(savedPin);
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       }
 
       setStore(resolvedStore);
       setStoreId(resolvedStore.id);
+      fetchWalletData(resolvedStore.id);
 
       const menuRes = await api.get(`/public/stores/${resolvedStore.id}/menu`);
       const menuCategories = menuRes.data.data || [];
@@ -377,6 +405,8 @@ export const StoreMenuPage = () => {
         paymentModel,
         type: 'DINE_IN',
         promoCode: appliedPromo?.code || undefined,
+        applyWalletCredits: useWalletCredits && appliedWalletCredits > 0,
+        walletCredits: appliedWalletCredits,
         items: items.map((i) => ({
           menuItemId: i.menuItemId,
           quantity: i.quantity,
@@ -423,6 +453,7 @@ export const StoreMenuPage = () => {
             }
             clearCart();
             setIsCheckoutOpen(false);
+            fetchWalletData();
           },
           prefill: { name: `Table ${tableNumber}` },
           theme: { color: store.tenant?.brandColor || '#059669' },
@@ -436,6 +467,7 @@ export const StoreMenuPage = () => {
         showToast('Order received! The kitchen is preparing your meal.', 'success');
         clearCart();
         setIsCheckoutOpen(false);
+        fetchWalletData();
       }
     } catch (err) {
       if (err.response?.status === 403 && err.response?.data?.message?.includes('Table PIN')) {
@@ -480,6 +512,9 @@ export const StoreMenuPage = () => {
         setAuth(newToken, user);
         setShowAuthModal(false);
         showToast('Authenticated successfully!', 'success');
+        if (store?.id) {
+          fetchWalletData(store.id);
+        }
         await submitOrder();
       }
     } catch (err) {
@@ -524,11 +559,26 @@ export const StoreMenuPage = () => {
     if (discountAmount > subTotal) discountAmount = subTotal;
   }
 
+  // Wallet Redemption Math
+  const loyaltyRules = walletData?.settings || walletData?.storeRules;
+  const isLoyaltyEnabled = Boolean(loyaltyRules?.isEnabled);
+  const customerBalance = Number(walletData?.wallet?.balance || 0);
+
+  let appliedWalletCredits = 0;
+  if (isLoyaltyEnabled && useWalletCredits && customerBalance > 0 && subTotal >= (loyaltyRules.minOrderToRedeem || 0)) {
+    if (!appliedPromo || loyaltyRules.allowPromoStacking) {
+      const maxAllowedPercent = loyaltyRules.maxRedemptionPercent || 50;
+      const maxAllowedByCart = Math.floor(subTotal * (maxAllowedPercent / 100));
+      const payableBeforeWallet = Math.max(0, subTotal - discountAmount);
+      appliedWalletCredits = Math.min(Math.floor(customerBalance), maxAllowedByCart, payableBeforeWallet);
+    }
+  }
+
   const taxAmount = store?.taxRules?.reduce((acc, tax) => {
     return acc + Math.round(subTotal * (tax.rate / 100));
   }, 0) || 0;
 
-  const finalTotal = subTotal - discountAmount + taxAmount;
+  const finalTotal = Math.max(0, subTotal - discountAmount - appliedWalletCredits + taxAmount);
 
   // ═════════════════════════════════════════════════════════════════════════
   // LOADING SKELETON
@@ -628,9 +678,8 @@ export const StoreMenuPage = () => {
 
         {/* ── Compact Top Bar ────────────────────────────────────────────── */}
         <header
-          className={`sticky top-0 z-30 flex items-center justify-between border-b bg-white/95 px-4 py-2.5 backdrop-blur-xl transition-shadow duration-300 dark:bg-zinc-950/95 ${
-            isScrolled ? 'border-zinc-200/80 shadow-sm dark:border-zinc-800' : 'border-transparent'
-          }`}
+          className={`sticky top-0 z-30 flex items-center justify-between border-b bg-white/95 px-4 py-2.5 backdrop-blur-xl transition-shadow duration-300 dark:bg-zinc-950/95 ${isScrolled ? 'border-zinc-200/80 shadow-sm dark:border-zinc-800' : 'border-transparent'
+            }`}
         >
           <div className="flex min-w-0 items-center gap-2.5">
             {store.tenant?.logo ? (
@@ -655,7 +704,7 @@ export const StoreMenuPage = () => {
           <div className="flex shrink-0 items-center gap-1.5">
             {/* Table badge */}
             {tableNumber ? (
-              <div className="flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 pl-2 pr-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400">
+              <div className="inline-flex h-7 items-center gap-1 rounded-l-full border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400">
                 <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
                 T{tableNumber}
                 {activeTablePin && (
@@ -663,9 +712,30 @@ export const StoreMenuPage = () => {
                 )}
               </div>
             ) : (
-              <div className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-medium text-amber-600 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+              <div className="inline-flex h-7 items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 text-[11px] font-medium text-amber-600 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
                 Browse
               </div>
+            )}
+
+            {/* Store Credit Wallet Pill */}
+            {isLoyaltyEnabled && (
+              <button
+                type="button"
+                onClick={() => setShowWalletModal(true)}
+                title="Store Credit Wallet"
+                className="inline-flex h-7 items-center gap-1.5 rounded-r-full border border-amber-300 bg-amber-100 px-2.5 text-[11px] font-semibold text-amber-900 transition-colors hover:bg-amber-200 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-900"
+              >
+                {token && walletData?.wallet ? (
+                  <Coins01Icon size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                ) : (
+                  <GiftIcon size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
+                )}
+                <span>
+                  {token && walletData?.wallet
+                    ? `₹${customerBalance.toFixed(0)}`
+                    : `₹${loyaltyRules.welcomeBonusCredits || 50} Free`}
+                </span>
+              </button>
             )}
 
             {/* Call Waiter (inline icon) */}
@@ -673,11 +743,10 @@ export const StoreMenuPage = () => {
               <button
                 type="button"
                 onClick={() => setShowCallWaiter(true)}
-                className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-all ${
-                  isCallActive
-                    ? 'bg-yellow-500 text-zinc-950 shadow-md ring-2 ring-yellow-500/40'
-                    : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
-                }`}
+                className={`relative flex h-8 w-8 items-center justify-center rounded-full transition-all ${isCallActive
+                  ? 'bg-yellow-500 text-zinc-950 shadow-md ring-2 ring-yellow-500/40'
+                  : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'
+                  }`}
                 title="Call a waiter"
               >
                 <span className="text-sm">{isCallActive ? <HotelBellIcon size={16} /> : <HotelBellIcon size={16} />}</span>
@@ -686,9 +755,11 @@ export const StoreMenuPage = () => {
                 )}
               </button>
             )}
-
             <AnimatedThemeToggler className="!size-8" />
-            <UserProfile />
+            <UserProfile
+              walletBalance={walletData?.wallet?.balance}
+              onOpenWallet={() => setShowWalletModal(true)}
+            />
           </div>
         </header>
 
@@ -741,18 +812,16 @@ export const StoreMenuPage = () => {
           {/* Veg Toggle */}
           <Button
             onClick={() => setVegOnly((v) => !v)}
-            className={` rounded-none rounded-r-full ${
-              vegOnly
-                ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm dark:border-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
-                : ''
-            }`}
+            className={` rounded-none rounded-r-full ${vegOnly
+              ? 'border-emerald-500 bg-emerald-50 text-emerald-700 shadow-sm dark:border-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400'
+              : ''
+              }`}
             title={vegOnly ? 'Showing veg only' : 'Show all items'}
           >
-            <span className={`h-2.5 w-2.5 rounded-full border-[1.5px] ${
-              vegOnly
-                ? 'border-emerald-600 bg-emerald-600'
-                : 'border-zinc-400 bg-transparent dark:border-zinc-500'
-            }`} />
+            <span className={`h-2.5 w-2.5 rounded-full border-[1.5px] ${vegOnly
+              ? 'border-emerald-600 bg-emerald-600'
+              : 'border-zinc-400 bg-transparent dark:border-zinc-500'
+              }`} />
             Veg
           </Button>
         </div>
@@ -769,20 +838,18 @@ export const StoreMenuPage = () => {
                 key={cat.id}
                 data-cat-chip={cat.id}
                 onClick={() => scrollToCategory(cat.id)}
-                className={`relative flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-semibold tracking-wide transition-all duration-200 active:scale-95 ${
-                  isActive
-                    ? 'text-white shadow-sm'
-                    : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-400 dark:hover:bg-zinc-700/70'
-                }`}
+                className={`relative flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-2 text-xs font-semibold tracking-wide transition-all duration-200 active:scale-95 ${isActive
+                  ? 'text-white shadow-sm'
+                  : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200 hover:text-zinc-700 dark:bg-zinc-800/70 dark:text-zinc-400 dark:hover:bg-zinc-700/70'
+                  }`}
                 style={{ backgroundColor: isActive ? brandColorHex : undefined }}
               >
                 {cat.name}
                 <span
-                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${
-                    isActive
-                      ? 'bg-white/25 text-white'
-                      : 'bg-zinc-200/80 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'
-                  }`}
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none ${isActive
+                    ? 'bg-white/25 text-white'
+                    : 'bg-zinc-200/80 text-zinc-500 dark:bg-zinc-700 dark:text-zinc-400'
+                    }`}
                 >
                   {cat.items.length}
                 </span>
@@ -866,13 +933,12 @@ export const StoreMenuPage = () => {
         {toast && (
           <div className="fixed left-4 right-4 top-4 z-[60] mx-auto max-w-md animate-in fade-in slide-in-from-top-4 duration-200">
             <div
-              className={`flex items-center gap-3 rounded-2xl border p-3.5 shadow-2xl backdrop-blur-xl ${
-                toast.type === 'error'
-                  ? 'border-rose-500/30 bg-rose-600/95 text-white'
-                  : toast.type === 'success'
-                    ? 'border-emerald-500/30 bg-emerald-600/95 text-white'
-                    : 'border-zinc-700/50 bg-zinc-900/95 text-white'
-              }`}
+              className={`flex items-center gap-3 rounded-2xl border p-3.5 shadow-2xl backdrop-blur-xl ${toast.type === 'error'
+                ? 'border-rose-500/30 bg-rose-600/95 text-white'
+                : toast.type === 'success'
+                  ? 'border-emerald-500/30 bg-emerald-600/95 text-white'
+                  : 'border-zinc-700/50 bg-zinc-900/95 text-white'
+                }`}
             >
               {toast.type === 'success' ? <CheckmarkCircle02Icon size={18} /> : <AlertCircleIcon size={18} />}
               <p className="flex-1 text-xs font-medium sm:text-sm">{toast.message}</p>
@@ -964,6 +1030,107 @@ export const StoreMenuPage = () => {
               {/* Footer: Promo + Bill + Pay + CTA */}
               <div className="space-y-3 border-t border-zinc-100 bg-zinc-50/80 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] dark:border-zinc-800 dark:bg-zinc-900/80">
 
+                {/* Store Credit Wallet Redemption Card */}
+{isLoyaltyEnabled && (
+  <div>
+    {!token ? (
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+        <div className="flex items-center gap-2.5 min-w-0">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+            <GiftIcon size={18} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
+              Claim ₹{loyaltyRules.welcomeBonusCredits || 50} free credits
+            </p>
+            <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80">
+              Log in to apply credits and earn cashback on this order
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowAuthModal(true)}
+          className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-600"
+        >
+          Log In
+        </button>
+      </div>
+    ) : (
+      (() => {
+        const minOrder = loyaltyRules.minOrderToRedeem || 0;
+        const canRedeem =
+          customerBalance > 0 &&
+          subTotal >= minOrder &&
+          (!appliedPromo || loyaltyRules.allowPromoStacking);
+
+        const redeemable = Math.min(
+          Math.floor(customerBalance),
+          Math.floor(subTotal * ((loyaltyRules.maxRedemptionPercent || 50) / 100)),
+        );
+
+        let status;
+        if (customerBalance <= 0) {
+          status = `You'll earn ${loyaltyRules.cashbackPercentage || 5}% cashback on this order`;
+        } else if (subTotal < minOrder) {
+          status = `Add ₹${minOrder - subTotal} more to redeem credits (min. ₹${minOrder})`;
+        } else if (appliedPromo && !loyaltyRules.allowPromoStacking) {
+          status = 'Credits cannot be combined with promo codes';
+        } else if (useWalletCredits) {
+          status = `Applying ₹${appliedWalletCredits} credits`;
+        } else {
+          status = `Redeem up to ₹${redeemable}`;
+        }
+
+        return (
+          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                  <Coins01Icon size={16} />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                      Store Credit Wallet
+                    </span>
+                    <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                      ₹{customerBalance.toFixed(2)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                    {status}
+                  </p>
+                </div>
+              </div>
+
+              {canRedeem && (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={useWalletCredits}
+                  aria-label="Apply store credits"
+                  onClick={() => setUseWalletCredits((v) => !v)}
+                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                    useWalletCredits
+                      ? 'bg-amber-500'
+                      : 'bg-zinc-200 dark:bg-zinc-700'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                      useWalletCredits ? 'translate-x-4' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })()
+    )}
+  </div>
+)}
                 {/* Promo Code (collapsible) */}
                 <div>
                   {!appliedPromo ? (
@@ -1024,6 +1191,14 @@ export const StoreMenuPage = () => {
                       <span>-₹{discountAmount}</span>
                     </div>
                   )}
+                  {appliedWalletCredits > 0 && (
+                    <div className="flex justify-between font-medium text-amber-600 dark:text-amber-400">
+                      <span className="flex items-center gap-1.5">
+                        <Coins01Icon size={14} className="text-amber-500 shrink-0" /> Store Credits Used
+                      </span>
+                      <span>-₹{appliedWalletCredits}</span>
+                    </div>
+                  )}
                   {store?.taxRules?.map((tax, idx) => (
                     <div key={idx} className="flex justify-between text-zinc-500 dark:text-zinc-400">
                       <span>{tax.name} ({tax.rate}%)</span>
@@ -1040,11 +1215,10 @@ export const StoreMenuPage = () => {
                 <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
                   <button
                     type="button"
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-all ${
-                      paymentModel === 'POSTPAID'
-                        ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white'
-                        : 'text-zinc-500 hover:text-zinc-700'
-                    }`}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-all ${paymentModel === 'POSTPAID'
+                      ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white'
+                      : 'text-zinc-500 hover:text-zinc-700'
+                      }`}
                     onClick={() => setPaymentModel('POSTPAID')}
                   >
                     <UserGroupIcon size={14} /> Pay at Table
@@ -1052,13 +1226,12 @@ export const StoreMenuPage = () => {
                   <button
                     type="button"
                     disabled={!store.razorpayConfigured}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-all ${
-                      !store.razorpayConfigured
-                        ? 'cursor-not-allowed text-zinc-300 dark:text-zinc-600'
-                        : paymentModel === 'PREPAID'
-                          ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white'
-                          : 'text-zinc-500 hover:text-zinc-700'
-                    }`}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-all ${!store.razorpayConfigured
+                      ? 'cursor-not-allowed text-zinc-300 dark:text-zinc-600'
+                      : paymentModel === 'PREPAID'
+                        ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white'
+                        : 'text-zinc-500 hover:text-zinc-700'
+                      }`}
                     onClick={() => store.razorpayConfigured && setPaymentModel('PREPAID')}
                   >
                     <CreditCardIcon size={14} /> Pay Online
@@ -1085,100 +1258,96 @@ export const StoreMenuPage = () => {
           </div>
         )}
 
-        {/* ── Auth Modal ─────────────────────────────────────────────── */}
-        {showAuthModal && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-                <CreditCardIcon size={26} />
-              </div>
-              <h3 className="mb-1.5 text-xl font-extrabold text-zinc-900 dark:text-zinc-50">Quick Checkout</h3>
-              <p className="mb-6 text-sm text-zinc-400 dark:text-zinc-500">
-                Verify your identity to secure your pre-paid order.
-              </p>
+        {/* ── Auth Sheet ─────────────────────────────────────────────── */}
+        <Sheet open={showAuthModal} onOpenChange={(open) => !open && setShowAuthModal(false)}>
+          <SheetContent side="bottom" className="w-full sm:max-w-md mx-auto p-6 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-t-3xl shadow-2xl text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
+              <CreditCardIcon size={26} />
+            </div>
+            <SheetTitle className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">Quick Checkout</SheetTitle>
+            <p className="mb-6 mt-1 text-sm text-zinc-400 dark:text-zinc-500">
+              Verify your identity to secure your pre-paid order and store wallet.
+            </p>
 
-              <div className="flex justify-center mb-4">
-                <GoogleLogin
-                  onSuccess={handleGoogleSuccess}
-                  onError={() => showToast('Google login failed', 'error')}
-                  theme="outline"
-                  shape="rectangular"
-                  text="continue_with"
-                />
-              </div>
+            <div className="flex justify-center mb-4">
+              <GoogleLogin
+                onSuccess={handleGoogleSuccess}
+                onError={() => showToast('Google login failed', 'error')}
+                theme="outline"
+                shape="rectangular"
+                text="continue_with"
+              />
+            </div>
 
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="mt-2 text-sm font-medium text-zinc-400 transition hover:text-zinc-700 dark:hover:text-zinc-200"
+            >
+              Cancel
+            </button>
+          </SheetContent>
+        </Sheet>
+
+        {/* ── PIN Entry Sheet ────────────────────────────────────────── */}
+        <Sheet open={showPinModal} onOpenChange={(open) => { if (!open) { setShowPinModal(false); setPinError(''); } }}>
+          <SheetContent side="bottom" className="w-full sm:max-w-md mx-auto p-6 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-t-3xl shadow-2xl text-center">
+            <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
+              <UserGroupIcon size={26} />
+            </div>
+            <SheetTitle className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">Table {tableNumber} PIN</SheetTitle>
+            <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+              An active session exists. Enter the 4-digit PIN to add your dishes.
+            </p>
+
+            <div className="my-5">
+              <input
+                type="text"
+                maxLength={4}
+                autoFocus
+                placeholder="• • • •"
+                value={pinInput}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setPinInput(val);
+                  setPinError('');
+                }}
+                className="w-32 text-center text-2xl font-extrabold tracking-[0.5em] py-3 rounded-xl border border-zinc-200 bg-zinc-50 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
+              />
+              {pinError && (
+                <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{pinError}</p>
+              )}
+            </div>
+
+            <div className="flex gap-2">
               <button
-                onClick={() => setShowAuthModal(false)}
-                className="mt-2 text-sm font-medium text-zinc-400 transition hover:text-zinc-700 dark:hover:text-zinc-200"
+                type="button"
+                onClick={() => {
+                  setShowPinModal(false);
+                  setPinError('');
+                }}
+                className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
               >
                 Cancel
               </button>
+              <button
+                type="button"
+                disabled={pinInput.length !== 4 || isPlacingOrder}
+                onClick={async () => {
+                  setActiveTablePin(pinInput);
+                  localStorage.setItem(`smo_table_pin_${store.id}_${tableNumber}`, pinInput);
+                  setShowPinModal(false);
+                  await submitOrder(pinInput);
+                }}
+                className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-bold text-white shadow-md transition disabled:opacity-40 dark:bg-white dark:text-zinc-900"
+              >
+                {isPlacingOrder ? 'Checking...' : 'Submit'}
+              </button>
             </div>
-          </div>
-        )}
-
-        {/* ── PIN Entry Modal ────────────────────────────────────────── */}
-        {showPinModal && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="w-full max-w-sm rounded-3xl bg-white p-6 text-center shadow-2xl dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800">
-              <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400">
-                <UserGroupIcon size={26} />
-              </div>
-              <h3 className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">Table {tableNumber} PIN</h3>
-              <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-                An active session exists. Enter the 4-digit PIN to add your dishes.
-              </p>
-
-              <div className="my-5">
-                <input
-                  type="text"
-                  maxLength={4}
-                  autoFocus
-                  placeholder="• • • •"
-                  value={pinInput}
-                  onChange={(e) => {
-                    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-                    setPinInput(val);
-                    setPinError('');
-                  }}
-                  className="w-32 text-center text-2xl font-extrabold tracking-[0.5em] py-3 rounded-xl border border-zinc-200 bg-zinc-50 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
-                />
-                {pinError && (
-                  <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{pinError}</p>
-                )}
-              </div>
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowPinModal(false);
-                    setPinError('');
-                  }}
-                  className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={pinInput.length !== 4 || isPlacingOrder}
-                  onClick={async () => {
-                    setActiveTablePin(pinInput);
-                    localStorage.setItem(`smo_table_pin_${store.id}_${tableNumber}`, pinInput);
-                    setShowPinModal(false);
-                    await submitOrder(pinInput);
-                  }}
-                  className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-bold text-white shadow-md transition disabled:opacity-40 dark:bg-white dark:text-zinc-900"
-                >
-                  {isPlacingOrder ? 'Checking...' : 'Submit'}
-                </button>
-              </div>
-              <p className="mt-4 text-[10px] text-zinc-400">
-                Ask companions at the table or call a waiter for the PIN.
-              </p>
-            </div>
-          </div>
-        )}
+            <p className="mt-4 text-[10px] text-zinc-400">
+              Ask companions at the table or call a waiter for the PIN.
+            </p>
+          </SheetContent>
+        </Sheet>
 
         {/* ── Call Waiter Modal ───────────────────────────────────────── */}
         {tableNumber && (
@@ -1197,6 +1366,33 @@ export const StoreMenuPage = () => {
           storeId={store.id}
           tableNumber={tableNumber}
           activeSessionId={tableSessionInfo?.tableSessionId || localStorage.getItem(`smo_table_session_${store.id}_${tableNumber}`)}
+        />
+
+        {/* ── Store Credit Wallet Modal ───────────────────────────────── */}
+        <CustomerWalletModal
+          open={showWalletModal}
+          onClose={() => setShowWalletModal(false)}
+          walletData={walletData}
+          store={store}
+          brandColor={brandColorHex}
+          onGoogleSuccess={async (credentialResponse) => {
+            try {
+              const res = await api.post('/auth/google', {
+                idToken: credentialResponse.credential,
+                tenantSlug: store.tenant?.slug
+              });
+              if (res.data.success) {
+                const { token: newToken, user } = res.data.data;
+                setAuth(newToken, user);
+                showToast('Welcome! Your store wallet is now active.', 'success');
+                if (store?.id) {
+                  fetchWalletData(store.id);
+                }
+              }
+            } catch (err) {
+              showToast('Google login failed', 'error');
+            }
+          }}
         />
       </div>
     </>

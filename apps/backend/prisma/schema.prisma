@@ -175,6 +175,8 @@ model Store {
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
   taxRules     Json?       @default("[]")
   promoCodes   PromoCode[]
+  loyaltyRules Json?       @default("null")
+  customerWallets CustomerStoreWallet[]
 
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -203,6 +205,7 @@ model User {
   passkeys     Passkey[]
   staffOrders    Order[] @relation("StaffOrders")
   customerOrders Order[] @relation("CustomerOrders")
+  customerWallets CustomerStoreWallet[] @relation("CustomerWallets")
   resolvedCalls WaiterCall[]
   reservations TableReservation[]
 
@@ -451,6 +454,7 @@ model Order {
   subTotal        Int            @default(0)
   taxAmount       Int            @default(0)
   discountAmount  Int            @default(0)
+  walletDiscount  Int            @default(0)
   promoCodeId     String?
   promoCode       PromoCode?     @relation(fields: [promoCodeId], references: [id])
   totalAmount     Int            @default(0) 
@@ -460,6 +464,7 @@ model Order {
   
   items           OrderItem[]
   feedbacks       Feedback[]
+  walletTransactions CustomerWalletTransaction[]
 
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
@@ -590,6 +595,49 @@ model TableReservation {
   @@index([storeId, status])
   @@index([storeId, startsAt])
   @@index([tableId, startsAt])
+}
+
+enum WalletTransactionType {
+  WELCOME_BONUS
+  ORDER_CASHBACK
+  ORDER_REDEMPTION
+  ORDER_REFUND
+  MANUAL_ADJUSTMENT
+  EXPIRED
+}
+
+model CustomerStoreWallet {
+  id           String                      @id @default(cuid())
+  customerId   String
+  customer     User                        @relation("CustomerWallets", fields: [customerId], references: [id], onDelete: Cascade)
+  storeId      String
+  store        Store                       @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  balance      Float                       @default(0)
+  totalEarned  Float                       @default(0)
+  totalSpent   Float                       @default(0)
+  createdAt    DateTime                    @default(now())
+  updatedAt    DateTime                    @updatedAt
+  transactions CustomerWalletTransaction[]
+
+  @@unique([customerId, storeId])
+  @@index([customerId])
+  @@index([storeId])
+}
+
+model CustomerWalletTransaction {
+  id           String                @id @default(cuid())
+  walletId     String
+  wallet       CustomerStoreWallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  orderId      String?
+  order        Order?                @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  type         WalletTransactionType
+  amount       Float
+  balanceAfter Float
+  description  String
+  createdAt    DateTime              @default(now())
+
+  @@index([walletId])
+  @@index([orderId])
 }
 
 

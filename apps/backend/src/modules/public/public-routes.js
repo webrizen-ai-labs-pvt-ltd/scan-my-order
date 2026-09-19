@@ -333,4 +333,64 @@ router.post("/webhooks/razorpay/:tenantId", express.json(), asyncHandler(async (
   res.json(createApiResponse(result));
 }));
 
+// GET /api/public/stores/:storeId/wallet/me
+router.get("/stores/:storeId/wallet/me", asyncHandler(async (req, res) => {
+  const { getCustomerWallet, getStoreLoyaltySettings } = require("../loyalty/loyalty-service");
+  
+  let customerId = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const { verifyJwt } = require("../../lib/jwt");
+      const token = authHeader.split(' ')[1];
+      const decoded = verifyJwt(token);
+      if (decoded && decoded.sub) {
+        customerId = decoded.sub;
+      }
+    } catch (err) {}
+  }
+
+  if (!customerId) {
+    // Return store loyalty rules even for unauthenticated users so UI can show promotions/benefits
+    const { settings } = await getStoreLoyaltySettings(req.params.storeId);
+    return res.json(createApiResponse({
+      wallet: null,
+      settings,
+      isAuthenticated: false
+    }));
+  }
+
+  const walletData = await getCustomerWallet(customerId, req.params.storeId);
+  res.json(createApiResponse({
+    ...walletData,
+    isAuthenticated: true
+  }));
+}));
+
+// POST /api/public/stores/:storeId/wallet/preview-redemption
+router.post("/stores/:storeId/wallet/preview-redemption", asyncHandler(async (req, res) => {
+  const { previewWalletRedemption } = require("../loyalty/loyalty-service");
+  const { subTotal, requestedCredits } = req.body;
+
+  let customerId = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const { verifyJwt } = require("../../lib/jwt");
+      const token = authHeader.split(' ')[1];
+      const decoded = verifyJwt(token);
+      if (decoded && decoded.sub) {
+        customerId = decoded.sub;
+      }
+    } catch (err) {}
+  }
+
+  if (!customerId) {
+    return res.status(401).json(createApiResponse(null, "Please log in to redeem wallet credits"));
+  }
+
+  const preview = await previewWalletRedemption(customerId, req.params.storeId, Number(subTotal) || 0, Number(requestedCredits) || 0);
+  res.json(createApiResponse(preview));
+}));
+
 module.exports = router;

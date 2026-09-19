@@ -6,7 +6,8 @@ import { StoreMenuManager } from '../components/store-menu-manager';
 import { StoreMenuBuilder } from '../components/store-menu-builder';
 import { StoreTablesManager } from '../components/store-tables-manager';
 import { StorePromoManager } from '../components/store-promo-manager';
-import { Loading03Icon, Settings01Icon, Menu01Icon, QrCodeIcon, Tag01Icon, ZapIcon } from 'hugeicons-react';
+import { StoreLoyaltyManager } from '../components/store-loyalty-manager';
+import { Loading03Icon, Settings01Icon, Menu01Icon, QrCodeIcon, Tag01Icon, ZapIcon, Coins01Icon } from 'hugeicons-react';
 
 export const StoreEdit = () => {
   const { id } = useParams();
@@ -101,6 +102,14 @@ export const StoreEdit = () => {
           >
             <Tag01Icon size={16} /> Promo Codes
           </button>
+          <button
+            onClick={() => setActiveTab('rewards')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${
+              activeTab === 'rewards' ? 'bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-white'
+            }`}
+          >
+            <Coins01Icon size={16} /> Rewards & Wallet
+          </button>
         </div>
       </div>
 
@@ -123,6 +132,9 @@ export const StoreEdit = () => {
         )}
         {activeTab === 'promos' && (
           <StorePromoManager storeId={initialData.id} />
+        )}
+        {activeTab === 'rewards' && (
+          <StoreLoyaltyManager storeId={initialData.id} />
         )}
       </div>
     </div>
