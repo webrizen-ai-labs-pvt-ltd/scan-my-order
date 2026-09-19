@@ -1,16 +1,17 @@
 {
   "cmt5g9r9c0005ebh8kn4dezdx": {
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-19T18:30:04.181Z",
+      "lastRunAt": "2026-09-19T19:00:10.412Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 4167
+      "lastRunDurationMs": 10409
     },
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-19T18:30:00.511Z",
-      "lastRunStatus": "SUCCESS",
-      "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 498
+      "lastRunAt": "2026-09-19T19:00:05.014Z",
+      "lastRunStatus": "FAILED",
+      "lastRunSummary": "Error: \nInvalid `prisma.order.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\stale-orders.js:21:42\n\n  18   whereClause.store = { tenantId };\n  19 }\n  20 \n→ 21 const staleOrders = await prisma.order.findMany(\nCan't reach database server at `aws-0-ap-south-1.pooler.supabase.com:6543`\n\nPlease make sure your database server is running at `aws-0-ap-south-1.pooler.supabase.com:6543`.",
+      "lastRunDurationMs": 5012,
+      "lastRunError": "\nInvalid `prisma.order.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\stale-orders.js:21:42\n\n  18   whereClause.store = { tenantId };\n  19 }\n  20 \n→ 21 const staleOrders = await prisma.order.findMany(\nCan't reach database server at `aws-0-ap-south-1.pooler.supabase.com:6543`\n\nPlease make sure your database server is running at `aws-0-ap-south-1.pooler.supabase.com:6543`."
     },
     "DAILY_SALES_DIGEST": {
       "lastRunAt": "2026-09-19T18:25:20.116Z",
@@ -27,16 +28,16 @@
   },
   "cmu1mjo6y0006s0507dgz8zg3": {
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-19T18:30:02.140Z",
+      "lastRunAt": "2026-09-19T19:00:07.337Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 2125
+      "lastRunDurationMs": 7334
     },
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-19T18:30:04.579Z",
+      "lastRunAt": "2026-09-19T19:00:11.241Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 4564
+      "lastRunDurationMs": 11237
     },
     "DAILY_SALES_DIGEST": {
       "lastRunAt": "2026-09-19T18:25:08.267Z",
