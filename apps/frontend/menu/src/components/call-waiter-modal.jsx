@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../lib/api';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
   Button,
   Input,
   Badge
@@ -15,39 +15,45 @@ import {
   Clock01Icon,
   AlertCircleIcon,
   Loading03Icon,
-  UserGroupIcon
+  UserGroupIcon,
+  DropletIcon,
+  Invoice01Icon,
+  SpoonAndForkIcon,
+  CleaningBucketIcon,
+  CustomerService01Icon,
+  Notification01Icon
 } from 'hugeicons-react';
 
 const CALL_TYPES = [
   {
     id: 'WATER',
     label: 'Water Refill',
-    icon: '💧',
-    desc: 'Regular or warm drinking water'
+    icon: DropletIcon,
+    desc: 'Regular or warm drinking water',
   },
   {
     id: 'BILL',
     label: 'Request Bill',
-    icon: '🧾',
-    desc: 'Ready to settle bill at table'
+    icon: Invoice01Icon,
+    desc: 'Ready to settle bill at table',
   },
   {
     id: 'CUTLERY',
     label: 'Cutlery & Napkins',
-    icon: '🍴',
-    desc: 'Extra spoons, forks, or tissues'
+    icon: SpoonAndForkIcon,
+    desc: 'Extra spoons, forks, or tissues',
   },
   {
     id: 'CLEAN_TABLE',
     label: 'Clean Table',
-    icon: '🧹',
-    desc: 'Clear empty plates or wipe table'
+    icon: CleaningBucketIcon,
+    desc: 'Clear empty plates or wipe table',
   },
   {
     id: 'CALL_WAITER',
     label: 'General Assistance',
-    icon: '🙋',
-    desc: 'Assistance with menu or ordering'
+    icon: CustomerService01Icon,
+    desc: 'Assistance with menu or ordering',
   }
 ];
 
@@ -183,21 +189,21 @@ export const CallWaiterModal = ({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DialogContent className="max-w-md p-6 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl">
-        <DialogHeader>
+    <Sheet open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
+      <SheetContent side="bottom" className="w-full sm:max-w-md mx-auto p-6 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-t-3xl shadow-2xl">
+        <SheetHeader className="pb-6 pt-2 pr-6 text-left">
           <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-bold flex items-center gap-2.5 text-zinc-900 dark:text-zinc-50">
+            <SheetTitle className="text-xl font-bold flex items-center gap-2.5 text-zinc-900 dark:text-zinc-50">
               <span className="p-2 rounded-xl bg-yellow-500/15 text-yellow-600 dark:text-yellow-400">
-                🔔
+                <Notification01Icon size={20} />
               </span>
               Call a Waiter
-            </DialogTitle>
+            </SheetTitle>
             <Badge variant="outline" className="px-2.5 py-1 text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700">
               Table {tableNumber}
             </Badge>
           </div>
-        </DialogHeader>
+        </SheetHeader>
 
         {/* If an active call is currently in progress */}
         {activeCall ? (
@@ -277,10 +283,7 @@ export const CallWaiterModal = ({
           </div>
         ) : (
           /* Create New Call View */
-          <div className="space-y-4 pt-2">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Need something at your table? Choose what you need and our smart dispatch system will page the next best available server immediately.
-            </p>
+          <div className="space-y-2 pt-2 pb-6 px-1">
 
             {error && (
               <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2">
@@ -290,7 +293,7 @@ export const CallWaiterModal = ({
             )}
 
             {/* Category Options */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div className="flex flex-col gap-1">
               {CALL_TYPES.map((type) => {
                 const isSelected = selectedType === type.id;
                 return (
@@ -298,22 +301,18 @@ export const CallWaiterModal = ({
                     key={type.id}
                     type="button"
                     onClick={() => setSelectedType(type.id)}
-                    className={`p-3 rounded-2xl border text-left transition-all flex items-start gap-3 cursor-pointer ${
+                    className={`px-2 py-3.5 rounded-2xl flex items-center justify-between transition-all w-full cursor-pointer border border-transparent ${
                       isSelected
-                        ? 'border-yellow-500 bg-yellow-500/10 dark:bg-yellow-500/15 shadow-xs'
-                        : 'border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/40 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                        ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-bold'
+                        : 'bg-transparent hover:bg-zinc-100 dark:hover:bg-zinc-800/50 text-zinc-700 dark:text-zinc-300 font-medium'
                     }`}
                   >
-                    <span className="text-xl p-1.5 rounded-xl bg-white dark:bg-zinc-800 shadow-xs">
-                      {type.icon}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <div className={`text-xs font-bold ${isSelected ? 'text-zinc-950 dark:text-yellow-400' : 'text-zinc-900 dark:text-zinc-100'}`}>
-                        {type.label}
-                      </div>
-                      <div className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
-                        {type.desc}
-                      </div>
+                    <div className="flex items-center gap-3.5">
+                      <type.icon size={22} variant={isSelected ? 'solid' : 'stroke'} className={isSelected ? 'text-yellow-500' : 'text-zinc-400 dark:text-zinc-500'} />
+                      <span className="text-[15px]">{type.label}</span>
+                    </div>
+                    <div className={`w-4 h-4 rounded-full border-[1.5px] flex items-center justify-center transition-all ${isSelected ? 'border-yellow-500 bg-yellow-500' : 'border-zinc-300 dark:border-zinc-700'}`}>
+                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
                     </div>
                   </button>
                 );
@@ -321,51 +320,40 @@ export const CallWaiterModal = ({
             </div>
 
             {/* Optional Custom Note */}
-            <div className="space-y-1 pt-1">
-              <label className="text-[11px] font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider block">
-                Additional Note (Optional)
-              </label>
+            <div className="pt-2">
               <Input
                 type="text"
-                placeholder="e.g. Warm water, separate bills, extra napkins..."
+                placeholder="Any special instructions? (Optional)"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 maxLength={100}
-                className="h-9 text-xs bg-zinc-50 dark:bg-zinc-800/80 rounded-xl"
+                className="h-10 text-sm bg-zinc-50 dark:bg-zinc-900/50 border-zinc-200 dark:border-zinc-800 rounded-xl"
               />
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-2 pt-2">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                disabled={loading}
-                className="w-1/3 text-xs"
-              >
-                Cancel
-              </Button>
+            <div className="pt-2">
               <Button
                 onClick={handleSendCall}
                 disabled={loading}
-                className="w-2/3 text-xs font-bold bg-yellow-500 hover:bg-yellow-400 text-zinc-950 shadow-md gap-2"
+                className="w-full h-12 text-sm font-bold bg-yellow-500 hover:bg-yellow-400 text-zinc-950 shadow-sm gap-2 rounded-xl"
               >
                 {loading ? (
                   <>
-                    <Loading03Icon size={16} className="animate-spin" />
+                    <Loading03Icon size={18} className="animate-spin" />
                     Paging Server...
                   </>
                 ) : (
                   <>
-                    <span>🔔</span> Call Server Now
+                    <Notification01Icon size={18} /> Call Server Now
                   </>
                 )}
               </Button>
             </div>
           </div>
         )}
-      </DialogContent>
-    </Dialog>
+      </SheetContent>
+    </Sheet>
   );
 };
 

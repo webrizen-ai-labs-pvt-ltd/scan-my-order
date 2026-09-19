@@ -1,54 +1,54 @@
 {
   "cmt5g9r9c0005ebh8kn4dezdx": {
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-17T18:45:07.770Z",
+      "lastRunAt": "2026-09-19T18:30:04.181Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 7757
+      "lastRunDurationMs": 4167
     },
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-17T18:30:00.905Z",
+      "lastRunAt": "2026-09-19T18:30:00.511Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 901
+      "lastRunDurationMs": 498
     },
     "DAILY_SALES_DIGEST": {
-      "lastRunAt": "2026-09-17T18:25:07.333Z",
+      "lastRunAt": "2026-09-19T18:25:20.116Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Generated sales digest for 1 store(s): 0 total order(s) settled, ₹0.00 revenue.",
-      "lastRunDurationMs": 7331
+      "lastRunDurationMs": 20105
     },
     "EXPIRED_PROMO_ARCHIVAL": {
-      "lastRunAt": "2026-09-17T18:30:01.897Z",
+      "lastRunAt": "2026-09-19T18:30:01.705Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "All active promotional codes are valid.",
-      "lastRunDurationMs": 1891
+      "lastRunDurationMs": 1690
     }
   },
   "cmu1mjo6y0006s0507dgz8zg3": {
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-17T18:30:02.294Z",
+      "lastRunAt": "2026-09-19T18:30:02.140Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 2287
+      "lastRunDurationMs": 2125
     },
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-17T18:45:08.589Z",
+      "lastRunAt": "2026-09-19T18:30:04.579Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 8576
+      "lastRunDurationMs": 4564
     },
     "DAILY_SALES_DIGEST": {
-      "lastRunAt": "2026-09-17T18:25:07.335Z",
+      "lastRunAt": "2026-09-19T18:25:08.267Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Generated sales digest for 1 store(s): 0 total order(s) settled, ₹0.00 revenue.",
-      "lastRunDurationMs": 7334
+      "lastRunDurationMs": 8254
     },
     "EXPIRED_PROMO_ARCHIVAL": {
-      "lastRunAt": "2026-09-17T18:30:03.285Z",
+      "lastRunAt": "2026-09-19T18:30:03.358Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "All active promotional codes are valid.",
-      "lastRunDurationMs": 3277
+      "lastRunDurationMs": 3342
     }
   }
 }
