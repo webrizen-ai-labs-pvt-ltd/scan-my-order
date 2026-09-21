@@ -268,19 +268,20 @@ async function createOrder(storeId, actor, origin, input) {
 
   // Store Loyalty Credit Wallet Redemption
   let walletDiscount = 0;
-  if (input.applyWalletCredits && actor) {
-    try {
-      const { previewWalletRedemption } = require("../loyalty/loyalty-service");
-      const preview = await previewWalletRedemption(actor.id, storeId, subTotal, Number(input.walletCredits || 0));
-      if (preview.eligible && preview.appliedCredits > 0) {
-        if (appliedPromoCodeId && !preview.allowPromoStacking) {
-          throw createHttpError(400, "Store credits cannot be combined with promo codes at this store.");
-        }
-        walletDiscount = preview.appliedCredits;
+  if (input.applyWalletCredits) {
+    if (!actor) {
+      throw createHttpError(401, "Please log in to redeem store credits.");
+    }
+    const { previewWalletRedemption } = require("../loyalty/loyalty-service");
+    const preview = await previewWalletRedemption(actor.id, storeId, subTotal, Number(input.walletCredits || 0));
+    if (!preview.eligible) {
+      throw createHttpError(400, preview.reason || "Unable to redeem store credits.");
+    }
+    if (preview.appliedCredits > 0) {
+      if (appliedPromoCodeId && !preview.allowPromoStacking) {
+        throw createHttpError(400, "Store credits cannot be combined with promo codes at this store.");
       }
-    } catch (err) {
-      if (err.statusCode) throw err;
-      console.warn("[Loyalty Preview Notice]", err.message);
+      walletDiscount = preview.appliedCredits;
     }
   }
 
@@ -319,6 +320,8 @@ async function createOrder(storeId, actor, origin, input) {
   } else if (paymentModel === 'PREPAID') {
     if (origin === 'POS' && resolvedPaymentMethod === 'CASH') {
       status = 'SETTLED';
+    } else if (totalAmount === 0) {
+      status = 'PROCESSING';
     } else {
       status = 'PENDING_PAYMENT';
     }
@@ -327,9 +330,10 @@ async function createOrder(storeId, actor, origin, input) {
     status = 'PROCESSING';
   }
 
-  // Handle Table Session Token / PIN Logic
+  // Handle Table Session Token / PIN Logic (Protected 2-Hour Rolling Inactivity)
   let tableSession = null;
   if (tableId) {
+    const sessionCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours
     tableSession = await prisma.tableSession.findFirst({
       where: {
         storeId,
@@ -338,24 +342,60 @@ async function createOrder(storeId, actor, origin, input) {
       }
     });
 
+    if (tableSession) {
+      const lastActive = tableSession.lastOrderAt || tableSession.updatedAt || tableSession.createdAt;
+      if (lastActive < sessionCutoff) {
+        // Auto-settle stale session after 2 hours of no new order placement
+        await prisma.tableSession.update({
+          where: { id: tableSession.id },
+          data: { status: 'SETTLED' }
+        });
+        tableSession = null;
+      }
+    }
+
     if (!tableSession) {
-      // First order for this table dining session: generate 4-digit numeric PIN (1000 - 9999)
+      // First order for this table dining session: generate 4-digit numeric PIN (1000 - 9999) and secure sessionToken
       const generatedPin = String(Math.floor(1000 + Math.random() * 9000));
+      const sessionToken = crypto.randomBytes(24).toString('hex');
       tableSession = await prisma.tableSession.create({
         data: {
           storeId,
           tableId,
           pin: generatedPin,
-          status: 'ACTIVE'
+          sessionToken,
+          status: 'ACTIVE',
+          lastOrderAt: new Date()
         }
       });
     } else {
-      // Table has an active session in progress
+      // Table has an active session in progress (< 2 hours old)
       if (origin === 'QR_MENU') {
+        const providedToken = input.sessionToken ? String(input.sessionToken).trim() : null;
         const providedPin = input.pin ? String(input.pin).trim() : null;
-        if (!providedPin || providedPin !== tableSession.pin) {
-          throw createHttpError(403, "Invalid Table PIN. An active dining session is already in progress for this table. Please enter the 4-digit table PIN.");
+
+        const isTokenValid = Boolean(providedToken && tableSession.sessionToken && providedToken === tableSession.sessionToken);
+        const isPinValid = Boolean(providedPin && providedPin === tableSession.pin);
+
+        if (!isTokenValid && !isPinValid) {
+          throw createHttpError(403, "Invalid Table PIN. An active dining session is in progress for this table. Please enter the 4-digit table PIN.");
         }
+
+        // Ensure sessionToken exists and update rolling 2h inactivity timer
+        const tokenToSave = tableSession.sessionToken || crypto.randomBytes(24).toString('hex');
+        tableSession = await prisma.tableSession.update({
+          where: { id: tableSession.id },
+          data: { 
+            sessionToken: tokenToSave,
+            lastOrderAt: new Date()
+          }
+        });
+      } else {
+        // POS / Staff order refreshes rolling inactivity timer
+        tableSession = await prisma.tableSession.update({
+          where: { id: tableSession.id },
+          data: { lastOrderAt: new Date() }
+        });
       }
     }
   }
@@ -438,7 +478,7 @@ async function createOrder(storeId, actor, origin, input) {
   
   // If prepaid, we need to generate a Razorpay order
   let paymentIntent = null;
-  if (status === 'PENDING_PAYMENT') {
+  if (status === 'PENDING_PAYMENT' && order.totalAmount > 0) {
     paymentIntent = await generateRazorpayOrder(prisma, storeId, order);
   }
   
@@ -446,6 +486,7 @@ async function createOrder(storeId, actor, origin, input) {
     order, 
     paymentIntent,
     tableSessionId: tableSession ? tableSession.id : null,
+    sessionToken: tableSession ? tableSession.sessionToken : null,
     sessionPin: tableSession ? tableSession.pin : null
   };
 }
@@ -1681,7 +1722,7 @@ async function getTableSessionBill(storeId, tableSessionId) {
   };
 }
 
-async function getTableSessionStatus(storeId, tableNumber) {
+async function getTableSessionStatus(storeId, tableNumber, clientToken = null, clientPin = null) {
   const prisma = getPrismaClient();
   const table = await prisma.table.findUnique({
     where: {
@@ -1694,7 +1735,8 @@ async function getTableSessionStatus(storeId, tableNumber) {
 
   if (!table) throw createHttpError(404, "Table not found");
 
-  const activeSession = await prisma.tableSession.findFirst({
+  const sessionCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  let activeSession = await prisma.tableSession.findFirst({
     where: {
       storeId,
       tableId: table.id,
@@ -1702,11 +1744,103 @@ async function getTableSessionStatus(storeId, tableNumber) {
     }
   });
 
+  if (activeSession) {
+    const lastActive = activeSession.lastOrderAt || activeSession.updatedAt || activeSession.createdAt;
+    if (lastActive < sessionCutoff) {
+      // Auto-settle stale session after 2 hours of no new order placement
+      await prisma.tableSession.update({
+        where: { id: activeSession.id },
+        data: { status: 'SETTLED' }
+      });
+      activeSession = null;
+    }
+  }
+
+  if (!activeSession) {
+    return {
+      tableNumber: table.tableNumber,
+      tableId: table.id,
+      hasActiveSession: false,
+      tableSessionId: null,
+      isJoined: false,
+      expiresAt: null
+    };
+  }
+
+  const lastActive = activeSession.lastOrderAt || activeSession.updatedAt || activeSession.createdAt;
+  const expiresAt = new Date(lastActive.getTime() + 2 * 60 * 60 * 1000).toISOString();
+
+  const isJoined = Boolean(
+    (clientToken && activeSession.sessionToken && clientToken === activeSession.sessionToken) ||
+    (clientPin && String(clientPin).trim() === activeSession.pin)
+  );
+
   return {
     tableNumber: table.tableNumber,
     tableId: table.id,
-    hasActiveSession: !!activeSession,
-    tableSessionId: activeSession?.id || null
+    hasActiveSession: true,
+    tableSessionId: activeSession.id,
+    isJoined,
+    expiresAt
+  };
+}
+
+async function joinTableSession(storeId, tableNumber, pin) {
+  const prisma = getPrismaClient();
+  const table = await prisma.table.findUnique({
+    where: {
+      storeId_tableNumber: {
+        storeId,
+        tableNumber: parseInt(tableNumber, 10)
+      }
+    }
+  });
+
+  if (!table) throw createHttpError(404, "Table not found");
+
+  const sessionCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
+  let activeSession = await prisma.tableSession.findFirst({
+    where: {
+      storeId,
+      tableId: table.id,
+      status: 'ACTIVE'
+    }
+  });
+
+  if (!activeSession) {
+    throw createHttpError(404, "No active dining session found on this table.");
+  }
+
+  const lastActive = activeSession.lastOrderAt || activeSession.updatedAt || activeSession.createdAt;
+  if (lastActive < sessionCutoff) {
+    await prisma.tableSession.update({
+      where: { id: activeSession.id },
+      data: { status: 'SETTLED' }
+    });
+    throw createHttpError(410, "This table session has expired due to 2 hours of inactivity.");
+  }
+
+  const inputPin = String(pin || '').trim();
+  if (inputPin !== activeSession.pin) {
+    throw createHttpError(403, "Invalid Table PIN. Please enter the 4-digit PIN displayed on your companion's device or ask a waiter.");
+  }
+
+  // Ensure sessionToken exists
+  let sessionToken = activeSession.sessionToken;
+  if (!sessionToken) {
+    sessionToken = crypto.randomBytes(24).toString('hex');
+    await prisma.tableSession.update({
+      where: { id: activeSession.id },
+      data: { sessionToken }
+    });
+  }
+
+  return {
+    success: true,
+    tableNumber: table.tableNumber,
+    tableSessionId: activeSession.id,
+    sessionToken,
+    sessionPin: activeSession.pin
   };
 }
 
@@ -1755,5 +1889,6 @@ module.exports = {
   generateSessionPaymentLink,
   verifySessionPayment,
   getTableSessionBill,
-  getTableSessionStatus
+  getTableSessionStatus,
+  joinTableSession
 };

@@ -106,6 +106,8 @@ async function getTables(actor, storeId) {
         totalAmount: activeOrder.totalAmount
       } : null,
       activePin: activeSession?.pin || null,
+      activeSessionId: activeSession?.id || null,
+      activeSessionCreatedAt: activeSession?.createdAt || null,
       createdAt: tbl.createdAt,
       updatedAt: tbl.updatedAt
     };
@@ -206,9 +208,32 @@ async function deleteTable(actor, storeId, tableId) {
   return res;
 }
 
+async function terminateTableSession(actor, storeId, tableId) {
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+
+  const activeSession = await prisma.tableSession.findFirst({
+    where: {
+      storeId,
+      tableId,
+      status: 'ACTIVE'
+    }
+  });
+
+  if (!activeSession) {
+    throw createHttpError(404, "No active dining session found for this table");
+  }
+
+  const { settleTableSession } = require("../orders/order-service");
+  const result = await settleTableSession(actor, storeId, activeSession.id, false, { paymentMethod: 'CASH' });
+  invalidateTablesCache(storeId);
+  return { success: true, message: "Table session terminated and table released successfully", session: result };
+}
+
 module.exports = {
   getTables,
   createTable,
   updateTable,
-  deleteTable
+  deleteTable,
+  terminateTableSession
 };

@@ -24,6 +24,7 @@ import {
   HotelBellIcon,
   Coins01Icon,
   GiftIcon,
+  Loading03Icon,
 } from 'hugeicons-react';
 import { CallWaiterModal } from '../components/call-waiter-modal';
 import { CustomerWalletModal } from '../components/customer-wallet-modal';
@@ -211,6 +212,7 @@ export const StoreMenuPage = () => {
   // Table Session / PIN State
   const [tableSessionInfo, setTableSessionInfo] = useState(null);
   const [activeTablePin, setActiveTablePin] = useState('');
+  const [activeTableToken, setActiveTableToken] = useState('');
   const [showPinModal, setShowPinModal] = useState(false);
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
@@ -224,6 +226,7 @@ export const StoreMenuPage = () => {
   const [walletData, setWalletData] = useState(null);
   const [showWalletModal, setShowWalletModal] = useState(false);
   const [useWalletCredits, setUseWalletCredits] = useState(false);
+  const [isGoogleAuthLoading, setIsGoogleAuthLoading] = useState(false);
 
   // Scroll state for compact header
   const [isScrolled, setIsScrolled] = useState(false);
@@ -243,6 +246,20 @@ export const StoreMenuPage = () => {
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 4000);
+  };
+
+  const getErrorMessage = (err, fallback = 'Something went wrong. Please try again.') => {
+    const apiError = err?.response?.data?.error;
+    let msg = apiError?.message || err?.response?.data?.message || err?.message || fallback;
+    if (apiError?.details && typeof apiError.details === 'object') {
+      if (Array.isArray(apiError.details) && apiError.details.length > 0) {
+        const detailsStr = apiError.details.map((d) => d.message || d).join(', ');
+        if (detailsStr) msg = `${msg} (${detailsStr})`;
+      } else if (typeof apiError.details.message === 'string') {
+        msg = `${msg} (${apiError.details.message})`;
+      }
+    }
+    return msg;
   };
 
   const fetchWalletData = useCallback(async (currentStoreId) => {
@@ -280,15 +297,49 @@ export const StoreMenuPage = () => {
           setSearchParams(searchParams);
         } else {
           try {
-            const sessRes = await api.get(`/public/stores/${resolvedStore.id}/tables/${tableNumInt}/session`);
+            const savedPin = localStorage.getItem(`smo_table_pin_${resolvedStore.id}_${tableNumInt}`);
+            const savedToken = localStorage.getItem(`smo_table_token_${resolvedStore.id}_${tableNumInt}`);
+
+            const sessRes = await api.get(`/public/stores/${resolvedStore.id}/tables/${tableNumInt}/session`, {
+              params: {
+                clientToken: savedToken || undefined,
+                clientPin: savedPin || undefined,
+              }
+            });
             if (sessRes.data.success) {
-              setTableSessionInfo(sessRes.data.data);
-              const savedPin = localStorage.getItem(`smo_table_pin_${resolvedStore.id}_${tableNumInt}`);
-              if (savedPin) {
-                setActiveTablePin(savedPin);
+              const sessionData = sessRes.data.data;
+              setTableSessionInfo(sessionData);
+
+              if (sessionData.hasActiveSession) {
+                if (sessionData.isJoined) {
+                  if (savedPin) {
+                    setActiveTablePin(savedPin);
+                    setSessionPinBanner(savedPin);
+                  }
+                  if (savedToken) {
+                    setActiveTableToken(savedToken);
+                  }
+                } else {
+                  // Active session exists but this browser is not joined
+                  localStorage.removeItem(`smo_table_pin_${resolvedStore.id}_${tableNumInt}`);
+                  localStorage.removeItem(`smo_table_token_${resolvedStore.id}_${tableNumInt}`);
+                  setActiveTablePin('');
+                  setActiveTableToken('');
+                  setSessionPinBanner('');
+                }
+              } else {
+                // No active session on table (fresh table or settled)
+                localStorage.removeItem(`smo_table_pin_${resolvedStore.id}_${tableNumInt}`);
+                localStorage.removeItem(`smo_table_token_${resolvedStore.id}_${tableNumInt}`);
+                localStorage.removeItem(`smo_table_session_${resolvedStore.id}_${tableNumInt}`);
+                setActiveTablePin('');
+                setActiveTableToken('');
+                setSessionPinBanner('');
               }
             }
-          } catch (e) { }
+          } catch (e) {
+            console.warn('Failed to verify table session:', e);
+          }
         }
       }
 
@@ -303,7 +354,7 @@ export const StoreMenuPage = () => {
         setActiveCategory(menuCategories[0].id);
       }
     } catch (err) {
-      setError(err.response?.data?.message || 'Unable to load menu. Please check your connection.');
+      setError(getErrorMessage(err, 'Unable to load menu. Please check your connection.'));
     } finally {
       setLoading(false);
     }
@@ -396,9 +447,10 @@ export const StoreMenuPage = () => {
     return cats;
   }, [categories, searchQuery, vegOnly]);
 
-  const submitOrder = async (overridePin) => {
+  const submitOrder = async (overridePin, overrideToken) => {
     setIsPlacingOrder(true);
     const pinToUse = overridePin || activeTablePin || undefined;
+    const tokenToUse = overrideToken || activeTableToken || undefined;
     try {
       const payload = {
         tableNumber: parseInt(tableNumber, 10),
@@ -413,20 +465,27 @@ export const StoreMenuPage = () => {
           kitchenNotes: '',
         })),
         sessionId: getSessionId(),
+        sessionToken: tokenToUse,
         pin: pinToUse
       };
 
       const res = await api.post(`/public/stores/${store.id}/orders`, payload);
-      const { paymentIntent, tableSessionId, sessionPin } = res.data.data;
+      const { paymentIntent, tableSessionId, sessionPin, sessionToken } = res.data.data;
 
-      if (sessionPin) {
-        setActiveTablePin(sessionPin);
-        localStorage.setItem(`smo_table_pin_${store.id}_${tableNumber}`, sessionPin);
+      if (sessionPin || sessionToken) {
+        if (sessionPin) {
+          setActiveTablePin(sessionPin);
+          localStorage.setItem(`smo_table_pin_${store.id}_${tableNumber}`, sessionPin);
+          setSessionPinBanner(sessionPin);
+        }
+        if (sessionToken) {
+          setActiveTableToken(sessionToken);
+          localStorage.setItem(`smo_table_token_${store.id}_${tableNumber}`, sessionToken);
+        }
         if (tableSessionId) {
           localStorage.setItem(`smo_table_session_${store.id}_${tableNumber}`, tableSessionId);
         }
-        setSessionPinBanner(sessionPin);
-        setTableSessionInfo(prev => ({ ...prev, hasActiveSession: true, tableSessionId }));
+        setTableSessionInfo(prev => ({ ...prev, hasActiveSession: true, isJoined: true, tableSessionId }));
       }
 
       if (paymentModel === 'PREPAID' && res.data.data.order?.id) {
@@ -470,11 +529,12 @@ export const StoreMenuPage = () => {
         fetchWalletData();
       }
     } catch (err) {
-      if (err.response?.status === 403 && err.response?.data?.message?.includes('Table PIN')) {
-        setPinError(err.response?.data?.message || 'Invalid Table PIN');
+      const errorMsg = getErrorMessage(err, 'Order failed. Please call a waiter.');
+      if (err.response?.status === 403 && (errorMsg.toLowerCase().includes('pin') || errorMsg.toLowerCase().includes('session'))) {
+        setPinError(errorMsg);
         setShowPinModal(true);
       } else {
-        showToast(err.response?.data?.message || 'Order failed. Please call a waiter.', 'error');
+        showToast(errorMsg, 'error');
       }
     } finally {
       setIsPlacingOrder(false);
@@ -493,7 +553,10 @@ export const StoreMenuPage = () => {
       return;
     }
 
-    if (tableSessionInfo?.hasActiveSession && !activeTablePin) {
+    // If table has an active session and this device hasn't joined it, require PIN entry
+    if (tableSessionInfo?.hasActiveSession && !tableSessionInfo?.isJoined && !activeTableToken && !activeTablePin) {
+      setPinError('');
+      setPinInput('');
       setShowPinModal(true);
       return;
     }
@@ -501,11 +564,47 @@ export const StoreMenuPage = () => {
     await submitOrder();
   };
 
+  const handleJoinSession = async () => {
+    if (pinInput.length !== 4) return;
+    setIsPlacingOrder(true);
+    setPinError('');
+    try {
+      const res = await api.post(`/public/stores/${store.id}/tables/${tableNumber}/join-session`, {
+        pin: pinInput
+      });
+      if (res.data.success) {
+        const { sessionToken, sessionPin, tableSessionId } = res.data.data;
+        setActiveTableToken(sessionToken);
+        setActiveTablePin(sessionPin);
+        localStorage.setItem(`smo_table_token_${store.id}_${tableNumber}`, sessionToken);
+        localStorage.setItem(`smo_table_pin_${store.id}_${tableNumber}`, sessionPin);
+        if (tableSessionId) {
+          localStorage.setItem(`smo_table_session_${store.id}_${tableNumber}`, tableSessionId);
+        }
+        setSessionPinBanner(sessionPin);
+        setTableSessionInfo(prev => ({ ...prev, hasActiveSession: true, isJoined: true, tableSessionId }));
+        setShowPinModal(false);
+        showToast(`Joined Table ${tableNumber} session!`, 'success');
+
+        // If checkout is open and user was placing an order, submit it immediately
+        if (items.length > 0 && isCheckoutOpen) {
+          await submitOrder(sessionPin, sessionToken);
+        }
+      }
+    } catch (err) {
+      const errorMsg = getErrorMessage(err, 'Incorrect PIN for this table. Please check with companions.');
+      setPinError(errorMsg);
+    } finally {
+      setIsPlacingOrder(false);
+    }
+  };
+
   const handleGoogleSuccess = async (credentialResponse) => {
+    setIsGoogleAuthLoading(true);
     try {
       const res = await api.post('/auth/google', {
         idToken: credentialResponse.credential,
-        tenantSlug: store.tenant.slug
+        tenantSlug: store?.tenant?.slug
       });
       if (res.data.success) {
         const { token: newToken, user } = res.data.data;
@@ -518,7 +617,10 @@ export const StoreMenuPage = () => {
         await submitOrder();
       }
     } catch (err) {
-      showToast('Authentication failed. Please try again.', 'error');
+      const errorMsg = getErrorMessage(err, 'Authentication failed. Please try again.');
+      showToast(errorMsg, 'error');
+    } finally {
+      setIsGoogleAuthLoading(false);
     }
   };
 
@@ -531,7 +633,8 @@ export const StoreMenuPage = () => {
       showToast('Promo code applied successfully!', 'success');
     } catch (err) {
       setAppliedPromo(null);
-      showToast(err.response?.data?.message || 'Invalid promo code', 'error');
+      const errorMsg = getErrorMessage(err, 'Invalid promo code');
+      showToast(errorMsg, 'error');
     } finally {
       setValidatingPromo(false);
     }
@@ -704,13 +807,25 @@ export const StoreMenuPage = () => {
           <div className="flex shrink-0 items-center gap-1.5">
             {/* Table badge */}
             {tableNumber ? (
-              <div className="inline-flex h-7 items-center gap-1 rounded-l-full border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-                T{tableNumber}
-                {activeTablePin && (
-                  <span className="ml-1 text-emerald-500/70 dark:text-emerald-600">• PIN {activeTablePin}</span>
-                )}
-              </div>
+              tableSessionInfo?.hasActiveSession && !tableSessionInfo?.isJoined && !activeTableToken ? (
+                <button
+                  type="button"
+                  onClick={() => { setPinError(''); setPinInput(''); setShowPinModal(true); }}
+                  className="inline-flex h-7 items-center gap-1 rounded-l-full border border-amber-300 bg-amber-50 px-2.5 text-[11px] font-bold text-amber-800 transition hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+                  title="Active session. Click to enter PIN"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500 animate-ping" />
+                  T{tableNumber} • Enter PIN
+                </button>
+              ) : (
+                <div className="inline-flex h-7 items-center gap-1 rounded-l-full border border-emerald-200 bg-emerald-50 px-2.5 text-[11px] font-semibold text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+                  T{tableNumber}
+                  {activeTablePin && (
+                    <span className="ml-1 text-emerald-600/90 dark:text-emerald-400">• PIN {activeTablePin}</span>
+                  )}
+                </div>
+              )
             ) : (
               <div className="inline-flex h-7 items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 text-[11px] font-medium text-amber-600 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
                 Browse
@@ -773,17 +888,40 @@ export const StoreMenuPage = () => {
           <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-white via-white/20 to-transparent dark:from-zinc-950 dark:via-zinc-950/20" />
 
           {/* Session PIN Banner overlaid on bottom of hero */}
-          {sessionPinBanner && (
-            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between rounded-xl border border-indigo-300/50 bg-indigo-50/95 px-3 py-2 text-xs text-indigo-900 shadow-lg backdrop-blur-md dark:border-indigo-800/50 dark:bg-indigo-950/90 dark:text-indigo-200">
-              <div>
-                <p className="font-bold">Table {tableNumber} PIN: {sessionPinBanner}</p>
-                <p className="text-[10px] opacity-75">Share with companions to add dishes</p>
+          {sessionPinBanner ? (
+            <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between rounded-xl border border-indigo-300/60 bg-indigo-50/95 px-3 py-2 text-xs text-indigo-900 shadow-lg backdrop-blur-md dark:border-indigo-800/60 dark:bg-indigo-950/90 dark:text-indigo-200">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300">
+                  <UserGroupIcon size={16} />
+                </div>
+                <div>
+                  <p className="font-bold">Table {tableNumber} PIN: {sessionPinBanner}</p>
+                  <p className="text-[10px] opacity-75">Share with companions to add dishes</p>
+                </div>
               </div>
-              <button onClick={() => setSessionPinBanner('')} className="p-0.5 text-indigo-400 hover:text-indigo-600">
+              <button onClick={() => setSessionPinBanner('')} className="p-1 text-indigo-400 hover:text-indigo-600">
                 <Cancel01Icon size={14} />
               </button>
             </div>
-          )}
+          ) : (tableSessionInfo?.hasActiveSession && !tableSessionInfo?.isJoined && !activeTableToken) ? (
+            <div
+              onClick={() => { setPinError(''); setPinInput(''); setShowPinModal(true); }}
+              className="absolute bottom-3 left-3 right-3 flex items-center justify-between rounded-xl border border-amber-300/70 bg-amber-50/95 px-3 py-2 text-xs text-amber-950 shadow-lg backdrop-blur-md cursor-pointer hover:bg-amber-100 transition dark:border-amber-800/70 dark:bg-amber-950/90 dark:text-amber-200"
+            >
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-200/80 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
+                  <UserGroupIcon size={16} />
+                </div>
+                <div>
+                  <p className="font-bold">Active Table {tableNumber} Session</p>
+                  <p className="text-[10px] opacity-80">Tap to enter 4-digit PIN to join this table</p>
+                </div>
+              </div>
+              <span className="rounded-md bg-amber-200/90 px-2 py-0.5 text-[10px] font-bold text-amber-900 dark:bg-amber-800/80 dark:text-amber-200">
+                Enter PIN
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {/* ── Search + Dietary Filters ─────────────────────────────────── */}
@@ -1031,106 +1169,151 @@ export const StoreMenuPage = () => {
               <div className="space-y-3 border-t border-zinc-100 bg-zinc-50/80 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] dark:border-zinc-800 dark:bg-zinc-900/80">
 
                 {/* Store Credit Wallet Redemption Card */}
-{isLoyaltyEnabled && (
-  <div>
-    {!token ? (
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
-            <GiftIcon size={18} />
-          </div>
-          <div className="min-w-0">
-            <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
-              Claim ₹{loyaltyRules.welcomeBonusCredits || 50} free credits
-            </p>
-            <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80">
-              Log in to apply credits and earn cashback on this order
-            </p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowAuthModal(true)}
-          className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-600"
-        >
-          Log In
-        </button>
-      </div>
-    ) : (
-      (() => {
-        const minOrder = loyaltyRules.minOrderToRedeem || 0;
-        const canRedeem =
-          customerBalance > 0 &&
-          subTotal >= minOrder &&
-          (!appliedPromo || loyaltyRules.allowPromoStacking);
+                {isLoyaltyEnabled && (
+                  <div>
+                    {!token ? (
+                      <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/40">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+                            <GiftIcon size={18} />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                              Claim ₹{loyaltyRules.welcomeBonusCredits || 50} free credits
+                            </p>
+                            <p className="text-[10px] text-amber-700/80 dark:text-amber-400/80">
+                              Log in to apply credits and earn cashback on this order
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowAuthModal(true)}
+                          className="shrink-0 rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-amber-600"
+                        >
+                          Log In
+                        </button>
+                      </div>
+                    ) : (
+                      (() => {
+                        const minOrder = loyaltyRules.minOrderToRedeem || 0;
+                        const canRedeem =
+                          customerBalance > 0 &&
+                          subTotal >= minOrder &&
+                          (!appliedPromo || loyaltyRules.allowPromoStacking);
 
-        const redeemable = Math.min(
-          Math.floor(customerBalance),
-          Math.floor(subTotal * ((loyaltyRules.maxRedemptionPercent || 50) / 100)),
-        );
+                        const redeemable = Math.min(
+                          Math.floor(customerBalance),
+                          Math.floor(subTotal * ((loyaltyRules.maxRedemptionPercent || 50) / 100)),
+                        );
 
-        let status;
-        if (customerBalance <= 0) {
-          status = `You'll earn ${loyaltyRules.cashbackPercentage || 5}% cashback on this order`;
-        } else if (subTotal < minOrder) {
-          status = `Add ₹${minOrder - subTotal} more to redeem credits (min. ₹${minOrder})`;
-        } else if (appliedPromo && !loyaltyRules.allowPromoStacking) {
-          status = 'Credits cannot be combined with promo codes';
-        } else if (useWalletCredits) {
-          status = `Applying ₹${appliedWalletCredits} credits`;
-        } else {
-          status = `Redeem up to ₹${redeemable}`;
-        }
+                        let status;
+                        if (customerBalance <= 0) {
+                          status = `You'll earn ${loyaltyRules.cashbackPercentage || 5}% cashback on this order`;
+                        } else if (subTotal < minOrder) {
+                          status = `Add ₹${minOrder - subTotal} more to redeem credits (min. ₹${minOrder})`;
+                        } else if (appliedPromo && !loyaltyRules.allowPromoStacking) {
+                          status = 'Credits cannot be combined with promo codes';
+                        } else if (useWalletCredits) {
+                          status = `Applying ₹${appliedWalletCredits} credits`;
+                        } else {
+                          status = `Redeem up to ₹${redeemable}`;
+                        }
 
-        return (
-          <div className="rounded-xl border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-900 dark:bg-amber-950/20">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
-                  <Coins01Icon size={16} />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                      Store Credit Wallet
-                    </span>
-                    <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
-                      ₹{customerBalance.toFixed(2)}
-                    </span>
+                        return (
+                          <div
+                            className={`rounded-xl border p-3 transition-colors ${
+                              useWalletCredits && canRedeem
+                                ? 'border-amber-300 bg-amber-50/70 dark:border-amber-800 dark:bg-amber-950/30'
+                                : 'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900/60'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div
+                                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${
+                                    useWalletCredits && canRedeem
+                                      ? 'bg-amber-500/20 text-amber-700 dark:text-amber-300'
+                                      : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
+                                  }`}
+                                >
+                                  <Coins01Icon size={16} />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                                      Store Credit Wallet
+                                    </span>
+                                    <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:text-amber-300">
+                                      ₹{customerBalance.toFixed(2)}
+                                    </span>
+                                  </div>
+                                  <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
+                                    {status}
+                                  </p>
+                                </div>
+                              </div>
+
+                              {canRedeem && (
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {useWalletCredits ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setUseWalletCredits(false)}
+                                      className="text-[11px] font-semibold text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 underline"
+                                    >
+                                      Don't use
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => setUseWalletCredits(true)}
+                                      className="rounded-lg bg-amber-500 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm hover:bg-amber-600 transition"
+                                    >
+                                      Apply Credits
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={useWalletCredits}
+                                    aria-label="Toggle store credits"
+                                    onClick={() => setUseWalletCredits((v) => !v)}
+                                    className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
+                                      useWalletCredits
+                                        ? 'bg-amber-500'
+                                        : 'bg-zinc-200 dark:bg-zinc-700'
+                                    }`}
+                                  >
+                                    <span
+                                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                                        useWalletCredits ? 'translate-x-4' : 'translate-x-0.5'
+                                      }`}
+                                    />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {canRedeem && !useWalletCredits && (
+                              <div className="mt-2 flex items-center justify-between border-t border-zinc-100 pt-2 dark:border-zinc-800 text-[11px] text-zinc-500 dark:text-zinc-400">
+                                <span>Save ₹{customerBalance.toFixed(2)} balance for later</span>
+                                <button
+                                  type="button"
+                                  onClick={() => setUseWalletCredits(true)}
+                                  className="font-bold text-amber-600 dark:text-amber-400 hover:underline"
+                                >
+                                  Use ₹{redeemable} now →
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()
+                    )}
                   </div>
-                  <p className="mt-0.5 text-[10px] text-zinc-500 dark:text-zinc-400">
-                    {status}
-                  </p>
-                </div>
-              </div>
-
-              {canRedeem && (
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={useWalletCredits}
-                  aria-label="Apply store credits"
-                  onClick={() => setUseWalletCredits((v) => !v)}
-                  className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-                    useWalletCredits
-                      ? 'bg-amber-500'
-                      : 'bg-zinc-200 dark:bg-zinc-700'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
-                      useWalletCredits ? 'translate-x-4' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })()
-    )}
-  </div>
-)}
+                )}
                 {/* Promo Code (collapsible) */}
                 <div>
                   {!appliedPromo ? (
@@ -1192,9 +1375,18 @@ export const StoreMenuPage = () => {
                     </div>
                   )}
                   {appliedWalletCredits > 0 && (
-                    <div className="flex justify-between font-medium text-amber-600 dark:text-amber-400">
+                    <div className="flex justify-between items-center font-medium text-amber-600 dark:text-amber-400">
                       <span className="flex items-center gap-1.5">
-                        <Coins01Icon size={14} className="text-amber-500 shrink-0" /> Store Credits Used
+                        <Coins01Icon size={14} className="text-amber-500 shrink-0" />
+                        <span>Store Credits Used</span>
+                        <button
+                          type="button"
+                          onClick={() => setUseWalletCredits(false)}
+                          className="ml-1 rounded px-1.5 py-0.5 text-[10px] font-bold text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 bg-zinc-100 dark:bg-zinc-800 transition"
+                          title="Don't use credits on this order"
+                        >
+                          Don't use
+                        </button>
                       </span>
                       <span>-₹{appliedWalletCredits}</span>
                     </div>
@@ -1259,32 +1451,51 @@ export const StoreMenuPage = () => {
         )}
 
         {/* ── Auth Sheet ─────────────────────────────────────────────── */}
-        <Sheet open={showAuthModal} onOpenChange={(open) => !open && setShowAuthModal(false)}>
+        <Sheet open={showAuthModal} onOpenChange={(open) => {
+          if (!open && !isGoogleAuthLoading) setShowAuthModal(false);
+        }}>
           <SheetContent side="bottom" className="w-full sm:max-w-md mx-auto p-6 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-t-3xl shadow-2xl text-center">
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-zinc-100">
-              <CreditCardIcon size={26} />
+              {isGoogleAuthLoading ? (
+                <Loading03Icon className="animate-spin text-amber-600 dark:text-amber-400" size={26} />
+              ) : (
+                <CreditCardIcon size={26} />
+              )}
             </div>
-            <SheetTitle className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">Quick Checkout</SheetTitle>
+            <SheetTitle className="text-xl font-extrabold text-zinc-900 dark:text-zinc-50">
+              {isGoogleAuthLoading ? 'Authenticating...' : 'Quick Checkout'}
+            </SheetTitle>
             <p className="mb-6 mt-1 text-sm text-zinc-400 dark:text-zinc-500">
-              Verify your identity to secure your pre-paid order and store wallet.
+              {isGoogleAuthLoading
+                ? 'Please wait while we verify your Google account...'
+                : 'Verify your identity to secure your pre-paid order and store wallet.'}
             </p>
 
-            <div className="flex justify-center mb-4">
-              <GoogleLogin
-                onSuccess={handleGoogleSuccess}
-                onError={() => showToast('Google login failed', 'error')}
-                theme="outline"
-                shape="rectangular"
-                text="continue_with"
-              />
+            <div className="flex justify-center mb-4 min-h-[44px] items-center">
+              {isGoogleAuthLoading ? (
+                <div className="flex items-center justify-center gap-2.5 py-2.5 px-6 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-800 dark:text-zinc-200 text-xs font-semibold animate-pulse border border-zinc-200 dark:border-zinc-700">
+                  <Loading03Icon className="animate-spin text-amber-600 dark:text-amber-400" size={16} />
+                  <span>Signing in with Google...</span>
+                </div>
+              ) : (
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={() => showToast('Google login failed', 'error')}
+                  theme="outline"
+                  shape="rectangular"
+                  text="continue_with"
+                />
+              )}
             </div>
 
-            <button
-              onClick={() => setShowAuthModal(false)}
-              className="mt-2 text-sm font-medium text-zinc-400 transition hover:text-zinc-700 dark:hover:text-zinc-200"
-            >
-              Cancel
-            </button>
+            {!isGoogleAuthLoading && (
+              <button
+                onClick={() => setShowAuthModal(false)}
+                className="mt-2 text-sm font-medium text-zinc-400 transition hover:text-zinc-700 dark:hover:text-zinc-200"
+              >
+                Cancel
+              </button>
+            )}
           </SheetContent>
         </Sheet>
 
@@ -1296,12 +1507,22 @@ export const StoreMenuPage = () => {
             </div>
             <SheetTitle className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">Table {tableNumber} PIN</SheetTitle>
             <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-              An active session exists. Enter the 4-digit PIN to add your dishes.
+              An active session exists on this table. Enter the 4-digit PIN to join and order.
             </p>
 
-            <div className="my-5">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (pinInput.length === 4 && !isPlacingOrder) {
+                  handleJoinSession();
+                }
+              }}
+              className="my-5"
+            >
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 maxLength={4}
                 autoFocus
                 placeholder="• • • •"
@@ -1311,40 +1532,35 @@ export const StoreMenuPage = () => {
                   setPinInput(val);
                   setPinError('');
                 }}
-                className="w-32 text-center text-2xl font-extrabold tracking-[0.5em] py-3 rounded-xl border border-zinc-200 bg-zinc-50 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800"
+                className="w-36 text-center text-2xl font-extrabold tracking-[0.5em] py-3 rounded-xl border border-zinc-200 bg-zinc-50 outline-none focus:ring-2 focus:ring-indigo-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
               {pinError && (
-                <p className="mt-2 text-xs font-medium text-rose-600 dark:text-rose-400">{pinError}</p>
+                <p className="mt-2 text-xs font-semibold text-rose-600 dark:text-rose-400">{pinError}</p>
               )}
-            </div>
 
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowPinModal(false);
-                  setPinError('');
-                }}
-                className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-500 dark:border-zinc-700 dark:text-zinc-400"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                disabled={pinInput.length !== 4 || isPlacingOrder}
-                onClick={async () => {
-                  setActiveTablePin(pinInput);
-                  localStorage.setItem(`smo_table_pin_${store.id}_${tableNumber}`, pinInput);
-                  setShowPinModal(false);
-                  await submitOrder(pinInput);
-                }}
-                className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-bold text-white shadow-md transition disabled:opacity-40 dark:bg-white dark:text-zinc-900"
-              >
-                {isPlacingOrder ? 'Checking...' : 'Submit'}
-              </button>
-            </div>
-            <p className="mt-4 text-[10px] text-zinc-400">
-              Ask companions at the table or call a waiter for the PIN.
+              <div className="flex gap-2 mt-5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPinModal(false);
+                    setPinError('');
+                  }}
+                  className="flex-1 rounded-xl border border-zinc-200 py-2.5 text-sm font-semibold text-zinc-500 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={pinInput.length !== 4 || isPlacingOrder}
+                  className="flex-1 rounded-xl bg-zinc-900 py-2.5 text-sm font-bold text-white shadow-md transition disabled:opacity-40 hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-100 flex items-center justify-center gap-2"
+                >
+                  {isPlacingOrder && <Loading03Icon className="animate-spin" size={16} />}
+                  <span>{isPlacingOrder ? 'Verifying...' : (items.length > 0 && isCheckoutOpen ? 'Verify & Place Order' : 'Join Table')}</span>
+                </button>
+              </div>
+            </form>
+            <p className="mt-2 text-[11px] text-zinc-400">
+              Ask companions at your table or call a waiter for the 4-digit PIN.
             </p>
           </SheetContent>
         </Sheet>
@@ -1375,11 +1591,13 @@ export const StoreMenuPage = () => {
           walletData={walletData}
           store={store}
           brandColor={brandColorHex}
+          authLoading={isGoogleAuthLoading}
           onGoogleSuccess={async (credentialResponse) => {
+            setIsGoogleAuthLoading(true);
             try {
               const res = await api.post('/auth/google', {
                 idToken: credentialResponse.credential,
-                tenantSlug: store.tenant?.slug
+                tenantSlug: store?.tenant?.slug
               });
               if (res.data.success) {
                 const { token: newToken, user } = res.data.data;
@@ -1390,7 +1608,10 @@ export const StoreMenuPage = () => {
                 }
               }
             } catch (err) {
-              showToast('Google login failed', 'error');
+              const errorMsg = getErrorMessage(err, 'Google login failed');
+              showToast(errorMsg, 'error');
+            } finally {
+              setIsGoogleAuthLoading(false);
             }
           }}
         />

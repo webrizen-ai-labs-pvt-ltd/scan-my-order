@@ -1,4 +1,9 @@
-const { PrismaClient } = require("@prisma/client");
+let PrismaClient;
+try {
+  ({ PrismaClient } = require("../generated/prisma"));
+} catch (e) {
+  ({ PrismaClient } = require("@prisma/client"));
+}
 const { env } = require("../config/env");
 
 let prisma;

@@ -32,4 +32,11 @@ router.delete("/:id", asyncHandler(async (req, res) => {
   res.json(createApiResponse(result));
 }));
 
+// POST /api/stores/:storeId/tables/:id/terminate-session
+router.post("/:id/terminate-session", asyncHandler(async (req, res) => {
+  const { terminateTableSession } = require("./table-service");
+  const result = await terminateTableSession(req.user, req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
+}));
+
 module.exports = router;

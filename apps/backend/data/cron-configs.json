@@ -1,54 +1,58 @@
 {
   "cmt5g9r9c0005ebh8kn4dezdx": {
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-19T20:45:03.675Z",
-      "lastRunStatus": "SUCCESS",
-      "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 3657
+      "lastRunAt": "2026-09-21T16:30:01.783Z",
+      "lastRunStatus": "FAILED",
+      "lastRunSummary": "Error: \nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-21T15:45:00.015Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-21T15:45:00.015Z\")\n             }\n           }\n         ],\n         storeId: \"cmt5g9r9c0005ebh8kn4dezdx\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing.",
+      "lastRunDurationMs": 1767,
+      "lastRunError": "\nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-21T15:45:00.015Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-21T15:45:00.015Z\")\n             }\n           }\n         ],\n         storeId: \"cmt5g9r9c0005ebh8kn4dezdx\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing."
     },
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-19T20:30:00.929Z",
+      "lastRunAt": "2026-09-21T16:30:01.779Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 917
+      "lastRunDurationMs": 1764
     },
     "DAILY_SALES_DIGEST": {
-      "lastRunAt": "2026-09-19T18:25:20.116Z",
+      "lastRunAt": "2026-09-20T18:25:06.118Z",
       "lastRunStatus": "SUCCESS",
-      "lastRunSummary": "Generated sales digest for 1 store(s): 0 total order(s) settled, ₹0.00 revenue.",
-      "lastRunDurationMs": 20105
+      "lastRunSummary": "Generated sales digest for 1 store(s): 2 total order(s) settled, ₹8.99 revenue.",
+      "lastRunDurationMs": 6101
     },
     "EXPIRED_PROMO_ARCHIVAL": {
-      "lastRunAt": "2026-09-19T18:30:01.705Z",
-      "lastRunStatus": "SUCCESS",
-      "lastRunSummary": "All active promotional codes are valid.",
-      "lastRunDurationMs": 1690
+      "lastRunAt": "2026-09-20T18:30:10.037Z",
+      "lastRunStatus": "FAILED",
+      "lastRunSummary": "Error: \nInvalid `prisma.promoCode.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\promo-archival.js:21:48\n\n  18   whereClause.store = { tenantId };\n  19 }\n  20 \n→ 21 const expiredPromos = await prisma.promoCode.findMany(\nTimed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 1)",
+      "lastRunDurationMs": 10020,
+      "lastRunError": "\nInvalid `prisma.promoCode.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\promo-archival.js:21:48\n\n  18   whereClause.store = { tenantId };\n  19 }\n  20 \n→ 21 const expiredPromos = await prisma.promoCode.findMany(\nTimed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 1)"
     }
   },
   "cmu1mjo6y0006s0507dgz8zg3": {
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-19T20:30:01.736Z",
+      "lastRunAt": "2026-09-21T16:30:00.982Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 1722
+      "lastRunDurationMs": 968
     },
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-19T20:45:04.451Z",
-      "lastRunStatus": "SUCCESS",
-      "lastRunSummary": "Reconciled 0 inactive table session(s) and flagged 0 overdue reservation(s) as No-Show.",
-      "lastRunDurationMs": 4432
+      "lastRunAt": "2026-09-21T16:30:00.269Z",
+      "lastRunStatus": "FAILED",
+      "lastRunSummary": "Error: \nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-21T15:45:00.013Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-21T15:45:00.013Z\")\n             }\n           }\n         ],\n         storeId: \"cmu1mjo6y0006s0507dgz8zg3\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing.",
+      "lastRunDurationMs": 256,
+      "lastRunError": "\nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-21T15:45:00.013Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-21T15:45:00.013Z\")\n             }\n           }\n         ],\n         storeId: \"cmu1mjo6y0006s0507dgz8zg3\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing."
     },
     "DAILY_SALES_DIGEST": {
-      "lastRunAt": "2026-09-19T18:25:08.267Z",
+      "lastRunAt": "2026-09-20T18:25:06.038Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "Generated sales digest for 1 store(s): 0 total order(s) settled, ₹0.00 revenue.",
-      "lastRunDurationMs": 8254
+      "lastRunDurationMs": 6022
     },
     "EXPIRED_PROMO_ARCHIVAL": {
-      "lastRunAt": "2026-09-19T18:30:03.358Z",
-      "lastRunStatus": "SUCCESS",
-      "lastRunSummary": "All active promotional codes are valid.",
-      "lastRunDurationMs": 3342
+      "lastRunAt": "2026-09-20T18:30:10.018Z",
+      "lastRunStatus": "FAILED",
+      "lastRunSummary": "Error: \nInvalid `prisma.promoCode.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\promo-archival.js:21:48\n\n  18   whereClause.store = { tenantId };\n  19 }\n  20 \n→ 21 const expiredPromos = await prisma.promoCode.findMany(\nTimed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 1)",
+      "lastRunDurationMs": 10004,
+      "lastRunError": "\nInvalid `prisma.promoCode.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\promo-archival.js:21:48\n\n  18   whereClause.store = { tenantId };\n  19 }\n  20 \n→ 21 const expiredPromos = await prisma.promoCode.findMany(\nTimed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 1)"
     }
   }
 }

@@ -12,7 +12,8 @@ import {
   Tag01Icon, 
   CheckmarkCircle02Icon, 
   AlertCircleIcon,
-  CreditCardIcon
+  CreditCardIcon,
+  Loading03Icon
 } from 'hugeicons-react';
 import { GoogleLogin } from '@react-oauth/google';
 
@@ -22,7 +23,8 @@ export const CustomerWalletModal = ({
   walletData, 
   store, 
   brandColor = '#059669',
-  onGoogleSuccess
+  onGoogleSuccess,
+  authLoading = false
 }) => {
   const wallet = walletData?.wallet;
   const settings = walletData?.settings || walletData?.storeRules || {};
@@ -143,16 +145,23 @@ export const CustomerWalletModal = ({
                 Log in with your Google account to unlock your store wallet and claim free credits to spend right now.
               </p>
 
-              <div className="flex justify-center pt-1">
-                <GoogleLogin
-                  onSuccess={(res) => {
-                    if (onGoogleSuccess) onGoogleSuccess(res);
-                  }}
-                  onError={() => alert('Login failed')}
-                  theme="outline"
-                  shape="pill"
-                  text="continue_with"
-                />
+              <div className="flex justify-center pt-1 min-h-[44px] items-center">
+                {authLoading ? (
+                  <div className="flex items-center justify-center gap-2.5 py-2.5 px-5 rounded-full bg-amber-500/10 text-amber-800 dark:text-amber-200 text-xs font-semibold border border-amber-500/20 animate-pulse">
+                    <Loading03Icon className="animate-spin text-amber-600 dark:text-amber-400" size={16} />
+                    <span>Signing in with Google...</span>
+                  </div>
+                ) : (
+                  <GoogleLogin
+                    onSuccess={(res) => {
+                      if (onGoogleSuccess) onGoogleSuccess(res);
+                    }}
+                    onError={() => alert('Google sign-in failed. Please try again.')}
+                    theme="outline"
+                    shape="pill"
+                    text="continue_with"
+                  />
+                )}
               </div>
             </div>
           )}

@@ -2,7 +2,7 @@ const { getPrismaClient } = require('../../lib/prisma');
 
 async function runTableReconciliationJob({ storeId, tenantId, params = {} }) {
   const prisma = getPrismaClient();
-  const idleMinutes = Number(params.idleMinutes) || 45;
+  const idleMinutes = Number(params.idleMinutes) || 120; // 2 hours rolling inactivity
   const reservationGraceMinutes = Number(params.reservationGraceMinutes) || 45;
 
   const sessionCutoff = new Date();
@@ -14,10 +14,13 @@ async function runTableReconciliationJob({ storeId, tenantId, params = {} }) {
   let sessionsClosedCount = 0;
   let reservationsNoShowCount = 0;
 
-  // 1. Reconcile lingering active table sessions
+  // 1. Reconcile lingering active table sessions older than 2 hours of no order placement
   const sessionWhere = {
     status: 'ACTIVE',
-    updatedAt: { lt: sessionCutoff }
+    OR: [
+      { lastOrderAt: { lt: sessionCutoff } },
+      { lastOrderAt: null, updatedAt: { lt: sessionCutoff } }
+    ]
   };
   if (storeId) {
     sessionWhere.storeId = storeId;
@@ -25,27 +28,13 @@ async function runTableReconciliationJob({ storeId, tenantId, params = {} }) {
     sessionWhere.store = { tenantId };
   }
 
-  const activeSessions = await prisma.tableSession.findMany({
+  const inactiveSessions = await prisma.tableSession.findMany({
     where: sessionWhere,
-    include: {
-      orders: {
-        select: { id: true, status: true }
-      }
-    }
+    select: { id: true, storeId: true, tableId: true }
   });
 
-  const sessionIdsToClose = [];
-  for (const session of activeSessions) {
-    // If no orders or all orders are SETTLED or CANCELLED
-    const hasActiveOrders = session.orders.some(o => 
-      !['SETTLED', 'CANCELLED'].includes(o.status)
-    );
-    if (!hasActiveOrders) {
-      sessionIdsToClose.push(session.id);
-    }
-  }
-
-  if (sessionIdsToClose.length > 0) {
+  if (inactiveSessions.length > 0) {
+    const sessionIdsToClose = inactiveSessions.map(s => s.id);
     const res = await prisma.tableSession.updateMany({
       where: { id: { in: sessionIdsToClose } },
       data: { status: 'SETTLED' }

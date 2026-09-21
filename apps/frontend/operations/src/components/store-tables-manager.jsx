@@ -32,6 +32,7 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [savingCapacityId, setSavingCapacityId] = useState(null);
   const [deletingIds, setDeletingIds] = useState(() => new Set());
+  const [terminatingId, setTerminatingId] = useState(null);
 
   // Form state
   const [newTableNumber, setNewTableNumber] = useState('');
@@ -159,6 +160,25 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
         next.delete(table.id);
         return next;
       });
+    }
+  };
+
+  /* ─────────────────────────────────────────────────────────────
+     TERMINATE SESSION — manager releases table session immediately
+  ───────────────────────────────────────────────────────────── */
+  const handleTerminateSession = async (table) => {
+    if (!window.confirm(`Are you sure you want to terminate the active session on Table ${table.tableNumber}? This will release the table and reset the PIN.`)) {
+      return;
+    }
+    setTerminatingId(table.id);
+    try {
+      await api.post(`/stores/${storeId}/tables/${table.id}/terminate-session`);
+      await fetchTables({ silent: true });
+    } catch (err) {
+      console.error(err);
+      setError(err?.response?.data?.error?.message || err?.response?.data?.message || 'Failed to terminate table session');
+    } finally {
+      setTerminatingId(null);
     }
   };
 
@@ -514,6 +534,34 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
                       }}
                     />
                   </div>
+
+                  {/* Active Session Status & Terminate Button */}
+                  {table.activePin ? (
+                    <div className="w-full flex items-center justify-between bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-lg px-2.5 py-1.5 text-xs text-amber-900 dark:text-amber-300">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+                        <span>PIN: {table.activePin}</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTerminateSession(table)}
+                        disabled={terminatingId === table.id}
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 dark:text-rose-400 bg-white dark:bg-zinc-900 border border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 px-2 py-0.5 rounded shadow-sm transition disabled:opacity-50"
+                        title="Terminate session and release table"
+                      >
+                        {terminatingId === table.id ? (
+                          <Loading03Icon size={12} className="animate-spin" />
+                        ) : (
+                          <Cancel01Icon size={12} />
+                        )}
+                        <span>Release</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="w-full text-[11px] font-medium text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/40 rounded-lg py-1 px-2 text-center">
+                      Table Available
+                    </div>
+                  )}
 
                   <Button
                     variant="secondary"

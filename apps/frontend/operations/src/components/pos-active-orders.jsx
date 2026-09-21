@@ -608,6 +608,22 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
                           </span>
                         )}
 
+                        {group.tableSessionId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to terminate Table ${group.table?.tableNumber || ''} session and release the table?`)) {
+                                settleSession(group.tableSessionId, primaryOrder);
+                              }
+                            }}
+                            className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/50 px-2 py-0.5 rounded-md transition"
+                            title="Terminate active session and release table"
+                          >
+                            <Cancel01Icon size={12} />
+                            <span>Release Table</span>
+                          </button>
+                        )}
+
                         {group.orders.length > 1 && (
                           <span className="bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 text-[11px] px-2 py-0.5 rounded-md font-bold">
                             {group.orders.length} Batches
@@ -725,6 +741,21 @@ export const POSActiveOrders = ({ selectedStoreId, token }) => {
                           <Money01Icon size={18} />
                           <span>Collect Payment / Settle Tab (₹{groupTotal})</span>
                         </Button>
+                        {group.tableSessionId && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-xs font-semibold text-rose-600 hover:text-rose-700 border-rose-200 dark:border-rose-900/50 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to terminate Table ${group.table?.tableNumber || ''} session and release the table?`)) {
+                                settleSession(group.tableSessionId, primaryOrder);
+                              }
+                            }}
+                          >
+                            <Cancel01Icon size={14} className="mr-1.5" />
+                            Terminate Session / Release Table
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>

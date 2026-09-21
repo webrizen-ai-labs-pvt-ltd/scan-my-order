@@ -12,8 +12,12 @@ function notFoundHandler(req, _res, next) {
 }
 
 function errorHandler(error, _req, res, _next) {
-  console.error("[Backend Error]", error);
   const statusCode = error.statusCode || 500;
+  if (statusCode >= 500) {
+    console.error("[Backend Server Error]", error);
+  } else {
+    console.warn(`[API ${statusCode}] ${error.message}`);
+  }
 
   res.status(statusCode).json(createApiError(
     statusCode === 500 ? "Internal server error" : error.message,

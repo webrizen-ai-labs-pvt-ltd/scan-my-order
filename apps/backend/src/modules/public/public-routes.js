@@ -8,6 +8,7 @@ const { publicMenuCache } = require("../../lib/cache");
 const { createOrder, handleRazorpayWebhook } = require("../orders/order-service");
 const { createWaiterCall, getTableCallStatus, cancelWaiterCall } = require("../waiter-calls/waiter-call-service");
 const { createFeedback } = require("../feedback/feedback-service");
+const { createHttpError } = require("../../middleware/error-handler");
 
 const router = express.Router();
 
@@ -135,7 +136,7 @@ router.post("/stores/:storeId/orders", asyncHandler(async (req, res) => {
   }
 
   if (!tableId) {
-    return res.status(400).json(createApiResponse(null, "Invalid or missing table number"));
+    throw createHttpError(400, "Invalid or missing table number. Please re-scan your table QR code.");
   }
 
   // Attempt to decode Authorization header for pre-paid authenticated orders
@@ -311,7 +312,17 @@ router.post("/stores/:storeId/validate-promo", asyncHandler(async (req, res) => 
 // GET /api/public/stores/:storeId/tables/:tableNumber/session
 router.get("/stores/:storeId/tables/:tableNumber/session", asyncHandler(async (req, res) => {
   const { getTableSessionStatus } = require("../orders/order-service");
-  const result = await getTableSessionStatus(req.params.storeId, req.params.tableNumber);
+  const clientToken = req.headers['x-table-session-token'] || req.query.sessionToken || null;
+  const clientPin = req.query.pin || null;
+  const result = await getTableSessionStatus(req.params.storeId, req.params.tableNumber, clientToken, clientPin);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/public/stores/:storeId/tables/:tableNumber/join-session
+router.post("/stores/:storeId/tables/:tableNumber/join-session", asyncHandler(async (req, res) => {
+  const { joinTableSession } = require("../orders/order-service");
+  const { pin } = req.body || {};
+  const result = await joinTableSession(req.params.storeId, req.params.tableNumber, pin);
   res.json(createApiResponse(result));
 }));
 
