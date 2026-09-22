@@ -6,25 +6,10 @@ import { Tick02Icon, Cancel01Icon, Store01Icon, Clock01Icon, Money01Icon, QrCode
 import { QRCodeSVG } from 'qrcode.react';
 import { Receipt } from '../components/receipt';
 import { PaymentBifurcationModal } from '../components/payment-bifurcation-modal';
+import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
 
-// Synthesized audio chime for new incoming waiter calls
 const playChime = () => {
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-    osc.frequency.setValueAtTime(880, ctx.currentTime + 0.12); // A5
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.45);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.5);
-  } catch (e) {
-    // Safely ignore if user has not interacted with the browser yet
-  }
+  playNotificationChime({ haptic: true });
 };
 
 // Toast component for notifications
@@ -150,6 +135,7 @@ export const WaiterTasks = () => {
 
   // 1-second interval to tick countdown timers smoothly
   useEffect(() => {
+    initAudioUnlock();
     const timer = setInterval(() => setNowTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
@@ -294,6 +280,14 @@ export const WaiterTasks = () => {
             const data = JSON.parse(event.data);
             if (['ORDER_PENDING_VERIFICATION', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_PROCESSING', 'ORDER_CANCELLED', 'ORDER_SETTLED'].includes(data.type)) {
               fetchOrders(selectedStoreId, true);
+              
+              if (data.type === 'ORDER_READY') {
+                playChime();
+                showToast(`Table ${data.data?.table?.tableNumber || ''}: Order ready for pickup!`, 'success');
+              } else if (data.type === 'ORDER_PENDING_VERIFICATION') {
+                playChime();
+                showToast(`Table ${data.data?.table?.tableNumber || ''}: New order waiting for verification`, 'info');
+              }
               
               // If we are currently showing a payment modal for this order and it was settled
               if (data.type === 'ORDER_SETTLED') {

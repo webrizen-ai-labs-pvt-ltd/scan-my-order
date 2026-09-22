@@ -5,6 +5,7 @@ const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
 const { decrypt } = require("../../lib/encryption");
 const { broadcastToStore, broadcastToCustomer } = require("./sse-service");
+const { sendNotification } = require("../notifications/notification-service");
 const { evaluateMenuItemAvailability } = require("../inventory/inventory-service");
 const { 
   openItemRecordCache, 
@@ -454,16 +455,50 @@ async function createOrder(storeId, actor, origin, input) {
     broadcastToStore(storeId, 'ORDER_PENDING_VERIFICATION', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PENDING_VERIFICATION', order);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_PENDING_VERIFICATION', order);
+    sendNotification({
+      storeId,
+      type: 'ORDER_PENDING_VERIFICATION',
+      title: 'Order Pending Verification',
+      body: `Table ${order.table?.tableNumber || 'N/A'}: Order #${order.id.slice(-6).toUpperCase()} requires waiter verification.`,
+      data: { orderId: order.id, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/waiter' },
+      target: { roles: ['WAITER', 'STORE_MANAGER'], storeId }
+    }).catch(() => {});
   } else if (status === 'PROCESSING') {
     await deductInventory(prisma, order);
     broadcastToStore(storeId, 'ORDER_PROCESSING', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PROCESSING', order);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_PROCESSING', order);
+    sendNotification({
+      storeId,
+      type: 'ORDER_PROCESSING',
+      title: 'New Kitchen Order',
+      body: `Table ${order.table?.tableNumber || 'N/A'}: Order #${order.id.slice(-6).toUpperCase()} received in kitchen.`,
+      data: { orderId: order.id, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/kds' },
+      target: { roles: ['KITCHEN', 'STORE_MANAGER'], storeId }
+    }).catch(() => {});
+    if (order.customerId || order.sessionId) {
+      sendNotification({
+        storeId,
+        type: 'ORDER_PROCESSING',
+        title: 'Order Confirmed',
+        body: `Your order #${order.id.slice(-6).toUpperCase()} is confirmed and being prepared!`,
+        data: { orderId: order.id, sound: 'notification.mp3' },
+        target: { customerId: order.customerId, sessionId: order.sessionId }
+      }).catch(() => {});
+    }
   } else if (status === 'SETTLED') {
     await deductInventory(prisma, order);
     broadcastToStore(storeId, 'ORDER_SETTLED', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_SETTLED', order);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_SETTLED', order);
+    sendNotification({
+      storeId,
+      type: 'ORDER_SETTLED',
+      title: 'Order Settled',
+      body: `Table ${order.table?.tableNumber || 'N/A'}: Order #${order.id.slice(-6).toUpperCase()} settled.`,
+      data: { orderId: order.id, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/pos' },
+      target: { roles: ['STORE_MANAGER', 'WAITER'], storeId }
+    }).catch(() => {});
     try {
       const { creditOrderCashback } = require("../loyalty/loyalty-service");
       await creditOrderCashback(order.id);
@@ -727,6 +762,24 @@ async function handleRazorpayWebhook(tenantId, payload, signature, rawBody) {
       } else if (order.paymentModel === 'POSTPAID' && order.status !== 'SETTLED' && order.status !== 'CANCELLED') {
         // If a postpaid order receives a successful payment via Waiter generated link, it is instantly settled.
         await updateOrderStatus(null, order.storeId, order.id, 'SETTLED', true);
+      }
+      sendNotification({
+        storeId: order.storeId,
+        type: 'PAYMENT_WEBHOOK',
+        title: 'Payment Received via Razorpay',
+        body: `Payment of ₹${order.totalAmount} captured for Order #${order.id.slice(-6).toUpperCase()}.`,
+        data: { orderId: order.id, sound: 'notification.mp3', event: payload.event },
+        target: { storeId: order.storeId, roles: ['STORE_MANAGER', 'WAITER'] }
+      }).catch(() => {});
+      if (order.customerId || order.sessionId) {
+        sendNotification({
+          storeId: order.storeId,
+          type: 'PAYMENT_WEBHOOK',
+          title: 'Payment Confirmed',
+          body: `Your payment of ₹${order.totalAmount} was processed successfully!`,
+          data: { orderId: order.id, sound: 'notification.mp3' },
+          target: { customerId: order.customerId, sessionId: order.sessionId }
+        }).catch(() => {});
       }
     } else {
       console.log("[Webhook] Order not found for ID:", orderId);
@@ -1204,6 +1257,103 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
     broadcastToCustomer(updatedOrder.sessionId, 'ORDER_UPDATED', updatedOrder);
   }
 
+  // Centralized Quantum Notification dispatch on status changes
+  try {
+    const tableNum = updatedOrder.table?.tableNumber || 'N/A';
+    const shortId = updatedOrder.id.slice(-6).toUpperCase();
+    
+    if (newStatus === 'PROCESSING') {
+      sendNotification({
+        storeId,
+        type: 'ORDER_PROCESSING',
+        title: 'Order Cooking',
+        body: `Table ${tableNum}: Order #${shortId} is being prepared in the kitchen.`,
+        data: { orderId: updatedOrder.id, tableNumber: tableNum, sound: 'notification.mp3', url: '/kds' },
+        target: { roles: ['KITCHEN', 'STORE_MANAGER'], storeId }
+      }).catch(() => {});
+      if (updatedOrder.customerId || updatedOrder.sessionId) {
+        sendNotification({
+          storeId,
+          type: 'ORDER_PROCESSING',
+          title: 'Food is Cooking',
+          body: `The kitchen has started preparing your order #${shortId}!`,
+          data: { orderId: updatedOrder.id, sound: 'notification.mp3' },
+          target: { customerId: updatedOrder.customerId, sessionId: updatedOrder.sessionId }
+        }).catch(() => {});
+      }
+    } else if (newStatus === 'READY') {
+      sendNotification({
+        storeId,
+        type: 'ORDER_READY',
+        title: 'Order Ready for Pickup',
+        body: `Table ${tableNum}: Order #${shortId} is hot and ready to serve!`,
+        data: { orderId: updatedOrder.id, tableNumber: tableNum, sound: 'notification.mp3', url: '/waiter' },
+        target: { roles: ['WAITER', 'STORE_MANAGER'], storeId }
+      }).catch(() => {});
+      if (updatedOrder.customerId || updatedOrder.sessionId) {
+        sendNotification({
+          storeId,
+          type: 'ORDER_READY',
+          title: 'Your Order is Ready!',
+          body: `Order #${shortId} is ready and will be served to your table shortly!`,
+          data: { orderId: updatedOrder.id, sound: 'notification.mp3' },
+          target: { customerId: updatedOrder.customerId, sessionId: updatedOrder.sessionId }
+        }).catch(() => {});
+      }
+    } else if (newStatus === 'SERVED') {
+      if (updatedOrder.customerId || updatedOrder.sessionId) {
+        sendNotification({
+          storeId,
+          type: 'ORDER_SERVED',
+          title: 'Enjoy Your Meal!',
+          body: `Order #${shortId} has been served. Have a wonderful dining experience!`,
+          data: { orderId: updatedOrder.id, sound: 'notification.mp3' },
+          target: { customerId: updatedOrder.customerId, sessionId: updatedOrder.sessionId }
+        }).catch(() => {});
+      }
+    } else if (newStatus === 'SETTLED') {
+      sendNotification({
+        storeId,
+        type: 'ORDER_SETTLED',
+        title: 'Order Settled',
+        body: `Table ${tableNum}: Order #${shortId} settled for ₹${updatedOrder.totalAmount}.`,
+        data: { orderId: updatedOrder.id, tableNumber: tableNum, sound: 'notification.mp3', url: '/pos' },
+        target: { roles: ['STORE_MANAGER', 'WAITER'], storeId }
+      }).catch(() => {});
+      if (updatedOrder.customerId || updatedOrder.sessionId) {
+        sendNotification({
+          storeId,
+          type: 'ORDER_SETTLED',
+          title: 'Payment Received',
+          body: `Thank you for dining with us! Order #${shortId} has been paid and settled.`,
+          data: { orderId: updatedOrder.id, sound: 'notification.mp3' },
+          target: { customerId: updatedOrder.customerId, sessionId: updatedOrder.sessionId }
+        }).catch(() => {});
+      }
+    } else if (newStatus === 'CANCELLED') {
+      sendNotification({
+        storeId,
+        type: 'ORDER_CANCELLED',
+        title: 'Order Cancelled',
+        body: `Table ${tableNum}: Order #${shortId} was cancelled.`,
+        data: { orderId: updatedOrder.id, tableNumber: tableNum, sound: 'notification.mp3' },
+        target: { storeId }
+      }).catch(() => {});
+      if (updatedOrder.customerId || updatedOrder.sessionId) {
+        sendNotification({
+          storeId,
+          type: 'ORDER_CANCELLED',
+          title: 'Order Cancelled',
+          body: `Order #${shortId} has been cancelled.`,
+          data: { orderId: updatedOrder.id, sound: 'notification.mp3' },
+          target: { customerId: updatedOrder.customerId, sessionId: updatedOrder.sessionId }
+        }).catch(() => {});
+      }
+    }
+  } catch (notifErr) {
+    console.warn('[OrderStatus Notification Error]', notifErr.message);
+  }
+
   // Invalidate table status cache on relevant status transitions
   invalidateTablesCache(storeId);
   
@@ -1449,6 +1599,34 @@ async function settleTableSession(actor, storeId, tableSessionId, isSystem = fal
   }
   broadcastToStore(actualStoreId, 'TABLE_SESSION_SETTLED', { tableSessionId, tableId: session.tableId });
   invalidateTablesCache(actualStoreId);
+
+  try {
+    const tableNum = session.table?.tableNumber || 'N/A';
+    sendNotification({
+      storeId: actualStoreId,
+      type: 'TABLE_SESSION_SETTLED',
+      title: `Table ${tableNum} Settled`,
+      body: `All orders settled for Table ${tableNum} (₹${totalSessionAmount}). Table is now free.`,
+      data: { tableSessionId, tableId: session.tableId, tableNumber: tableNum, sound: 'notification.mp3', url: '/pos' },
+      target: { storeId: actualStoreId, roles: ['STORE_MANAGER', 'WAITER'] }
+    }).catch(() => {});
+
+    for (const order of activeOrders) {
+      if (order.customerId || order.sessionId) {
+        sendNotification({
+          storeId: actualStoreId,
+          type: 'TABLE_SESSION_SETTLED',
+          title: 'Bill Settled',
+          body: `Your bill for Table ${tableNum} has been fully settled. Thank you for visiting!`,
+          data: { tableSessionId, sound: 'notification.mp3' },
+          target: { customerId: order.customerId, sessionId: order.sessionId }
+        }).catch(() => {});
+        break;
+      }
+    }
+  } catch (sessNotifErr) {
+    console.warn('[Session Settle Notification Error]', sessNotifErr.message);
+  }
 
   return { success: true, tableSessionId, settledOrdersCount: activeOrders.length, session: updatedSession };
 }

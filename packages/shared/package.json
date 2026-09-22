@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.js",
     "./node": "./src/node.js",
+    "./audio": "./src/audio-player.js",
     "./assets/*": "./assets/*"
   },
   "files": [

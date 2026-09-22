@@ -1,5 +1,6 @@
 const { getPrismaClient } = require("../../lib/prisma");
 const { broadcastToStore } = require("../orders/sse-service");
+const { sendNotification } = require("../notifications/notification-service");
 
 /**
  * In-memory active dispatch tracking for waiter calls
@@ -287,6 +288,15 @@ async function handleCallTimeout(callId) {
       escalationLevel: 2,
       message: `Urgent: Table ${tableNumber} has called for ${type} with no waiter response. Manager attention required.`
     });
+
+    sendNotification({
+      storeId,
+      type: 'WAITER_CALL_ESCALATED_MANAGER',
+      title: `Urgent: Table ${tableNumber} Unanswered`,
+      body: `Table ${tableNumber} has been waiting for ${type} without response. Immediate manager intervention needed.`,
+      data: { callId, tableId, tableNumber, sound: 'notification.mp3', url: '/waiter' },
+      target: { role: 'STORE_MANAGER', storeId }
+    }).catch(() => {});
   }
 }
 

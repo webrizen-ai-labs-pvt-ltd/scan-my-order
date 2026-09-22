@@ -1,6 +1,7 @@
 const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { broadcastToStore } = require("../orders/sse-service");
+const { sendNotification } = require("../notifications/notification-service");
 const dispatchEngine = require("./waiter-dispatch-engine");
 
 // Helper to safely map customer call types to DB enum (WATER, BILL, CALL_WAITER)
@@ -91,6 +92,24 @@ async function createWaiterCall(storeId, input) {
       assignedAt: dispatchState.assignedAt
     }
   });
+
+  const tblNumber = call.table?.tableNumber || '';
+  sendNotification({
+    storeId,
+    type: 'WAITER_CALL',
+    title: `Table ${tblNumber} Request`,
+    body: `Customer requested: ${type || 'Call Waiter'}${note ? ` (${note})` : ''}`,
+    data: {
+      callId: call.id,
+      tableId: call.tableId,
+      tableNumber: tblNumber,
+      sound: 'notification.mp3',
+      url: '/waiter'
+    },
+    target: dispatchState.assignedWaiterId
+      ? { userId: dispatchState.assignedWaiterId, role: 'WAITER', storeId }
+      : { role: 'WAITER', storeId }
+  }).catch(() => {});
 
   return {
     success: true,

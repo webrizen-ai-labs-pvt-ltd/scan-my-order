@@ -1,8 +1,12 @@
 let PrismaClient;
 try {
-  ({ PrismaClient } = require("../generated/prisma"));
+  ({ PrismaClient } = require("../generated/prisma_v2"));
 } catch (e) {
-  ({ PrismaClient } = require("@prisma/client"));
+  try {
+    ({ PrismaClient } = require("../generated/prisma"));
+  } catch (e2) {
+    ({ PrismaClient } = require("@prisma/client"));
+  }
 }
 const { env } = require("../config/env");
 

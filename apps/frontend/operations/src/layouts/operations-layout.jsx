@@ -41,6 +41,7 @@ import {
   UserGroupIcon,
   Analytics01Icon
 } from 'hugeicons-react';
+import { StaffNotificationCenter } from '../components/staff-notification-center';
 
 export const OperationsLayout = () => {
   const { user, logout } = useAuthStore();
@@ -236,7 +237,8 @@ export const OperationsLayout = () => {
               </Breadcrumb>
             </div>
 
-            <div className="hidden md:flex items-center gap-3 pr-2">
+            <div className="flex items-center gap-3 pr-2">
+              <StaffNotificationCenter />
               {user?.store ? (
                 <>
                   <div className="flex flex-col text-right">

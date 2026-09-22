@@ -3,6 +3,7 @@ import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import { Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
 import { Store01Icon, Clock01Icon, Tick02Icon, Cancel01Icon, Alert01Icon, CheckmarkBadge01Icon } from 'hugeicons-react';
+import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
 
 // Specialized Toast for KDS (Large, High Contrast)
 const KdsToast = ({ message, type, onClose }) => {
@@ -83,6 +84,10 @@ export const KDS = () => {
   }, [user]);
 
   useEffect(() => {
+    initAudioUnlock();
+  }, []);
+
+  useEffect(() => {
     if (selectedStoreId) {
       fetchOrders(selectedStoreId);
       
@@ -92,7 +97,10 @@ export const KDS = () => {
       eventSource.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          if (['ORDER_PROCESSING', 'ORDER_READY', 'ORDER_CANCELLED', 'ORDER_UPDATED'].includes(data.type)) {
+          if (data.type === 'ORDER_PROCESSING' || data.type === 'KITCHEN_ALERT') {
+            playNotificationChime({ haptic: true });
+            fetchOrders(selectedStoreId, true);
+          } else if (['ORDER_READY', 'ORDER_CANCELLED', 'ORDER_UPDATED'].includes(data.type)) {
             fetchOrders(selectedStoreId, true);
           }
         } catch(e) {}

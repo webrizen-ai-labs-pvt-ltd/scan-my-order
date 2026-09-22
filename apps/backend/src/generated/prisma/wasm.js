@@ -426,6 +426,34 @@ exports.Prisma.CustomerWalletTransactionScalarFieldEnum = {
   createdAt: 'createdAt'
 };
 
+exports.Prisma.PushSubscriptionScalarFieldEnum = {
+  id: 'id',
+  endpoint: 'endpoint',
+  p256dh: 'p256dh',
+  auth: 'auth',
+  userType: 'userType',
+  storeId: 'storeId',
+  userId: 'userId',
+  sessionId: 'sessionId',
+  role: 'role',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.NotificationScalarFieldEnum = {
+  id: 'id',
+  storeId: 'storeId',
+  userId: 'userId',
+  sessionId: 'sessionId',
+  role: 'role',
+  title: 'title',
+  body: 'body',
+  type: 'type',
+  data: 'data',
+  isRead: 'isRead',
+  createdAt: 'createdAt'
+};
+
 exports.Prisma.SortOrder = {
   asc: 'asc',
   desc: 'desc'
@@ -625,7 +653,9 @@ exports.Prisma.ModelName = {
   TableSession: 'TableSession',
   TableReservation: 'TableReservation',
   CustomerStoreWallet: 'CustomerStoreWallet',
-  CustomerWalletTransaction: 'CustomerWalletTransaction'
+  CustomerWalletTransaction: 'CustomerWalletTransaction',
+  PushSubscription: 'PushSubscription',
+  Notification: 'Notification'
 };
 
 /**

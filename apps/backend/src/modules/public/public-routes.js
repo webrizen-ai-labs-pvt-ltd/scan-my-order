@@ -9,8 +9,11 @@ const { createOrder, handleRazorpayWebhook } = require("../orders/order-service"
 const { createWaiterCall, getTableCallStatus, cancelWaiterCall } = require("../waiter-calls/waiter-call-service");
 const { createFeedback } = require("../feedback/feedback-service");
 const { createHttpError } = require("../../middleware/error-handler");
+const { publicNotificationRouter } = require("../notifications/notification-routes");
 
 const router = express.Router();
+
+router.use("/notifications", publicNotificationRouter);
 
 // ---------------------------------------------------------
 // Slug Resolution (Unprotected by billing guard so customers can see basic info)

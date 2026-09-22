@@ -1,8 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
-import { ChefHatIcon, CheckmarkBadge01Icon, DeliveryBox01Icon, Time02Icon, Cancel01Icon, Invoice01Icon, PrinterIcon } from 'hugeicons-react';
+import { 
+  ChefHatIcon, 
+  CheckmarkBadge01Icon, 
+  DeliveryBox01Icon, 
+  Time02Icon, 
+  Cancel01Icon, 
+  Invoice01Icon, 
+  PrinterIcon,
+  Notification03Icon,
+  VolumeHighIcon,
+  VolumeOffIcon
+} from 'hugeicons-react';
 import api from '../lib/api';
 import { getSessionId } from '../lib/session';
+import { initAudioUnlock, playNotificationChime, getAudioMuted, setAudioMuted } from '@smo/shared/audio';
+import { usePushNotifications } from '../hooks/use-push-notifications';
 
 const STATUS_MAPPING = {
   DRAFT: { label: 'Draft', icon: Time02Icon, color: 'text-zinc-500', bg: 'bg-zinc-100' },
@@ -22,6 +35,13 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId }) => {
   const [billData, setBillData] = useState(null);
   const [loadingBill, setLoadingBill] = useState(false);
   const [showBillModal, setShowBillModal] = useState(false);
+  const [toastNotification, setToastNotification] = useState(null);
+  const [isMuted, setIsMuted] = useState(getAudioMuted());
+  const { isSupported, permission, isSubscribed, subscribe } = usePushNotifications(storeId);
+
+  useEffect(() => {
+    initAudioUnlock();
+  }, []);
   
   useEffect(() => {
     const sessionId = getSessionId();
@@ -46,7 +66,25 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId }) => {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type.startsWith('ORDER_')) {
+        if (data.type === 'NOTIFICATION') {
+          playNotificationChime({ haptic: true });
+          setToastNotification({
+            title: data.title,
+            body: data.body,
+            id: Date.now()
+          });
+          setTimeout(() => setToastNotification(null), 5000);
+        } else if (data.type.startsWith('ORDER_')) {
+          playNotificationChime({ haptic: true });
+          const status = data.data?.status;
+          const statusLabel = STATUS_MAPPING[status]?.label || 'Order Update';
+          setToastNotification({
+            title: `Order Update: ${statusLabel}`,
+            body: `Order #${data.data?.id?.slice(-6).toUpperCase()} is now ${statusLabel.toLowerCase()}.`,
+            id: Date.now()
+          });
+          setTimeout(() => setToastNotification(null), 5000);
+
           setOrders(prev => {
             const existingIdx = prev.findIndex(o => o.id === data.data.id);
             if (existingIdx >= 0) {
@@ -90,6 +128,27 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId }) => {
 
   return (
     <>
+      {/* Real-time Floating Notification Toast */}
+      {toastNotification && (
+        <div className="fixed top-4 left-4 right-4 z-50 mx-auto max-w-md animate-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3 rounded-2xl border border-zinc-200 bg-white/95 p-3.5 px-4 shadow-2xl backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/95">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500">
+              <Notification03Icon size={20} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100 truncate">{toastNotification.title}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-2">{toastNotification.body}</p>
+            </div>
+            <button
+              onClick={() => setToastNotification(null)}
+              className="rounded-lg p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200"
+            >
+              <Cancel01Icon size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {activeOrders.length > 0 && (
         <div className="fixed bottom-[88px] left-4 right-4 z-40 mx-auto max-w-md animate-in slide-in-from-bottom-5">
           <button
@@ -119,15 +178,51 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId }) => {
                 <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">Live Orders</h2>
                 {tableNumber && <p className="text-xs text-zinc-500">Table {tableNumber}</p>}
               </div>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="rounded-full bg-zinc-100 p-2 text-zinc-500 hover:text-zinc-800 dark:bg-zinc-800"
-              >
-                <Cancel01Icon size={18} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    const nextMuted = !isMuted;
+                    setIsMuted(nextMuted);
+                    setAudioMuted(nextMuted);
+                    if (!nextMuted) {
+                      playNotificationChime({ force: true });
+                    }
+                  }}
+                  title={isMuted ? "Unmute Sound" : "Mute Sound"}
+                  className="rounded-full bg-zinc-100 p-2 text-zinc-500 hover:text-zinc-800 dark:bg-zinc-800 dark:text-zinc-400"
+                >
+                  {isMuted ? <VolumeOffIcon size={18} /> : <VolumeHighIcon size={18} />}
+                </button>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="rounded-full bg-zinc-100 p-2 text-zinc-500 hover:text-zinc-800 dark:bg-zinc-800"
+                >
+                  <Cancel01Icon size={18} />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {/* Push Permission Prompt Card */}
+              {isSupported && !isSubscribed && permission === 'default' && (
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white">
+                      <Notification03Icon size={16} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-amber-950 dark:text-amber-100">Background Alerts</p>
+                      <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">Get notified when food is cooking & ready</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => subscribe()}
+                    className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold shadow-sm hover:bg-amber-600 transition"
+                  >
+                    Enable
+                  </button>
+                </div>
+              )}
               {activeOrders.map(order => {
                 const conf = STATUS_MAPPING[order.status] || STATUS_MAPPING.PROCESSING;
                 const Icon = conf.icon;

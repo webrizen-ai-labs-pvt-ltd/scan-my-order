@@ -1,6 +1,6 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/prisma"
+  output   = "../src/generated/prisma_v2"
 }
 
 datasource db {
@@ -178,6 +178,8 @@ model Store {
   promoCodes   PromoCode[]
   loyaltyRules Json?       @default("null")
   customerWallets CustomerStoreWallet[]
+  pushSubscriptions PushSubscription[]
+  notifications     Notification[]
 
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
@@ -209,6 +211,8 @@ model User {
   customerWallets CustomerStoreWallet[] @relation("CustomerWallets")
   resolvedCalls WaiterCall[]
   reservations TableReservation[]
+  pushSubscriptions PushSubscription[]
+  notifications     Notification[]
 
   @@unique([tenantId, email])
   @@index([role])
@@ -642,5 +646,49 @@ model CustomerWalletTransaction {
   @@index([walletId])
   @@index([orderId])
 }
+
+model PushSubscription {
+  id          String    @id @default(cuid())
+  endpoint    String    @unique
+  p256dh      String
+  auth        String
+  userType    String    @default("CUSTOMER") // 'CUSTOMER' | 'STAFF'
+  storeId     String?
+  store       Store?    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId   String?   // For anonymous table QR customers
+  role        String?   // 'WAITER' | 'KITCHEN' | 'STORE_MANAGER' | 'CUSTOMER'
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([storeId])
+  @@index([userId])
+  @@index([sessionId])
+  @@index([role])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  storeId     String?
+  store       Store?    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId   String?
+  role        String?
+  title       String
+  body        String
+  type        String    // e.g. 'ORDER_STATUS', 'WAITER_CALL', 'PAYMENT_WEBHOOK', 'KITCHEN_ALERT'
+  data        Json?     // additional payload { orderId, tableNumber, url, sound }
+  isRead      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  @@index([storeId])
+  @@index([userId])
+  @@index([sessionId])
+  @@index([type])
+  @@index([isRead])
+}
+
 
 
