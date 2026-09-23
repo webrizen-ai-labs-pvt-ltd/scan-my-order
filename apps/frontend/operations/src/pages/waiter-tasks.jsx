@@ -2,8 +2,16 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
-import { Tick02Icon, Cancel01Icon, Store01Icon, Clock01Icon, Money01Icon, QrCodeIcon, CheckmarkBadge01Icon, PrinterIcon, AlertCircleIcon, CheckmarkCircle02Icon } from 'hugeicons-react';
-import { QRCodeSVG } from 'qrcode.react';
+import {
+  Tick02Icon,
+  Cancel01Icon,
+  Store01Icon,
+  Clock01Icon,
+  Money01Icon,
+  CheckmarkBadge01Icon,
+  PrinterIcon,
+  AlertCircleIcon,
+} from 'hugeicons-react';
 import { Receipt } from '../components/receipt';
 import { PaymentBifurcationModal } from '../components/payment-bifurcation-modal';
 import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
@@ -12,7 +20,26 @@ const playChime = () => {
   playNotificationChime({ haptic: true });
 };
 
-// Toast component for notifications
+// One brand color drives every primary action — like Swiggy/Zomato,
+// status is communicated with small text/pills, not whole-card recoloring.
+const BRAND = 'bg-yellow-500 hover:bg-yellow-600 active:bg-yellow-700';
+const BRAND_TEXT = 'text-yellow-600 dark:text-yellow-400';
+const BRAND_SOFT = 'bg-yellow-500/10';
+
+const TABS = [
+  { key: 'VERIFY', label: 'New' },
+  { key: 'SERVE', label: 'Ready' },
+  { key: 'COLLECT', label: 'Bill' },
+];
+
+const CALL_LABEL = {
+  WATER: 'Water',
+  BILL: 'Bill',
+  CUTLERY: 'Cutlery',
+  CLEAN_TABLE: 'Clean up',
+  DEFAULT: 'Assistance',
+};
+
 const Toast = ({ message, type, onClose }) => {
   const [isVisible, setIsVisible] = useState(true);
 
@@ -21,86 +48,45 @@ const Toast = ({ message, type, onClose }) => {
       setIsVisible(false);
       onClose();
     }, 3000);
-
     return () => clearTimeout(timer);
   }, [onClose]);
 
   if (!isVisible) return null;
 
-  const bgColor = type === 'success'
-    ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
-    : type === 'error'
-      ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-      : 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800';
-
-  const textColor = type === 'success'
-    ? 'text-green-800 dark:text-green-400'
-    : type === 'error'
-      ? 'text-red-800 dark:text-red-400'
-      : 'text-blue-800 dark:text-blue-400';
-
-  const iconColor = type === 'success'
-    ? 'text-green-500'
-    : type === 'error'
-      ? 'text-red-500'
-      : 'text-blue-500';
+  const dot = { success: 'bg-emerald-500', error: 'bg-red-500', info: 'bg-zinc-400' }[type] || 'bg-zinc-400';
 
   return (
-    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 p-4 rounded-lg border ${bgColor} shadow-lg animate-slide-in`}>
-      {type === 'success' ? (
-        <Tick02Icon size={20} className={iconColor} />
-      ) : type === 'error' ? (
-        <Cancel01Icon size={20} className={iconColor} />
-      ) : (
-        <Clock01Icon size={20} className={iconColor} />
-      )}
-      <span className={`text-sm font-medium ${textColor}`}>{message}</span>
-      <button onClick={() => { setIsVisible(false); onClose(); }} className="ml-2">
-        <Cancel01Icon size={16} className="text-zinc-400 hover:text-zinc-600" />
+    <div className="fixed left-0 right-0 bottom-2 top-auto mx-auto z-[9999] flex max-w-sm items-center gap-3 rounded-full bg-zinc-900 py-3 pl-6 pr-3 text-white shadow-lg animate-slide-in dark:bg-zinc-800 w-min whitespace-nowrap">
+      <span className="flex-1 text-sm font-medium">{message}</span>
+      <button onClick={() => { setIsVisible(false); onClose(); }} aria-label="Dismiss" className="shrink-0 p-1 text-zinc-400">
+        <Cancel01Icon size={15} />
       </button>
     </div>
   );
 };
 
-// Loading skeleton component
 const OrderSkeleton = () => (
-  <div className="space-y-4">
+  <div className="space-y-3">
     {[1, 2, 3].map((i) => (
-      <Card key={i} className="border-zinc-200 dark:border-zinc-800 shadow-sm">
+      <Card key={i} className="rounded-2xl border-0 shadow-sm">
         <CardContent className="p-4">
-          <div className="flex justify-between items-start mb-3">
-            <div className="space-y-2">
-              <Skeleton className="h-5 w-24" />
-              <Skeleton className="h-3 w-16" />
-            </div>
-            <div className="space-y-2">
-              <Skeleton className="h-4 w-20" />
-              <Skeleton className="h-3 w-12" />
-            </div>
+          <div className="mb-4 flex items-center justify-between">
+            <Skeleton className="h-6 w-28 rounded-lg" />
+            <Skeleton className="h-6 w-16 rounded-lg" />
           </div>
-          <Skeleton className="h-16 w-full mb-4" />
-          <div className="flex gap-2">
-            <Skeleton className="h-10 flex-1" />
-            <Skeleton className="h-10 flex-1" />
-          </div>
+          <Skeleton className="mb-4 h-10 w-full rounded-lg" />
+          <Skeleton className="h-12 w-full rounded-full" />
         </CardContent>
       </Card>
     ))}
   </div>
 );
 
-// Empty state component
-const EmptyState = ({ title, description, icon: Icon }) => (
-  <div className="flex flex-col items-center justify-center py-12 px-4">
-    <div className="w-16 h-16 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
-      {Icon ? <Icon size={32} className="text-zinc-400" /> : (
-        <svg className="w-8 h-8 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-        </svg>
-      )}
-    </div>
-    <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-2">{title}</h3>
-    <p className="text-sm text-zinc-500 dark:text-zinc-400 text-center max-w-sm">{description}</p>
+const EmptyState = ({ title, description }) => (
+  <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+    <div className="mb-3 text-4xl">🍽️</div>
+    <h3 className="mb-1 text-[15px] font-bold text-zinc-900 dark:text-zinc-100">{title}</h3>
+    <p className="max-w-[220px] text-sm text-zinc-500 dark:text-zinc-400">{description}</p>
   </div>
 );
 
@@ -116,43 +102,35 @@ export const WaiterTasks = () => {
   const [actionLoading, setActionLoading] = useState(null);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
 
-  // Payment Modal State
   const [paymentOrder, setPaymentOrder] = useState(null);
   const [qrUrl, setQrUrl] = useState(null);
-  const [qrLoading, setQrLoading] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const [activeTab, setActiveTab] = useState('SERVE');
-  
+
   const [storeData, setStoreData] = useState(null);
   const [receiptOrder, setReceiptOrder] = useState(null);
   const receiptRef = useRef();
 
-  // Active Waiter Calls & Availability State
   const [waiterCalls, setWaiterCalls] = useState([]);
   const [waiterAvailability, setWaiterAvailability] = useState('AVAILABLE');
   const [callActionLoading, setCallActionLoading] = useState(null);
   const [nowTime, setNowTime] = useState(Date.now());
 
-  // 1-second interval to tick countdown timers smoothly
   useEffect(() => {
     initAudioUnlock();
     const timer = setInterval(() => setNowTime(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  const showToast = (message, type = 'info') => {
-    setToast({ message, type });
-  };
+  const showToast = (message, type = 'info') => setToast({ message, type });
 
   const fetchWaiterCalls = useCallback(async (storeIdToFetch) => {
     if (!storeIdToFetch) return;
     try {
       const res = await api.get(`/stores/${storeIdToFetch}/waiter-calls`);
-      if (res.data?.success) {
-        setWaiterCalls(res.data.data || []);
-      }
+      if (res.data?.success) setWaiterCalls(res.data.data || []);
     } catch (e) {
-      console.error("Failed to fetch waiter calls", e);
+      console.error('Failed to fetch waiter calls', e);
     }
   }, []);
 
@@ -160,12 +138,8 @@ export const WaiterTasks = () => {
     if (!storeIdToFetch) return;
     try {
       const res = await api.get(`/stores/${storeIdToFetch}/waiter-calls/availability`);
-      if (res.data?.success && res.data.data?.status) {
-        setWaiterAvailability(res.data.data.status);
-      }
-    } catch (e) {
-      // Fallback to default AVAILABLE
-    }
+      if (res.data?.success && res.data.data?.status) setWaiterAvailability(res.data.data.status);
+    } catch (e) { }
   }, []);
 
   const toggleAvailability = async () => {
@@ -173,7 +147,7 @@ export const WaiterTasks = () => {
     try {
       setWaiterAvailability(nextStatus);
       await api.post(`/stores/${selectedStoreId}/waiter-calls/availability`, { status: nextStatus });
-      showToast(nextStatus === 'AVAILABLE' ? 'You are now marked Available for calls' : 'You are now marked Busy / On Break', 'info');
+      showToast(nextStatus === 'AVAILABLE' ? 'You are now available' : 'You are now busy / on break', 'info');
     } catch (e) {
       showToast('Failed to update availability status', 'error');
     }
@@ -184,7 +158,7 @@ export const WaiterTasks = () => {
     try {
       const res = await api.patch(`/stores/${selectedStoreId}/waiter-calls/${callId}/acknowledge`);
       if (res.data?.success) {
-        showToast('Assistance acknowledged! On your way.', 'success');
+        showToast('On your way!', 'success');
         fetchWaiterCalls(selectedStoreId);
       }
     } catch (err) {
@@ -199,7 +173,7 @@ export const WaiterTasks = () => {
     try {
       const res = await api.patch(`/stores/${selectedStoreId}/waiter-calls/${callId}/resolve`);
       if (res.data?.success) {
-        showToast('Table assistance completed!', 'success');
+        showToast('Marked as done', 'success');
         fetchWaiterCalls(selectedStoreId);
       }
     } catch (err) {
@@ -211,15 +185,11 @@ export const WaiterTasks = () => {
 
   const fetchOrders = useCallback(async (storeIdToFetch, silent = false) => {
     if (!storeIdToFetch) return;
-
     if (!silent) setLoading(true);
     setError('');
-
     try {
       const res = await api.get(`/stores/${storeIdToFetch}/orders?statuses=PENDING_VERIFICATION,READY,SERVED`);
-      if (res.data.success) {
-        setOrders(res.data.data);
-      }
+      if (res.data.success) setOrders(res.data.data);
     } catch (err) {
       setError('Failed to fetch orders. Please try again.');
       showToast('Failed to fetch orders', 'error');
@@ -234,9 +204,7 @@ export const WaiterTasks = () => {
       const res = await api.get('/stores');
       if (res.data.success && res.data.data.length > 0) {
         setStores(res.data.data);
-        if (!selectedStoreId) {
-          setSelectedStoreId(res.data.data[0].id);
-        }
+        if (!selectedStoreId) setSelectedStoreId(res.data.data[0].id);
       }
     } catch (err) {
       showToast('Failed to fetch stores', 'error');
@@ -246,133 +214,113 @@ export const WaiterTasks = () => {
   }, [selectedStoreId]);
 
   useEffect(() => {
-    if (!user?.store) {
-      fetchStores();
-    }
+    if (!user?.store) fetchStores();
   }, [user, fetchStores]);
 
   useEffect(() => {
-    if (selectedStoreId) {
-      fetchOrders(selectedStoreId);
-      fetchWaiterCalls(selectedStoreId);
-      fetchWaiterAvailability(selectedStoreId);
-      
-      api.get(`/stores/${selectedStoreId}`).then(res => {
-        if (res.data.success) setStoreData(res.data.data);
-      }).catch(err => console.error("Failed to fetch store data", err));
+    if (!selectedStoreId) return;
 
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-      let eventSource;
+    fetchOrders(selectedStoreId);
+    fetchWaiterCalls(selectedStoreId);
+    fetchWaiterAvailability(selectedStoreId);
 
-      try {
-        eventSource = new EventSource(`${baseUrl}/stores/${selectedStoreId}/orders/stream?token=${token}`);
+    api.get(`/stores/${selectedStoreId}`)
+      .then((res) => { if (res.data.success) setStoreData(res.data.data); })
+      .catch((err) => console.error('Failed to fetch store data', err));
 
-        eventSource.onopen = () => {
-          setConnectionStatus('connected');
-        };
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+    let eventSource;
 
-        eventSource.onerror = () => {
-          setConnectionStatus('disconnected');
-        };
+    try {
+      eventSource = new EventSource(`${baseUrl}/stores/${selectedStoreId}/orders/stream?token=${token}`);
+      eventSource.onopen = () => setConnectionStatus('connected');
+      eventSource.onerror = () => setConnectionStatus('disconnected');
 
-        eventSource.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (['ORDER_PENDING_VERIFICATION', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_PROCESSING', 'ORDER_CANCELLED', 'ORDER_SETTLED'].includes(data.type)) {
-              fetchOrders(selectedStoreId, true);
-              
-              if (data.type === 'ORDER_READY') {
-                playChime();
-                showToast(`Table ${data.data?.table?.tableNumber || ''}: Order ready for pickup!`, 'success');
-              } else if (data.type === 'ORDER_PENDING_VERIFICATION') {
-                playChime();
-                showToast(`Table ${data.data?.table?.tableNumber || ''}: New order waiting for verification`, 'info');
-              }
-              
-              // If we are currently showing a payment modal for this order and it was settled
-              if (data.type === 'ORDER_SETTLED') {
-                 setPaymentOrder(prev => {
-                   if (prev && prev.id === data.data.id) {
-                     showToast('Payment verified successfully!', 'success');
-                     
-                     // Show receipt
-                     api.get(`/stores/${selectedStoreId}/orders/${data.data.id}`).then(orderRes => {
-                       if (orderRes.data.success) {
-                         setReceiptOrder(orderRes.data.data);
-                       }
-                     });
-                     
-                     return null;
-                   }
-                   return prev;
-                 });
-                 setQrUrl(null);
-              }
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          if (['ORDER_PENDING_VERIFICATION', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_PROCESSING', 'ORDER_CANCELLED', 'ORDER_SETTLED'].includes(data.type)) {
+            fetchOrders(selectedStoreId, true);
+
+            if (data.type === 'ORDER_READY') {
+              playChime();
+              showToast(`Table ${data.data?.table?.tableNumber || ''}: order ready`, 'success');
+            } else if (data.type === 'ORDER_PENDING_VERIFICATION') {
+              playChime();
+              showToast(`Table ${data.data?.table?.tableNumber || ''}: new order`, 'info');
             }
 
-            // Real-time Waiter Call SSE Events
-            if ([
-              'WAITER_CALL_CREATED',
-              'WAITER_CALL_DISPATCHED',
-              'WAITER_CALL_ESCALATED',
-              'WAITER_CALL_ESCALATED_MANAGER',
-              'WAITER_CALL_ACKNOWLEDGED',
-              'WAITER_CALL_RESOLVED',
-              'WAITER_CALL_CANCELLED'
-            ].includes(data.type)) {
-              fetchWaiterCalls(selectedStoreId);
-
-              if (['WAITER_CALL_CREATED', 'WAITER_CALL_DISPATCHED', 'WAITER_CALL_ESCALATED'].includes(data.type)) {
-                const assignedId = data.data?.assignedWaiterId || data.data?.dispatch?.assignedWaiterId;
-                if (assignedId === user?.id) {
-                  playChime();
-                  showToast(`Table ${data.data?.tableNumber || ''} requested assistance! You are assigned.`, 'info');
+            if (data.type === 'ORDER_SETTLED') {
+              setPaymentOrder((prev) => {
+                if (prev && prev.id === data.data.id) {
+                  showToast('Payment received!', 'success');
+                  api.get(`/stores/${selectedStoreId}/orders/${data.data.id}`).then((orderRes) => {
+                    if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
+                  });
+                  return null;
                 }
-              } else if (data.type === 'WAITER_CALL_ESCALATED_MANAGER') {
-                if (['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role)) {
-                  playChime();
-                  showToast(data.data?.message || 'Urgent table call escalated to manager!', 'error');
-                }
-              }
+                return prev;
+              });
+              setQrUrl(null);
             }
-
-            if (data.type === 'WAITER_AVAILABILITY_CHANGED' && data.data?.waiterId === user?.id) {
-              setWaiterAvailability(data.data.status);
-            }
-          } catch (e) {
-            // Silently ignore
           }
-        };
-      } catch (err) {
-        setConnectionStatus('disconnected');
-      }
 
-      return () => {
-        if (eventSource) eventSource.close();
+          if ([
+            'WAITER_CALL_CREATED',
+            'WAITER_CALL_DISPATCHED',
+            'WAITER_CALL_ESCALATED',
+            'WAITER_CALL_ESCALATED_MANAGER',
+            'WAITER_CALL_ACKNOWLEDGED',
+            'WAITER_CALL_RESOLVED',
+            'WAITER_CALL_CANCELLED',
+          ].includes(data.type)) {
+            fetchWaiterCalls(selectedStoreId);
+
+            if (['WAITER_CALL_CREATED', 'WAITER_CALL_DISPATCHED', 'WAITER_CALL_ESCALATED'].includes(data.type)) {
+              const assignedId = data.data?.assignedWaiterId || data.data?.dispatch?.assignedWaiterId;
+              if (assignedId === user?.id) {
+                playChime();
+                showToast(`Table ${data.data?.tableNumber || ''} needs you`, 'info');
+              }
+            } else if (data.type === 'WAITER_CALL_ESCALATED_MANAGER') {
+              if (['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role)) {
+                playChime();
+                showToast(data.data?.message || 'Urgent call escalated to manager', 'error');
+              }
+            }
+          }
+
+          if (data.type === 'WAITER_AVAILABILITY_CHANGED' && data.data?.waiterId === user?.id) {
+            setWaiterAvailability(data.data.status);
+          }
+        } catch (e) { }
       };
+    } catch (err) {
+      setConnectionStatus('disconnected');
     }
+
+    return () => {
+      if (eventSource) eventSource.close();
+    };
   }, [selectedStoreId, token, fetchOrders, fetchWaiterCalls, fetchWaiterAvailability, user]);
 
   const updateStatus = async (orderId, status) => {
     setActionLoading(orderId);
     setError('');
-
     try {
       await api.patch(`/stores/${selectedStoreId}/orders/${orderId}/status`, { status });
-      setOrders(prev => prev.filter(o => o.id !== orderId));
+      setOrders((prev) => prev.filter((o) => o.id !== orderId));
 
       const statusMessages = {
-        'CANCELLED': 'Order cancelled successfully',
-        'PROCESSING': 'Order approved successfully',
-        'SERVED': 'Order marked as served',
-        'SETTLED': 'Order settled successfully'
+        CANCELLED: 'Order cancelled',
+        PROCESSING: 'Order approved',
+        SERVED: 'Marked as served',
+        SETTLED: 'Order settled',
       };
+      showToast(statusMessages[status] || 'Order updated', 'success');
 
-      showToast(statusMessages[status] || 'Order updated successfully', 'success');
-      
-      if (status === 'SETTLED' && paymentOrder?.id === orderId) {
-        setPaymentOrder(null);
-      }
+      if (status === 'SETTLED' && paymentOrder?.id === orderId) setPaymentOrder(null);
     } catch (err) {
       console.error(err);
       const errorMessage = err.response?.data?.message || 'Failed to update order';
@@ -383,85 +331,13 @@ export const WaiterTasks = () => {
     }
   };
 
-  const generatePaymentQr = async (orderOrGroup) => {
-    setQrLoading(true);
-    setQrUrl(null);
-    try {
-      let res;
-      if (orderOrGroup?.tableSessionId) {
-        res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${orderOrGroup.tableSessionId}/payment-link`);
-      } else {
-        const orderId = orderOrGroup?.id || orderOrGroup;
-        res = await api.post(`/stores/${selectedStoreId}/orders/${orderId}/payment-link`);
-      }
-      if (res.data.success && res.data.data.short_url) {
-        setQrUrl(res.data.data.short_url);
-      } else {
-        showToast('Failed to generate QR', 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast(err.response?.data?.message || 'Failed to generate QR', 'error');
-    } finally {
-      setQrLoading(false);
-    }
-  };
-
-  const handleSettlePayment = async (orderOrGroup) => {
-    setActionLoading('settle');
-    try {
-      if (orderOrGroup?.tableSessionId) {
-        const sessId = orderOrGroup.tableSessionId;
-        await api.post(`/stores/${selectedStoreId}/orders/sessions/${sessId}/settle`);
-        const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
-        if (billRes.data.success) {
-          const b = billRes.data.data;
-          setReceiptOrder({
-            id: `TAB-${b.session.pin}`,
-            createdAt: b.session.createdAt,
-            type: 'DINE_IN',
-            paymentModel: 'POSTPAID',
-            table: { tableNumber: b.session.tableNumber },
-            subTotal: b.subTotal,
-            discountAmount: b.discountAmount,
-            taxAmount: b.taxAmount,
-            totalAmount: b.totalAmount,
-            items: b.aggregatedItems.map(i => ({
-              quantity: i.quantity,
-              priceAtOrder: i.price,
-              menuItem: { name: i.name },
-              modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
-            }))
-          });
-        }
-        setPaymentOrder(null);
-        setQrUrl(null);
-        showToast('Table settled successfully!', 'success');
-        fetchOrders(selectedStoreId, true);
-      } else {
-        await updateStatus(orderOrGroup.id, 'SETTLED');
-      }
-    } catch (err) {
-      showToast('Failed to settle table', 'error');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  /* ─── Waiter Payment Bifurcation Handlers ───────────────────────── */
   const handleWaiterGenerateQR = async (onlineAmount) => {
     if (!paymentOrder) return;
     try {
-      let res;
-      if (paymentOrder.tableSessionId) {
-        res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/payment-link`, {
-          onlineAmount
-        });
-      } else {
-        res = await api.post(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-link`, {
-          onlineAmount
-        });
-      }
+      const url = paymentOrder.tableSessionId
+        ? `/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/payment-link`
+        : `/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-link`;
+      const res = await api.post(url, { onlineAmount });
       if (res.data.success && res.data.data.short_url) {
         setQrUrl(res.data.data.short_url);
         return { url: res.data.data.short_url };
@@ -499,17 +375,17 @@ export const WaiterTasks = () => {
             discountAmount: b.discountAmount,
             taxAmount: b.taxAmount,
             totalAmount: b.totalAmount,
-            items: b.aggregatedItems.map(i => ({
+            items: b.aggregatedItems.map((i) => ({
               quantity: i.quantity,
               priceAtOrder: i.price,
               menuItem: { name: i.name },
-              modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
-            }))
+              modifiers: (i.modifiers || []).map((m) => ({ modifierOption: { name: m } })),
+            })),
           });
         }
         setPaymentOrder(null);
         setQrUrl(null);
-        showToast('Table settled successfully!', 'success');
+        showToast('Table settled!', 'success');
         fetchOrders(selectedStoreId, true);
       } else {
         await api.patch(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/status`, {
@@ -519,12 +395,10 @@ export const WaiterTasks = () => {
           onlineAmount: tenderDetails.onlineAmount,
         });
         const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}`);
-        if (orderRes.data.success) {
-          setReceiptOrder(orderRes.data.data);
-        }
+        if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
         setPaymentOrder(null);
         setQrUrl(null);
-        showToast('Order settled successfully!', 'success');
+        showToast('Order settled!', 'success');
         fetchOrders(selectedStoreId, true);
       }
     } catch (err) {
@@ -559,52 +433,46 @@ export const WaiterTasks = () => {
               discountAmount: b.discountAmount,
               taxAmount: b.taxAmount,
               totalAmount: b.totalAmount,
-              items: b.aggregatedItems.map(i => ({
+              items: b.aggregatedItems.map((i) => ({
                 quantity: i.quantity,
                 priceAtOrder: i.price,
                 menuItem: { name: i.name },
-                modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
-              }))
+                modifiers: (i.modifiers || []).map((m) => ({ modifierOption: { name: m } })),
+              })),
             });
           }
           setPaymentOrder(null);
           setQrUrl(null);
-          showToast('Payment verified successfully!', 'success');
+          showToast('Payment received!', 'success');
           fetchOrders(selectedStoreId, true);
           return { success: true };
-        } else {
-          return { success: false, message: res.data.data?.message || 'Payment not yet confirmed.' };
         }
-      } else {
-        let isSuccess = false;
-        try {
-          const verifyRes = await api.post(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/verify-payment`, { manual: true });
-          if (verifyRes.data.success && (verifyRes.data.data.status === 'PROCESSING' || verifyRes.data.data.status === 'SETTLED' || verifyRes.data.data.success)) {
-            isSuccess = true;
-          }
-        } catch (e) {}
-
-        if (!isSuccess) {
-          const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
-          if (res.data.success && res.data.data.status === 'success') {
-            isSuccess = true;
-          }
-        }
-
-        if (isSuccess) {
-          const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}`);
-          if (orderRes.data.success) {
-            setReceiptOrder(orderRes.data.data);
-          }
-          setPaymentOrder(null);
-          setQrUrl(null);
-          showToast('Payment verified successfully!', 'success');
-          fetchOrders(selectedStoreId, true);
-          return { success: true };
-        } else {
-          return { success: false, message: 'Payment not received yet.' };
-        }
+        return { success: false, message: res.data.data?.message || 'Payment not yet confirmed.' };
       }
+
+      let isSuccess = false;
+      try {
+        const verifyRes = await api.post(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/verify-payment`, { manual: true });
+        if (verifyRes.data.success && (verifyRes.data.data.status === 'PROCESSING' || verifyRes.data.data.status === 'SETTLED' || verifyRes.data.data.success)) {
+          isSuccess = true;
+        }
+      } catch (e) { }
+
+      if (!isSuccess) {
+        const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
+        if (res.data.success && res.data.data.status === 'success') isSuccess = true;
+      }
+
+      if (isSuccess) {
+        const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}`);
+        if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
+        setPaymentOrder(null);
+        setQrUrl(null);
+        showToast('Payment received!', 'success');
+        fetchOrders(selectedStoreId, true);
+        return { success: true };
+      }
+      return { success: false, message: 'Payment not received yet.' };
     } catch (err) {
       console.error(err);
       return { success: false, message: 'Verification error' };
@@ -613,31 +481,29 @@ export const WaiterTasks = () => {
     }
   };
 
-  // Payment Polling logic
   useEffect(() => {
     let intervalId;
     let attempts = 0;
-    
+
     if (qrUrl && paymentOrder && selectedStoreId) {
       intervalId = setInterval(async () => {
         attempts++;
         if (attempts > 100) {
           clearInterval(intervalId);
-          showToast('Payment QR Expired (timeout). Please generate again.', 'error');
+          showToast('Payment QR expired. Please generate again.', 'error');
           setQrUrl(null);
           return;
         }
-        
         try {
           if (paymentOrder.tableSessionId) {
             const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/verify-payment`, { polling: true });
             if (res.data.success && res.data.data.status === 'SETTLED') {
               clearInterval(intervalId);
-              showToast('Payment verified successfully!', 'success');
+              showToast('Payment received!', 'success');
               const sessId = paymentOrder.tableSessionId;
               setPaymentOrder(null);
               setQrUrl(null);
-              
+
               const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
               if (billRes.data.success) {
                 const b = billRes.data.data;
@@ -651,12 +517,12 @@ export const WaiterTasks = () => {
                   discountAmount: b.discountAmount,
                   taxAmount: b.taxAmount,
                   totalAmount: b.totalAmount,
-                  items: b.aggregatedItems.map(i => ({
+                  items: b.aggregatedItems.map((i) => ({
                     quantity: i.quantity,
                     priceAtOrder: i.price,
                     menuItem: { name: i.name },
-                    modifiers: (i.modifiers || []).map(m => ({ modifierOption: { name: m } }))
-                  }))
+                    modifiers: (i.modifiers || []).map((m) => ({ modifierOption: { name: m } })),
+                  })),
                 });
               }
               fetchOrders(selectedStoreId, true);
@@ -665,25 +531,21 @@ export const WaiterTasks = () => {
             const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
             if (res.data.success && res.data.data.status === 'success') {
               clearInterval(intervalId);
-              showToast('Payment verified successfully!', 'success');
-              
+              showToast('Payment received!', 'success');
               const orderId = paymentOrder.id;
               setPaymentOrder(null);
               setQrUrl(null);
-              
               const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
-              if (orderRes.data.success) {
-                setReceiptOrder(orderRes.data.data);
-              }
+              if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
               fetchOrders(selectedStoreId, true);
             }
           }
         } catch (err) {
-          console.error("Polling error:", err);
+          console.error('Polling error:', err);
         }
-      }, 3000); // Poll every 3 seconds
+      }, 3000);
     }
-    
+
     return () => {
       if (intervalId) clearInterval(intervalId);
     };
@@ -694,12 +556,11 @@ export const WaiterTasks = () => {
     setOrders([]);
   };
 
-  const pendingOrders = orders.filter(o => o.status === 'PENDING_VERIFICATION');
-  const readyOrders = orders.filter(o => o.status === 'READY');
-  
-  // Group served postpaid orders by table session or table
+  const pendingOrders = orders.filter((o) => o.status === 'PENDING_VERIFICATION');
+  const readyOrders = orders.filter((o) => o.status === 'READY');
+
   const servedGroups = useMemo(() => {
-    const postPaidServed = orders.filter(o => o.status === 'SERVED' && o.paymentModel === 'POSTPAID');
+    const postPaidServed = orders.filter((o) => o.status === 'SERVED' && o.paymentModel === 'POSTPAID');
     const groups = [];
     const map = new Map();
     for (const ord of postPaidServed) {
@@ -712,7 +573,7 @@ export const WaiterTasks = () => {
           tableSessionId: ord.tableSessionId,
           tableSession: ord.tableSession,
           table: ord.table,
-          orders: [ord]
+          orders: [ord],
         };
         map.set(key, grp);
         groups.push(grp);
@@ -721,25 +582,58 @@ export const WaiterTasks = () => {
     return groups;
   }, [orders]);
 
-  return (
-    <div className="flex flex-col h-full relative">
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+  const counts = {
+    VERIFY: pendingOrders.length,
+    SERVE: readyOrders.length,
+    COLLECT: servedGroups.length,
+  };
 
-      {/* Payment Bifurcation Modal */}
+  const handlePrint = () => {
+    const printWindow = window.open('', '', 'width=400,height=600');
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Receipt</title>
+          <style>
+            body { font-family: monospace; font-size: 14px; margin: 0; padding: 20px; }
+            .flex { display: flex; }
+            .justify-between { justify-content: space-between; }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .font-bold { font-weight: bold; }
+            .text-xl { font-size: 1.25rem; }
+            .text-lg { font-size: 1.125rem; }
+            .mb-4 { margin-bottom: 1rem; }
+            .mb-2 { margin-bottom: 0.5rem; }
+            .mb-1 { margin-bottom: 0.25rem; }
+            .pb-2 { padding-bottom: 0.5rem; }
+            .pl-2 { padding-left: 0.5rem; }
+            .uppercase { text-transform: uppercase; }
+            .border-b { border-bottom: 1px dashed black; }
+            .flex-1 { flex: 1; }
+            .w-10 { width: 2.5rem; }
+            .w-16 { width: 4rem; }
+            .text-xs { font-size: 0.75rem; }
+            .pr-2 { padding-right: 0.5rem; }
+          </style>
+        </head>
+        <body>${receiptRef.current.innerHTML}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+  };
+
+  return (
+    <div className="relative flex h-full flex-col bg-[#FAFAF9] dark:bg-zinc-950">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
       <PaymentBifurcationModal
         isOpen={Boolean(paymentOrder)}
-        onClose={() => {
-          setPaymentOrder(null);
-          setQrUrl(null);
-        }}
+        onClose={() => { setPaymentOrder(null); setQrUrl(null); }}
         totalAmount={paymentOrder?.totalAmount || 0}
-        title="Collect Payment"
+        title="Collect payment"
         subtitle={paymentOrder?.table ? `Table ${paymentOrder.table.tableNumber}` : 'Takeaway'}
         onSettle={handleWaiterModalSettle}
         onGenerateQR={handleWaiterGenerateQR}
@@ -749,550 +643,326 @@ export const WaiterTasks = () => {
         externalQrUrl={qrUrl}
       />
 
-      {/* Receipt Modal Overlay */}
       {receiptOrder && (
-        <div className="absolute inset-0 z-50 bg-black/70 flex items-center justify-center p-6 backdrop-blur-md">
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl flex flex-col w-full max-w-md max-h-[90vh] overflow-hidden">
-            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400">
-              <h3 className="font-bold flex items-center gap-2"><Tick02Icon size={20}/> Payment Successful</h3>
-              <button onClick={() => setReceiptOrder(null)} className="p-1 hover:bg-green-100 dark:hover:bg-green-800 rounded-full">
-                <Cancel01Icon size={20} />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 bg-zinc-100 dark:bg-black">
-              {receiptOrder && storeData && (
-                <Receipt ref={receiptRef} order={receiptOrder} storeData={storeData} />
-              )}
+        <div className="fixed inset-0 z-70 flex items-end justify-center bg-black/50 sm:items-center">
+          <div className="flex max-h-sheet w-full flex-col overflow-hidden rounded-t-[28px] bg-white shadow-2xl animate-sheet-up dark:bg-zinc-900 sm:max-w-md sm:rounded-3xl">
+            <div className="mx-auto mt-2.5 h-1 w-9 rounded-full bg-zinc-200 dark:bg-zinc-700 sm:hidden" />
+
+            <div className="flex flex-col items-center gap-1 px-5 py-5 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/10 text-emerald-500">
+                <Tick02Icon size={26} />
+              </div>
+              <h3 className="mt-1 text-base font-bold text-zinc-900 dark:text-zinc-100">Payment successful</h3>
             </div>
 
-            <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex gap-3">
-              <Button 
-                variant="outline" 
-                className="flex-1"
-                onClick={() => setReceiptOrder(null)}
-              >
+            <div className="flex-1 overflow-y-auto overscroll-contain bg-zinc-50 px-4 pb-4 dark:bg-black">
+              {receiptOrder && storeData && <Receipt ref={receiptRef} order={receiptOrder} storeData={storeData} />}
+            </div>
+
+            <div className="flex gap-3 p-4 pb-safe">
+              <Button variant="outline" className="h-12 flex-1 rounded-full" onClick={() => setReceiptOrder(null)}>
                 Close
               </Button>
-              <Button 
-                className="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white flex items-center justify-center gap-2"
-                onClick={() => {
-                  const printWindow = window.open('', '', 'width=400,height=600');
-                  printWindow.document.write(`
-                    <html>
-                      <head>
-                        <title>Receipt</title>
-                        <style>
-                          body { font-family: monospace; font-size: 14px; margin: 0; padding: 20px; }
-                          .flex { display: flex; }
-                          .justify-between { justify-content: space-between; }
-                          .text-center { text-align: center; }
-                          .text-right { text-align: right; }
-                          .font-bold { font-weight: bold; }
-                          .text-xl { font-size: 1.25rem; }
-                          .text-lg { font-size: 1.125rem; }
-                          .mb-4 { margin-bottom: 1rem; }
-                          .mb-2 { margin-bottom: 0.5rem; }
-                          .mb-1 { margin-bottom: 0.25rem; }
-                          .pb-2 { padding-bottom: 0.5rem; }
-                          .pl-2 { padding-left: 0.5rem; }
-                          .uppercase { text-transform: uppercase; }
-                          .border-b { border-bottom: 1px dashed black; }
-                          .flex-1 { flex: 1; }
-                          .w-10 { width: 2.5rem; }
-                          .w-16 { width: 4rem; }
-                          .text-xs { font-size: 0.75rem; }
-                          .pr-2 { padding-right: 0.5rem; }
-                        </style>
-                      </head>
-                      <body>${receiptRef.current.innerHTML}</body>
-                    </html>
-                  `);
-                  printWindow.document.close();
-                  printWindow.focus();
-                  setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
-                }}
-              >
-                <PrinterIcon size={18} /> Print Receipt
+              <Button className={`h-12 flex-1 rounded-full text-white ${BRAND}`} onClick={handlePrint}>
+                <PrinterIcon size={17} className="mr-2" /> Print
               </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header with Waiter Status & Controls */}
-      <div className="flex flex-wrap justify-between items-center gap-3 mb-6">
-        {/* Availability Toggle */}
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleAvailability}
-            className={`h-9 px-3 gap-2 font-medium border text-xs transition-all shadow-sm ${
-              waiterAvailability === 'AVAILABLE'
-                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100'
-                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-800 hover:bg-amber-100'
-            }`}
-            title="Click to toggle between Available and Busy / Break"
-          >
-            <span className={`w-2.5 h-2.5 rounded-full ${waiterAvailability === 'AVAILABLE' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-            <span>Status: <strong>{waiterAvailability === 'AVAILABLE' ? 'Available' : 'Busy / Break'}</strong></span>
-          </Button>
+      {/* Header */}
+      <div className="sticky top-0 z-20 border-b border-zinc-200/70 bg-white/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/60 dark:border-zinc-800/70 dark:bg-zinc-950/80 dark:supports-[backdrop-filter]:bg-zinc-950/60">
+        {/* ── Store / status / availability row ── */}
+        <div className="flex items-center gap-2.5 px-3 pt-3 sm:gap-3 sm:px-4 sm:pt-4">
 
-          {waiterCalls.length > 0 && (
-            <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-950/40 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-800 animate-pulse">
-              <AlertCircleIcon size={14} />
-              {waiterCalls.length} Table {waiterCalls.length === 1 ? 'Call' : 'Calls'} Active
-            </span>
-          )}
-        </div>
+          <div className="w-full flex flex-row justify-between items-center">
+            {user?.store ? (
+              <div
+                title={storeData?.name || 'Your store'}
+                className="truncate text-sm font-bold leading-tight text-zinc-900 sm:text-[15px] dark:text-zinc-100"
+              >
+                {storeData?.name || 'Your store'}
+              </div>
+            ) : (
+              <Select
+                value={selectedStoreId}
+                onValueChange={handleStoreChange}
+                disabled={storesLoading}
+              >
+                <SelectTrigger className="w-full max-w-[220px] rounded-full">
+                  <Store01Icon size={14} className="shrink-0 text-yellow-500" />
+                  <SelectValue
+                    placeholder={storesLoading ? '…' : 'Choose store'}
+                    className="truncate"
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {stores.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>
+                      {s.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-xs">
-            <span className={`w-2 h-2 rounded-full ${connectionStatus === 'connected'
-                ? 'bg-green-500 animate-pulse'
-                : connectionStatus === 'connecting'
-                  ? 'bg-yellow-500 animate-pulse'
-                  : 'bg-red-500'
-              }`} />
-            <span className="text-zinc-500 capitalize">{connectionStatus}</span>
+            <div className="mt-0.5 flex items-center gap-1.5 text-[11px] font-medium text-zinc-400 sm:text-xs">
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${connectionStatus === 'connected'
+                  ? 'bg-emerald-500 shadow-[0_0_0_3px_rgba(16,185,129,0.15)]'
+                  : connectionStatus === 'connecting'
+                    ? 'bg-yellow-500 animate-pulse'
+                    : 'bg-red-500'
+                  }`}
+              />
+              <span className="truncate">
+                {connectionStatus === 'connected'
+                  ? 'Live'
+                  : connectionStatus === 'connecting'
+                    ? 'Connecting…'
+                    : 'Offline'}
+              </span>
+            </div>
           </div>
 
-          {!user?.store && (
-            <Select value={selectedStoreId} onValueChange={handleStoreChange} disabled={storesLoading}>
-              <SelectTrigger className="w-[200px] h-10 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors">
-                <Store01Icon size={16} className="mr-1 text-zinc-400" />
-                <SelectValue placeholder={storesLoading ? "Loading stores..." : "Select a store"} />
-              </SelectTrigger>
-              <SelectContent>
-                {stores.map(s => (
-                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div className="mb-4 flex items-center gap-2 p-4 text-sm text-red-500 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg shadow-sm">
-          <Cancel01Icon size={18} />
-          <span>{error}</span>
-          <button onClick={() => setError('')} className="ml-auto">
-            <Cancel01Icon size={16} className="text-red-400 hover:text-red-600" />
+          <button
+            onClick={toggleAvailability}
+            aria-label={
+              waiterAvailability === 'AVAILABLE' ? 'Set as on break' : 'Set as available'
+            }
+            className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] font-bold transition active:scale-95 sm:px-3.5 sm:py-2 sm:text-xs ${waiterAvailability === 'AVAILABLE'
+              ? 'bg-emerald-500 text-white shadow-sm shadow-emerald-500/20'
+              : 'bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+              }`}
+          >
+            <span className="hidden xs:inline sm:inline">
+              {waiterAvailability === 'AVAILABLE' ? 'Available' : 'On break'}
+            </span>
+            <span className="xs:hidden sm:hidden">
+              {waiterAvailability === 'AVAILABLE' ? 'On' : 'Break'}
+            </span>
           </button>
         </div>
-      )}
 
-      {/* Active Table Assistance Requests Section */}
-      {waiterCalls.length > 0 && (
-        <div className="mb-6 bg-gradient-to-r from-amber-500/10 via-yellow-500/10 to-transparent border border-amber-300/60 dark:border-amber-700/60 rounded-2xl p-4 shadow-md">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
-              </span>
-              <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                Active Table Assistance Requests
-                <span className="text-xs bg-amber-500 text-black px-2 py-0.5 rounded-full font-extrabold">
-                  {waiterCalls.length}
-                </span>
-              </h3>
-            </div>
-            <span className="text-xs text-zinc-500 dark:text-zinc-400 hidden sm:inline">
-              Auto-escalates to next server in 60s if unacknowledged
-            </span>
+        {/* ── Error banner ── */}
+        {error && (
+          <div className="mx-3 mt-2.5 rounded-2xl bg-red-500/10 px-3.5 py-2.5 text-xs font-medium text-red-600 sm:mx-4 sm:mt-3 dark:text-red-400">
+            {error}
           </div>
+        )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {waiterCalls.map((call) => {
-              const isAssignedToMe = call.assignedWaiterId === user?.id;
-              const isManagerAlert = call.escalationLevel === 2;
-              const isAcknowledged = call.status === 'ACKNOWLEDGED';
-
-              // Calculate countdown remaining seconds
-              const assignedTimestamp = call.assignedAt ? new Date(call.assignedAt).getTime() : new Date(call.createdAt).getTime();
-              const elapsedSeconds = Math.floor((nowTime - assignedTimestamp) / 1000);
-              const remainingSec = Math.max(0, 60 - elapsedSeconds);
-
-              // Category icons & labels
-              const getCallMeta = (type) => {
-                switch (type) {
-                  case 'WATER':
-                    return { icon: '💧', label: 'Water Request', color: 'bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border-blue-200' };
-                  case 'BILL':
-                    return { icon: '💳', label: 'Request Bill', color: 'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 border-emerald-200' };
-                  case 'CUTLERY':
-                    return { icon: '🍴', label: 'Extra Cutlery', color: 'bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 border-orange-200' };
-                  case 'CLEAN_TABLE':
-                    return { icon: '🧹', label: 'Clean Table', color: 'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-200' };
-                  default:
-                    return { icon: '🔔', label: 'Call Server', color: 'bg-amber-100 dark:bg-amber-950/50 text-amber-700 dark:text-amber-300 border-amber-200' };
-                }
-              };
-
-              const meta = getCallMeta(call.type);
+        {/* ── Tabs ── */}
+        <div className="px-3 pb-2 pt-3 sm:px-4 sm:pt-4">
+          <div
+            role="tablist"
+            className="-mx-1 flex overflow-x-auto px-1 pb-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >
+            {TABS.map(({ key, label }, i) => {
+              const isActive = activeTab === key;
+              const count = counts[key] ?? 0;
+              const isFirst = i === 0;
+              const isLast = i === TABS.length - 1;
 
               return (
-                <div
-                  key={call.id}
-                  className={`relative p-3.5 rounded-xl border transition-all shadow-sm flex flex-col justify-between ${
-                    isAssignedToMe
-                      ? 'bg-amber-500/10 border-amber-500 dark:border-amber-400 ring-2 ring-amber-500/30'
-                      : isManagerAlert
-                        ? 'bg-red-500/10 border-red-400 dark:border-red-600 ring-2 ring-red-500/30'
-                        : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800'
-                  }`}
+                <Button
+                  key={key}
+                  role="tab"
+                  aria-selected={isActive}
+                  variant="ghost"
+                  onClick={() => setActiveTab(key)}
+                  className={`min-w-fit mx-3 flex-1 gap-1.5 rounded-none ${isFirst ? 'rounded-l-full' : ''
+                    } ${isLast ? 'rounded-r-full' : ''} ${!isFirst ? '-ml-px' : ''
+                    } ${isActive
+                      ? `${BRAND} text-white shadow-sm`
+                      : 'bg-white text-zinc-500 hover:bg-white hover:text-zinc-700 dark:bg-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200'
+                    }`}
                 >
-                  <div>
-                    {/* Header: Table & Service Type */}
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-base text-zinc-900 dark:text-zinc-50">
-                          Table {call.table?.tableNumber || 'N/A'}
-                        </span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${meta.color}`}>
-                          {meta.icon} {meta.label}
-                        </span>
-                      </div>
-
-                      {isAcknowledged ? (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 font-bold flex items-center gap-1 border border-emerald-300 dark:border-emerald-800">
-                          <CheckmarkCircle02Icon size={12} /> On the way
-                        </span>
-                      ) : (
-                        <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full flex items-center gap-1 ${
-                          remainingSec <= 15
-                            ? 'bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400 animate-pulse border border-red-300'
-                            : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300'
-                        }`}>
-                          <Clock01Icon size={12} /> {remainingSec}s
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Customer note if any */}
-                    {call.note && (
-                      <p className="text-xs italic text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800/60 px-2.5 py-1.5 rounded-lg mb-2.5">
-                        "{call.note}"
-                      </p>
-                    )}
-
-                    {/* Assignment & Escalation status */}
-                    <div className="text-xs mb-3 flex items-center justify-between text-zinc-500 dark:text-zinc-400">
-                      {isAssignedToMe ? (
-                        <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                          👉 Assigned to You
-                        </span>
-                      ) : isManagerAlert ? (
-                        <span className="font-bold text-red-600 dark:text-red-400 flex items-center gap-1">
-                          ⚠️ Escalated: Floor Lead Alert
-                        </span>
-                      ) : (
-                        <span>Assigned to: <strong className="text-zinc-700 dark:text-zinc-200">{call.assignedWaiterName || 'Available Staff'}</strong></span>
-                      )}
-
-                      {call.escalationLevel > 0 && !isManagerAlert && (
-                        <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 bg-amber-100 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
-                          Escalation Lv {call.escalationLevel}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-1 border-t border-zinc-200/60 dark:border-zinc-800/60">
-                    {!isAcknowledged ? (
-                      <Button
-                        size="sm"
-                        onClick={() => handleAcknowledgeCall(call.id)}
-                        disabled={callActionLoading === call.id}
-                        className="flex-1 h-8 text-xs font-bold bg-amber-500 hover:bg-amber-600 text-black shadow-sm"
-                      >
-                        {callActionLoading === call.id ? 'Updating...' : 'On My Way'}
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => handleResolveCall(call.id)}
-                        disabled={callActionLoading === call.id}
-                        className="flex-1 h-8 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                      >
-                        {callActionLoading === call.id ? 'Completing...' : 'Done / Resolved'}
-                      </Button>
-                    )}
-
-                    {!isAcknowledged && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleResolveCall(call.id)}
-                        disabled={callActionLoading === call.id}
-                        className="h-8 text-xs px-2.5 text-zinc-600 dark:text-zinc-300"
-                        title="Mark as completed directly"
-                      >
-                        Done
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                  <span>{label}</span>
+                  {count > 0 && (
+                    <span
+                      className={`flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-extrabold tabular-nums sm:text-[11px] ${isActive
+                        ? 'bg-white/25 text-white'
+                        : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300'
+                        }`}
+                    >
+                      {count > 99 ? '99+' : count}
+                    </span>
+                  )}
+                </Button>
               );
             })}
           </div>
         </div>
-      )}
-
-      {/* Mobile Tabs */}
-      <div className="flex lg:hidden bg-zinc-100 dark:bg-zinc-900 p-1 mb-4 rounded-xl shadow-sm border border-zinc-200 dark:border-zinc-800">
-        <button
-          onClick={() => setActiveTab('VERIFY')}
-          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
-            activeTab === 'VERIFY'
-              ? 'bg-white dark:bg-zinc-800 text-yellow-600 shadow-sm'
-              : 'text-zinc-500 hover:text-zinc-700'
-          }`}
-        >
-          Verify <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 px-1.5 py-0.5 rounded-full text-xs ml-1">{pendingOrders.length}</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('SERVE')}
-          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
-            activeTab === 'SERVE'
-              ? 'bg-white dark:bg-zinc-800 text-green-600 shadow-sm'
-              : 'text-zinc-500 hover:text-zinc-700'
-          }`}
-        >
-          Serve <span className="bg-green-100 dark:bg-green-900/30 text-green-700 px-1.5 py-0.5 rounded-full text-xs ml-1">{readyOrders.length}</span>
-        </button>
-        <button
-          onClick={() => setActiveTab('COLLECT')}
-          className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all ${
-            activeTab === 'COLLECT'
-              ? 'bg-white dark:bg-zinc-800 text-blue-600 shadow-sm'
-              : 'text-zinc-500 hover:text-zinc-700'
-          }`}
-        >
-          Collect <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-700 px-1.5 py-0.5 rounded-full text-xs ml-1">{servedGroups.length}</span>
-        </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
+      {/* Content */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-safe">
+        {waiterCalls.length > 0 && (
+          <div className="hide-scrollbar -mx-4 mt-1 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-4 pb-1">
+            {waiterCalls.map((call) => {
+              const isAssignedToMe = call.assignedWaiterId === user?.id;
+              const isAcknowledged = call.status === 'ACKNOWLEDGED';
+              const assignedTimestamp = call.assignedAt ? new Date(call.assignedAt).getTime() : new Date(call.createdAt).getTime();
+              const remainingSec = Math.max(0, 60 - Math.floor((nowTime - assignedTimestamp) / 1000));
+              const label = CALL_LABEL[call.type] || CALL_LABEL.DEFAULT;
 
-        {/* Verification Inbox */}
-        <div className={`flex-col h-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden transition-all hover:shadow-xl ${activeTab === 'VERIFY' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 px-4 py-4 border-b border-yellow-200 dark:border-yellow-800/50 flex justify-between items-center">
-            <div>
-              <h2 className="font-semibold text-yellow-800 dark:text-yellow-400 text-lg">Needs Verification</h2>
-              <p className="text-xs text-yellow-600 dark:text-yellow-500">Review and approve incoming orders</p>
-            </div>
-            <span className="bg-yellow-200 dark:bg-yellow-800/50 text-yellow-800 dark:text-yellow-300 text-sm px-3 py-1.5 rounded-full font-bold shadow-sm">
-              {pendingOrders.length}
-            </span>
+              return (
+                <div key={call.id} className="flex w-60 shrink-0 snap-start items-center gap-3 rounded-2xl bg-white p-3 shadow-sm dark:bg-zinc-900">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-yellow-500/10 text-yellow-600 dark:text-yellow-400">
+                    <AlertCircleIcon size={18} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      T{call.table?.tableNumber || '—'} · {label}
+                    </div>
+                    <div className="text-xs text-zinc-400">
+                      {isAcknowledged ? 'On the way' : isAssignedToMe ? `${remainingSec}s to respond` : call.assignedWaiterName || 'Unassigned'}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => (isAcknowledged ? handleResolveCall(call.id) : handleAcknowledgeCall(call.id))}
+                    disabled={callActionLoading === call.id}
+                    className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold text-white active:scale-95 ${isAcknowledged ? 'bg-emerald-500' : 'bg-yellow-500'}`}
+                  >
+                    {callActionLoading === call.id ? '…' : isAcknowledged ? 'Done' : 'Go'}
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {loading ? (
-              <OrderSkeleton />
-            ) : pendingOrders.length === 0 ? (
-              <EmptyState title="No Pending Orders" description="All caught up!" />
+        )}
+
+        <div className="space-y-3 py-3">
+          {activeTab === 'VERIFY' && (
+            loading ? <OrderSkeleton /> : pendingOrders.length === 0 ? (
+              <EmptyState title="No new orders" description="They'll show up here the moment a guest submits one." />
             ) : (
-              pendingOrders.map(order => (
-                <Card key={order.id} className="border-zinc-200 dark:border-zinc-800 shadow-sm hover:shadow-lg transition-all duration-200">
+              pendingOrders.map((order) => (
+                <Card key={order.id} className="rounded-2xl border-0 shadow-sm">
                   <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <div className="font-bold text-lg flex items-center gap-2">
-                          Table {order.table?.tableNumber || 'N/A'}
-                        </div>
-                        <div className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
-                          <Clock01Icon size={12} /> {Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000)} min ago
-                        </div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">Table {order.table?.tableNumber || 'N/A'}</span>
+                        <span className="text-xs text-zinc-400">{Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000)}m ago</span>
                       </div>
-                      <div className="text-right">
-                        <div className="text-lg font-bold">₹{order.totalAmount}</div>
-                        <div className="text-xs font-bold text-amber-600 dark:text-amber-500 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full inline-block mt-1">
-                          {order.paymentModel}
-                        </div>
-                      </div>
+                      <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">₹{order.totalAmount}</span>
                     </div>
 
-                    <div className="bg-zinc-50 dark:bg-zinc-950 p-3 rounded-lg border border-zinc-100 dark:border-zinc-800 mb-4 max-h-32 overflow-y-auto space-y-1">
-                      {order.items.map(item => (
-                        <div key={item.id} className="flex justify-between text-sm">
-                          <span className="text-zinc-700 dark:text-zinc-300">
-                            <span className="font-semibold mr-2">{item.quantity}x</span>{item.menuItem?.name}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
+                    <p className="mb-4 truncate text-sm text-zinc-500 dark:text-zinc-400">
+                      {order.items.map((i) => `${i.quantity}× ${i.menuItem?.name}`).join(', ')}
+                    </p>
 
                     <div className="flex gap-2">
-                      <Button className="flex-1" variant="outline" onClick={() => updateStatus(order.id, 'CANCELLED')} disabled={actionLoading === order.id}>
-                         <Cancel01Icon size={16} className="mr-1 text-red-500" /> Reject
+                      <Button
+                        variant="destructive"
+                        size="lg"
+                        onClick={() => updateStatus(order.id, 'CANCELLED')}
+                        disabled={actionLoading === order.id}
+                        className="rounded-none rounded-l-full w-full"
+                      >
+                        Reject
                       </Button>
-                      <Button className="flex-1 bg-gradient-to-r from-yellow-500 to-amber-500 text-white" onClick={() => updateStatus(order.id, 'PROCESSING')} disabled={actionLoading === order.id}>
-                         <Tick02Icon size={16} className="mr-1" /> Approve
+                      <Button
+                      size="lg"
+                        onClick={() => updateStatus(order.id, 'PROCESSING')}
+                        disabled={actionLoading === order.id}
+                        className="rounded-none rounded-r-full w-full"
+                      >
+                        Approve
                       </Button>
                     </div>
                   </CardContent>
                 </Card>
               ))
-            )}
-          </div>
-        </div>
+            )
+          )}
 
-        {/* Service Queue */}
-        <div className={`flex-col h-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden transition-all hover:shadow-xl ${activeTab === 'SERVE' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 px-4 py-4 border-b border-green-200 dark:border-green-800/50 flex justify-between items-center">
-            <div>
-              <h2 className="font-semibold text-green-800 dark:text-green-400 text-lg">Ready to Serve</h2>
-              <p className="text-xs text-green-600 dark:text-green-500">Deliver orders to their tables</p>
-            </div>
-            <span className="bg-green-200 dark:bg-green-800/50 text-green-800 dark:text-green-300 text-sm px-3 py-1.5 rounded-full font-bold shadow-sm">
-              {readyOrders.length}
-            </span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {loading ? (
-              <OrderSkeleton />
-            ) : readyOrders.length === 0 ? (
-              <EmptyState title="No Orders Ready" description="Kitchen is cooking!" />
+          {activeTab === 'SERVE' && (
+            loading ? <OrderSkeleton /> : readyOrders.length === 0 ? (
+              <EmptyState title="Nothing ready yet" description="Ready orders from the kitchen will land here." />
             ) : (
-              readyOrders.map(order => (
-                <Card key={order.id} className="border-green-200 dark:border-green-900/30 shadow-sm hover:shadow-lg transition-all duration-200 bg-green-50/30 dark:bg-green-900/10">
+              readyOrders.map((order) => (
+                <Card key={order.id} className="rounded-2xl border-0 shadow-sm">
                   <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <div className="font-bold text-2xl text-green-900 dark:text-green-100 mb-1">
-                          Table {order.table?.tableNumber || 'N/A'}
-                        </div>
-                        <div className="text-xs text-green-600 dark:text-green-500 flex items-center gap-1">
-                          <Clock01Icon size={12} /> Ready since {new Date(order.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100">₹{order.totalAmount}</div>
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">Table {order.table?.tableNumber || 'N/A'}</span>
                         {order.paymentModel === 'PREPAID' ? (
-                          <div className="text-xs font-bold text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-2 py-0.5 rounded-full mt-1 flex items-center gap-1">
-                            <CheckmarkBadge01Icon size={12} /> PREPAID
-                          </div>
+                          <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                            <CheckmarkBadge01Icon size={11} /> Paid
+                          </span>
                         ) : (
-                          <div className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full inline-block mt-1">
-                            TO COLLECT
-                          </div>
+                          <span className="rounded-full bg-yellow-500/10 px-2 py-0.5 text-[11px] font-bold text-yellow-600 dark:text-yellow-400">To collect</span>
                         )}
                       </div>
-                    </div>
-                    
-                    <div className="mb-4 bg-white/50 dark:bg-zinc-950/50 p-3 rounded-lg border border-green-100 dark:border-green-900/30 space-y-1">
-                       {order.items.map(item => (
-                         <div key={item.id} className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
-                           <span><span className="font-semibold mr-1">{item.quantity}x</span> {item.menuItem?.name}</span>
-                         </div>
-                       ))}
+                      <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">₹{order.totalAmount}</span>
                     </div>
 
+                    <p className="mb-4 truncate text-sm text-zinc-500 dark:text-zinc-400">
+                      {order.items.map((i) => `${i.quantity}× ${i.menuItem?.name}`).join(', ')}
+                    </p>
+
                     <Button
-                      className="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-md text-base h-12"
+                      className={`h-12 w-full rounded-full text-[15px] text-white active:scale-[0.98] ${BRAND}`}
                       onClick={() => updateStatus(order.id, 'SERVED')}
                       disabled={actionLoading === order.id}
                     >
-                      <Tick02Icon size={20} className="mr-2" /> Mark as Served
+                      Mark as served
                     </Button>
                   </CardContent>
                 </Card>
               ))
-            )}
-          </div>
-        </div>
+            )
+          )}
 
-        {/* Pending Payment Queue */}
-        <div className={`flex-col h-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden transition-all hover:shadow-xl ${activeTab === 'COLLECT' ? 'flex' : 'hidden lg:flex'}`}>
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 px-4 py-4 border-b border-blue-200 dark:border-blue-800/50 flex justify-between items-center">
-            <div>
-              <h2 className="font-semibold text-blue-800 dark:text-blue-400 text-lg">Pending Payment</h2>
-              <p className="text-xs text-blue-600 dark:text-blue-500">Collect payment from served tables</p>
-            </div>
-            <span className="bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300 text-sm px-3 py-1.5 rounded-full font-bold shadow-sm">
-              {servedGroups.length}
-            </span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {loading ? (
-              <OrderSkeleton />
-            ) : servedGroups.length === 0 ? (
-              <EmptyState title="No Pending Payments" description="All tables settled!" />
+          {activeTab === 'COLLECT' && (
+            loading ? <OrderSkeleton /> : servedGroups.length === 0 ? (
+              <EmptyState title="All settled up" description="Bills for served tables will appear here." />
             ) : (
-              servedGroups.map(group => {
+              servedGroups.map((group) => {
                 const groupTotal = group.orders.reduce((sum, o) => sum + o.totalAmount, 0);
                 return (
-                  <Card key={group.key} className="border-blue-200 dark:border-blue-900/30 shadow-sm hover:shadow-lg transition-all duration-200 bg-blue-50/30 dark:bg-blue-900/10">
+                  <Card key={group.key} className="rounded-2xl border-0 shadow-sm">
                     <CardContent className="p-4">
-                      <div className="flex justify-between items-start mb-3">
-                        <div>
-                          <div className="font-bold text-2xl text-blue-900 dark:text-blue-100 mb-1 flex items-center gap-2">
-                            Table {group.table?.tableNumber || 'N/A'}
-                            {group.tableSession?.pin && (
-                              <span className="text-xs bg-indigo-100 text-indigo-800 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 px-2 py-0.5 rounded-md font-bold">
-                                PIN: {group.tableSession.pin}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-xs text-blue-600 dark:text-blue-500 flex items-center gap-2">
-                            <span>{group.orders.length} Batch{group.orders.length > 1 ? 'es' : ''}</span>
-                            <span>•</span>
-                            <span>Last served {new Date(group.orders[group.orders.length - 1].updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                          </div>
+                      <div className="mb-3 flex items-center justify-between">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">Table {group.table?.tableNumber || 'N/A'}</span>
+                          {group.tableSession?.pin && (
+                            <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${BRAND_SOFT} ${BRAND_TEXT}`}>PIN {group.tableSession.pin}</span>
+                          )}
                         </div>
-                        <div className="text-right">
-                          <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">₹{groupTotal}</div>
-                          <div className="text-xs font-bold text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full inline-block mt-1">
-                            TOTAL DUE
-                          </div>
-                        </div>
-                      </div>
-                      
-                      <div className="mb-4 bg-white/60 dark:bg-zinc-950/50 p-3 rounded-lg border border-blue-100 dark:border-blue-900/30 max-h-32 overflow-y-auto space-y-1">
-                        {group.orders.map(order => order.items.map(item => (
-                          <div key={item.id} className="flex justify-between text-sm text-zinc-700 dark:text-zinc-300">
-                            <span><span className="font-semibold mr-1">{item.quantity}x</span> {item.menuItem?.name}</span>
-                            <span className="text-zinc-400 text-xs">₹{item.priceAtOrder * item.quantity}</span>
-                          </div>
-                        )))}
+                        <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">₹{groupTotal}</span>
                       </div>
 
+                      <p className="mb-4 text-xs text-zinc-400">
+                        {group.orders.length} batch{group.orders.length > 1 ? 'es' : ''} · last served{' '}
+                        {new Date(group.orders[group.orders.length - 1].updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+
                       <Button
-                        className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md text-base h-12 font-bold"
+                        className={`h-12 w-full rounded-full text-[15px] font-bold text-white active:scale-[0.98] ${BRAND}`}
                         onClick={() => {
                           setPaymentOrder({
                             id: group.orders[0].id,
                             tableSessionId: group.tableSessionId,
                             table: group.table,
                             totalAmount: groupTotal,
-                            orders: group.orders
+                            orders: group.orders,
                           });
                           setQrUrl(null);
                         }}
                       >
-                        <Money01Icon size={20} className="mr-2" /> Collect Payment (₹{groupTotal})
+                        <Money01Icon size={18} className="mr-2" /> Collect ₹{groupTotal}
                       </Button>
                     </CardContent>
                   </Card>
                 );
               })
-            )}
-          </div>
+            )
+          )}
         </div>
-
       </div>
-
-      <style jsx>{`
-        @keyframes slide-in {
-          from { transform: translateY(20px); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
-        }
-        .animate-slide-in { animation: slide-in 0.2s ease-out; }
-      `}</style>
     </div>
   );
 };

@@ -1,40 +1,34 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
+import { Task01Icon, ShoppingCart01Icon, Restaurant01Icon } from 'hugeicons-react';
+
+const TABS = [
+  { to: '/dashboard/waiter', end: true, label: 'Queue', Icon: Task01Icon },
+  { to: '/dashboard/waiter/pos', end: false, label: 'Take Order', Icon: ShoppingCart01Icon },
+];
 
 export const Waiter = () => {
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] bg-zinc-50 dark:bg-zinc-950 overflow-hidden">
-      
-      {/* Header and Tabs */}
-      <div className="flex justify-between items-center mb-6 shrink-0 gap-x-2">
-        <div className="flex items-center justify-between gap-6 w-full">
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">Waiter Panel</h1>
-            <p className="text-sm text-zinc-500">Service queue & order taking.</p>
-          </div>
-          
-          {/* Tabs */}
-          <div className="flex bg-zinc-200 dark:bg-zinc-800 p-1 rounded-lg ml-8 h-10">
-            <NavLink 
-              to="/dashboard/waiter" end
-              className={({ isActive }) => `px-6 text-sm font-semibold rounded-md transition-colors flex items-center ${isActive ? 'bg-white dark:bg-zinc-900 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
-            >
-              Service Queue
-            </NavLink>
-            <NavLink 
-              to="/dashboard/waiter/pos"
-              className={({ isActive }) => `px-6 text-sm font-semibold rounded-md transition-colors flex items-center ${isActive ? 'bg-white dark:bg-zinc-900 shadow-sm text-zinc-900 dark:text-zinc-100' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
-            >
-              Take Order
-            </NavLink>
-          </div>
-        </div>
-      </div>
-      
-      {/* Outlet for WaiterTasks or WaiterPOS */}
-      <div className="flex-1 overflow-hidden">
+    <div className="flex h-[calc(100dvh-5rem)] flex-col overflow-hidden bg-zinc-50 text-zinc-900 select-none [-webkit-tap-highlight-color:transparent] dark:bg-zinc-950 dark:text-zinc-100">
+
+      <main className="min-h-0 flex-1 overflow-hidden">
         <Outlet />
-      </div>
+      </main>
+
+      <nav aria-label="Waiter sections" className="shrink-0 border-t border-zinc-200/70 bg-white/90 backdrop-blur-md px-2 pt-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] dark:border-zinc-800/70 dark:bg-zinc-950/90">
+        <div className="flex items-stretch gap-1">
+          {TABS.map(({ to, end, label, Icon }) => (
+            <NavLink key={to} to={to} end={end} className="flex-1 touch-manipulation">
+              {({ isActive }) => (
+                <span className={`flex h-full w-full flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 transition-all duration-150 active:scale-[0.96] ${isActive ? 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400' : 'text-zinc-500 active:bg-zinc-100 dark:text-zinc-400 dark:active:bg-zinc-900'}`}>
+                  <Icon className="h-6 w-6" />
+                  <span className="text-[11px] font-semibold leading-none">{label}</span>
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </div>
+      </nav>
     </div>
   );
 };

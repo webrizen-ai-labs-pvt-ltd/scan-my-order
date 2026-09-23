@@ -23,11 +23,11 @@ import {
 } from '@smo/ui';
 import { AnimatedThemeToggler, Avatar, AvatarImage, AvatarFallback } from '@smo/ui';
 import { useAuthStore } from '../store/authStore';
-import { 
-  DashboardSquare01Icon, 
-  Store01Icon, 
-  Invoice01Icon, 
-  Home01Icon, 
+import {
+  DashboardSquare01Icon,
+  Store01Icon,
+  Invoice01Icon,
+  Home01Icon,
   ArrowRight01Icon,
   RestaurantIcon,
   Pot02Icon,
@@ -98,7 +98,7 @@ export const OperationsLayout = () => {
 
   const getBreadcrumbs = () => {
     const paths = location.pathname.split("/").filter(Boolean);
-    
+
     if (paths.length === 0 || (paths.length === 1 && paths[0] === 'dashboard')) {
       return [{ name: "Dashboard", href: "/dashboard", isLast: true }];
     }
@@ -186,100 +186,138 @@ export const OperationsLayout = () => {
         </Sidebar>
 
         <SidebarInset>
-          <header className="relative flex h-16 shrink-0 items-center justify-between gap-2 border-b border-zinc-200 dark:border-zinc-800 bg-white/60 dark:bg-zinc-900/60 px-4 backdrop-blur-xl">
-            <div className="absolute bottom-0 left-0 right-0 h-px bg-linear-to-r from-transparent via-yellow-500/20 to-transparent" />
-            
-            <div className="flex items-center gap-3">
-              <SidebarTrigger className="hover:bg-zinc-100 dark:hover:bg-zinc-800! rounded-lg transition-colors" />
-              <Separator orientation="vertical" className="h-5 border-zinc-300 dark:border-zinc-800" />
-              
-              <Breadcrumb>
-                <BreadcrumbList className="flex items-center gap-1.5">
-                  <BreadcrumbItem>
-                    <BreadcrumbLink 
+          <header className="relative z-50 flex h-16 shrink-0 items-center justify-between gap-1.5 border-b border-zinc-200 bg-white/60 px-2 backdrop-blur-xl sm:gap-2 sm:px-3 lg:px-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-linear-to-r from-transparent via-yellow-500/20 to-transparent" />
+
+            {/* ───────────────────────── Left ───────────────────────── */}
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+              <SidebarTrigger className="shrink-0 rounded-lg transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800!" />
+
+              <Separator
+                orientation="vertical"
+                className="hidden h-5 shrink-0 border-zinc-300 sm:block dark:border-zinc-800"
+              />
+
+              <Breadcrumb className="min-w-0 flex-1">
+                <BreadcrumbList className="flex min-w-0 flex-nowrap items-center gap-1 sm:gap-1.5">
+                  {/* Home — always visible */}
+                  <BreadcrumbItem className="shrink-0">
+                    <BreadcrumbLink
                       render={<Link to="/dashboard" />}
-                      className="group flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+                      className="group flex items-center gap-1.5 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
                     >
-                      <Home01Icon className="h-3.5 w-3.5 group-hover:text-yellow-500 dark:group-hover:text-yellow-400 transition-colors" />
+                      <Home01Icon className="h-3.5 w-3.5 transition-colors group-hover:text-yellow-500 dark:group-hover:text-yellow-400" />
                     </BreadcrumbLink>
                   </BreadcrumbItem>
 
-                  {breadcrumbs.map((crumb, i) => (
-                    <React.Fragment key={crumb.href}>
-                      {(i > 0 || (i === 0 && breadcrumbs.length > 1)) && (
-                        <BreadcrumbSeparator>
-                          <ArrowRight01Icon className="h-3 w-3 text-zinc-400 dark:text-zinc-600" />
-                        </BreadcrumbSeparator>
-                      )}
-                      {(i > 0 || breadcrumbs.length > 1) && (
-                        <BreadcrumbItem>
-                          {crumb.isLast ? (
-                            <BreadcrumbPage className="flex items-center gap-1.5">
-                              {crumb.icon && <crumb.icon className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-400" />}
-                              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 bg-zinc-100 dark:bg-zinc-800/80 px-2 py-1 rounded-md border border-zinc-200 dark:border-zinc-700/50">
+                  {breadcrumbs.map((crumb, i) => {
+                    const isLast = i === breadcrumbs.length - 1;
+                    const showSeparator = i > 0 || breadcrumbs.length > 1;
+
+                    return (
+                      <React.Fragment key={crumb.href}>
+                        {showSeparator && (
+                          <BreadcrumbSeparator
+                            className={`shrink-0 ${isLast ? 'flex' : 'hidden sm:flex'}`}
+                          >
+                            <ArrowRight01Icon className="h-3 w-3 text-zinc-400 dark:text-zinc-600" />
+                          </BreadcrumbSeparator>
+                        )}
+
+                        <BreadcrumbItem
+                          className={`min-w-0 items-center ${isLast ? 'flex' : 'hidden sm:flex'}`}
+                        >
+                          {isLast ? (
+                            <BreadcrumbPage className="flex min-w-0 items-center gap-1.5">
+                              {crumb.icon && (
+                                <crumb.icon className="h-3.5 w-3.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                              )}
+                              <span
+                                title={crumb.name}
+                                className="max-w-[45vw] truncate rounded-md border border-zinc-200 bg-zinc-100 px-2 py-1 text-xs font-semibold text-zinc-900 sm:max-w-[240px] lg:max-w-none dark:border-zinc-700/50 dark:bg-zinc-800/80 dark:text-zinc-100"
+                              >
                                 {crumb.name}
                               </span>
                             </BreadcrumbPage>
                           ) : (
-                            <BreadcrumbLink 
+                            <BreadcrumbLink
                               render={<Link to={crumb.href} />}
-                              className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200 transition-colors"
+                              className="flex min-w-0 items-center gap-1.5 text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200"
                             >
-                              {crumb.icon && <crumb.icon className="h-3.5 w-3.5" />}
-                              <span className="text-xs font-medium">{crumb.name}</span>
+                              {crumb.icon && <crumb.icon className="h-3.5 w-3.5 shrink-0" />}
+                              <span className="truncate text-xs font-medium">{crumb.name}</span>
                             </BreadcrumbLink>
                           )}
                         </BreadcrumbItem>
-                      )}
-                    </React.Fragment>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </BreadcrumbList>
               </Breadcrumb>
             </div>
 
-            <div className="flex items-center gap-3 pr-2">
+            {/* ───────────────────────── Right ──────────────────────── */}
+            <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 lg:gap-3 lg:pr-2">
               <StaffNotificationCenter />
+
               {user?.store ? (
                 <>
-                  <div className="flex flex-col text-right">
-                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-tight">
+                  <div className="hidden min-w-0 flex-col text-right sm:flex">
+                    <span
+                      title={user.store.name}
+                      className="max-w-[120px] truncate text-sm font-semibold leading-tight text-zinc-900 lg:max-w-[200px] xl:max-w-[280px] dark:text-zinc-100"
+                    >
                       {user.store.name}
                     </span>
-                    <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight uppercase tracking-wider">
+                    <span
+                      title={user.tenant?.name || 'Store'}
+                      className="max-w-[120px] truncate text-[10px] font-medium uppercase leading-tight tracking-wider text-zinc-500 lg:max-w-[200px] xl:max-w-[280px] dark:text-zinc-400"
+                    >
                       {user.tenant?.name || 'Store'}
                     </span>
                   </div>
-                  <Avatar className="h-9 w-9 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                    <AvatarImage src={user.tenant?.logo || ''} alt={user.tenant?.name || 'Brand'} className="object-cover" />
-                    <AvatarFallback className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-lg font-medium text-sm">
+                  <Avatar className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 shadow-sm sm:h-9 sm:w-9 dark:border-zinc-800">
+                    <AvatarImage
+                      src={user.tenant?.logo || ''}
+                      alt={user.tenant?.name || 'Brand'}
+                      className="object-cover"
+                    />
+                    <AvatarFallback className="rounded-lg bg-zinc-100 text-sm font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                       {(user.tenant?.name || user.store.name).charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                 </>
               ) : user?.tenant ? (
                 <>
-                  <div className="flex flex-col text-right">
-                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-tight">
+                  <div className="hidden min-w-0 flex-col text-right sm:flex">
+                    <span
+                      title={user.tenant.name}
+                      className="max-w-[120px] truncate text-sm font-semibold leading-tight text-zinc-900 lg:max-w-[200px] xl:max-w-[280px] dark:text-zinc-100"
+                    >
                       {user.tenant.name}
                     </span>
-                    <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight uppercase tracking-wider">
+                    <span className="text-[10px] font-medium uppercase leading-tight tracking-wider text-zinc-500 dark:text-zinc-400">
                       All Stores
                     </span>
                   </div>
-                  <Avatar className="h-9 w-9 shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm">
-                    <AvatarImage src={user.tenant.logo || ''} alt={user.tenant.name} className="object-cover" />
-                    <AvatarFallback className="bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 rounded-lg font-medium text-sm">
+                  <Avatar className="h-8 w-8 shrink-0 rounded-lg border border-zinc-200 shadow-sm sm:h-9 sm:w-9 dark:border-zinc-800">
+                    <AvatarImage
+                      src={user.tenant.logo || ''}
+                      alt={user.tenant.name}
+                      className="object-cover"
+                    />
+                    <AvatarFallback className="rounded-lg bg-zinc-100 text-sm font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                       {user.tenant.name.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                 </>
               ) : (
                 <>
-                  <div className="flex flex-col text-right">
-                    <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100 leading-tight">
+                  <div className="hidden min-w-0 flex-col text-right sm:flex">
+                    <span className="truncate text-sm font-semibold leading-tight text-zinc-900 dark:text-zinc-100">
                       Global System
                     </span>
-                    <span className="text-[10px] font-medium text-zinc-500 dark:text-zinc-400 leading-tight uppercase tracking-wider">
+                    <span className="text-[10px] font-medium uppercase leading-tight tracking-wider text-zinc-500 dark:text-zinc-400">
                       Super Admin
                     </span>
                   </div>
@@ -288,7 +326,7 @@ export const OperationsLayout = () => {
             </div>
           </header>
 
-          <div className={`w-full ${location.pathname.startsWith('/dashboard/pos') || location.pathname.startsWith('/dashboard/kds') ? 'p-2 md:p-3 h-[calc(100vh-4.05rem)] overflow-hidden flex flex-col' : 'p-6 md:p-8'}`}>
+          <div className={`w-full z-0 ${location.pathname.startsWith('/dashboard/pos') || location.pathname.startsWith('/dashboard/kds') ? 'p-0 md:p-3 h-[calc(100vh-4.05rem)] overflow-hidden flex flex-col' : 'p-0 md:p-8'}`}>
             <Outlet />
           </div>
         </SidebarInset>

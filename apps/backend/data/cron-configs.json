@@ -1,17 +1,17 @@
 {
   "cmt5g9r9c0005ebh8kn4dezdx": {
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-22T19:15:02.439Z",
+      "lastRunAt": "2026-09-23T11:15:02.834Z",
       "lastRunStatus": "FAILED",
-      "lastRunSummary": "Error: \nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-22T18:30:00.014Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-22T18:30:00.014Z\")\n             }\n           }\n         ],\n         storeId: \"cmt5g9r9c0005ebh8kn4dezdx\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing.",
-      "lastRunDurationMs": 2425,
-      "lastRunError": "\nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-22T18:30:00.014Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-22T18:30:00.014Z\")\n             }\n           }\n         ],\n         storeId: \"cmt5g9r9c0005ebh8kn4dezdx\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing."
+      "lastRunSummary": "Error: \nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-23T10:30:00.005Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-23T10:30:00.005Z\")\n             }\n           }\n         ],\n         storeId: \"cmt5g9r9c0005ebh8kn4dezdx\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing.",
+      "lastRunDurationMs": 2828,
+      "lastRunError": "\nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-23T10:30:00.005Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-23T10:30:00.005Z\")\n             }\n           }\n         ],\n         storeId: \"cmt5g9r9c0005ebh8kn4dezdx\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing."
     },
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-22T19:00:01.762Z",
+      "lastRunAt": "2026-09-23T11:00:00.941Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 1755
+      "lastRunDurationMs": 926
     },
     "DAILY_SALES_DIGEST": {
       "lastRunAt": "2026-09-22T18:25:22.167Z",
@@ -25,21 +25,27 @@
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "All active promotional codes are valid.",
       "lastRunDurationMs": 11923
+    },
+    "LOW_STOCK_ALERT": {
+      "lastRunAt": "2026-09-23T10:30:02.020Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "All raw material inventory levels are healthy above safety thresholds.",
+      "lastRunDurationMs": 2008
     }
   },
   "cmu1mjo6y0006s0507dgz8zg3": {
     "STALE_ORDERS_EXPIRATION": {
-      "lastRunAt": "2026-09-22T19:00:01.406Z",
+      "lastRunAt": "2026-09-23T11:00:00.418Z",
       "lastRunStatus": "SUCCESS",
       "lastRunSummary": "No stale orders found older than 2h.",
-      "lastRunDurationMs": 1400
+      "lastRunDurationMs": 405
     },
     "TABLE_SESSION_RECONCILIATION": {
-      "lastRunAt": "2026-09-22T19:15:02.441Z",
+      "lastRunAt": "2026-09-23T11:15:02.829Z",
       "lastRunStatus": "FAILED",
-      "lastRunSummary": "Error: \nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-22T18:30:00.015Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-22T18:30:00.015Z\")\n             }\n           }\n         ],\n         storeId: \"cmu1mjo6y0006s0507dgz8zg3\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing.",
-      "lastRunDurationMs": 2426,
-      "lastRunError": "\nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-22T18:30:00.015Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-22T18:30:00.015Z\")\n             }\n           }\n         ],\n         storeId: \"cmu1mjo6y0006s0507dgz8zg3\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing."
+      "lastRunSummary": "Error: \nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-23T10:30:00.004Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-23T10:30:00.004Z\")\n             }\n           }\n         ],\n         storeId: \"cmu1mjo6y0006s0507dgz8zg3\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing.",
+      "lastRunDurationMs": 2825,
+      "lastRunError": "\nInvalid `prisma.tableSession.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\table-reconciliation.js:31:54\n\n  28   sessionWhere.store = { tenantId };\n  29 }\n  30 \n→ 31 const inactiveSessions = await prisma.tableSession.findMany({\n       where: {\n         status: \"ACTIVE\",\n         OR: [\n           {\n             lastOrderAt: {\n               lt: new Date(\"2026-09-23T10:30:00.004Z\")\n             }\n           },\n           {\n             lastOrderAt: null,\n             updatedAt: {\n               lt: new Date(\"2026-09-23T10:30:00.004Z\")\n             }\n           }\n         ],\n         storeId: \"cmu1mjo6y0006s0507dgz8zg3\"\n       },\n       select: {\n         id: true,\n         storeId: true,\n         tableId: true\n       }\n     })\n\nArgument `lastOrderAt` is missing."
     },
     "DAILY_SALES_DIGEST": {
       "lastRunAt": "2026-09-22T18:25:19.114Z",
@@ -54,6 +60,12 @@
       "lastRunSummary": "Error: \nInvalid `prisma.promoCode.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\promo-archival.js:21:48\n\n  18   whereClause.store = { tenantId };\n  19 }\n  20 \n→ 21 const expiredPromos = await prisma.promoCode.findMany(\nTimed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 1)",
       "lastRunDurationMs": 10012,
       "lastRunError": "\nInvalid `prisma.promoCode.findMany()` invocation in\nC:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\jobs\\tasks\\promo-archival.js:21:48\n\n  18   whereClause.store = { tenantId };\n  19 }\n  20 \n→ 21 const expiredPromos = await prisma.promoCode.findMany(\nTimed out fetching a new connection from the connection pool. More info: http://pris.ly/d/connection-pool (Current connection pool timeout: 10, connection limit: 1)"
+    },
+    "LOW_STOCK_ALERT": {
+      "lastRunAt": "2026-09-23T10:30:01.704Z",
+      "lastRunStatus": "SUCCESS",
+      "lastRunSummary": "All raw material inventory levels are healthy above safety thresholds.",
+      "lastRunDurationMs": 1694
     }
   }
 }

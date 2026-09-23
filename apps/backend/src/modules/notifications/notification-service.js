@@ -222,14 +222,16 @@ async function getStaffNotifications(actor, storeId, { limit = 30, isRead, type 
     ...(type ? { type } : {})
   };
 
-  // Filter by user's role or general staff notifications
-  const userRole = actor.role;
-  where.OR = [
-    { role: null },
-    { role: userRole },
-    { role: { contains: userRole } },
-    { userId: actor.id }
-  ];
+  const isManagement = ["SUPER_ADMIN", "TENANT_ADMIN", "STORE_MANAGER"].includes(actor?.role);
+  if (!isManagement) {
+    const userRole = actor?.role;
+    where.OR = [
+      { role: null },
+      { role: userRole },
+      { role: { contains: userRole } },
+      { userId: actor?.id }
+    ];
+  }
 
   return prisma.notification.findMany({
     where,
@@ -254,19 +256,25 @@ async function markNotificationAsRead(id) {
  */
 async function markAllNotificationsAsRead(actor, storeId) {
   const prisma = getPrismaClient();
-  const userRole = actor.role;
+  const isManagement = ["SUPER_ADMIN", "TENANT_ADMIN", "STORE_MANAGER"].includes(actor?.role);
+
+  const where = {
+    storeId,
+    isRead: false
+  };
+
+  if (!isManagement) {
+    const userRole = actor?.role;
+    where.OR = [
+      { role: null },
+      { role: userRole },
+      { role: { contains: userRole } },
+      { userId: actor?.id }
+    ];
+  }
 
   return prisma.notification.updateMany({
-    where: {
-      storeId,
-      isRead: false,
-      OR: [
-        { role: null },
-        { role: userRole },
-        { role: { contains: userRole } },
-        { userId: actor.id }
-      ]
-    },
+    where,
     data: { isRead: true }
   });
 }

@@ -47,7 +47,7 @@ function getNotificationIcon(type) {
   }
 }
 
-export function StaffNotificationCenter() {
+export function StaffNotificationCenter({ storeId }) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
@@ -59,13 +59,15 @@ export function StaffNotificationCenter() {
     isMuted,
     toggleMute,
     testAudio,
+    sendTestNotification,
+    isSendingTest,
     markAsRead,
     markAllAsRead,
     isPushSupported,
     isPushSubscribed,
     pushPermission,
     subscribePush
-  } = useStaffNotifications();
+  } = useStaffNotifications(storeId);
 
   // Close on outside click
   useEffect(() => {
@@ -94,7 +96,7 @@ export function StaffNotificationCenter() {
   };
 
   return (
-    <div className="relative" ref={dropdownRef}>
+    <div className="relative z-50" ref={dropdownRef}>
       {/* Bell Button */}
       <button
         onClick={() => setIsOpen(prev => !prev)}
@@ -144,7 +146,7 @@ export function StaffNotificationCenter() {
 
           {/* Quick Audio & Push Bar */}
           <div className="flex items-center justify-between border-b border-zinc-100 bg-zinc-50/80 px-4 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-800/40">
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <button
                 onClick={toggleMute}
                 className={`flex items-center gap-1.5 rounded-lg px-2 py-1 font-medium transition ${
@@ -164,14 +166,24 @@ export function StaffNotificationCenter() {
                 title="Test Audio Chime"
               >
                 <PlayIcon size={14} />
-                <span>Test</span>
+                <span>Test Sound</span>
+              </button>
+
+              <button
+                onClick={sendTestNotification}
+                disabled={isSendingTest}
+                className="flex items-center gap-1 rounded-lg px-2 py-1 text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-300 transition disabled:opacity-50"
+                title="Dispatch a live notification test through backend SSE"
+              >
+                <Notification03Icon size={14} />
+                <span>{isSendingTest ? 'Sending…' : 'Simulate'}</span>
               </button>
             </div>
 
             {isPushSupported && !isPushSubscribed && (
               <button
                 onClick={subscribePush}
-                className="rounded-lg bg-amber-500 px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs hover:bg-amber-600 transition"
+                className="rounded-lg bg-amber-500 px-2.5 py-1 text-[11px] font-semibold text-white shadow-xs hover:bg-amber-600 transition shrink-0"
               >
                 Enable Push
               </button>
