@@ -39,7 +39,7 @@ Tiered SaaS subscriptions (monthly or annual), priced by the number of physical 
 
 ### Prerequisites
 
-- **Node.js** ≥ 18
+- **Node.js** ≥ 22.12 (the backend `require`s the ESM pricing module in `@smo/shared`)
 - **npm** ≥ 9 (ships with Node)
 - **PostgreSQL** — a Supabase project is used for hosted Postgres
 
@@ -165,10 +165,18 @@ The backend will be available at `http://localhost:8000` (or whatever `PORT` is 
 | `POST`   | `/api/stores/:storeId/tables`         | Bearer   | Provision secure Table UUIDs     |
 | `GET`    | `/api/stores/:storeId/orders?status=PENDING_VERIFICATION` | Bearer | Waiter pending orders inbox |
 | `PATCH`  | `/api/stores/:storeId/orders/:id/verify` | Bearer | Waiter approves QR Postpaid  |
+| `PATCH`  | `/api/stores/:storeId/orders/:id/status` | Bearer | Kitchen/floor status change (role + transition checked; cannot mark unpaid orders settled) |
+| `GET`    | `/api/stores/:storeId/orders/sessions/by-table/:tableId` | Bearer | Active table session incl. PIN (POS add-to-table) |
+| `GET`    | `/api/stores/:storeId/payments/summary` | Bearer | Bill total, paid, due, payments, enabled channels (`?orderId=` or `?tableSessionId=`) |
+| `POST`   | `/api/stores/:storeId/payments` | Bearer | Add a payment: `RAZORPAY` (QR), `UPI_OFFLINE` (own UPI QR) or `CASH`; split by posting several |
+| `GET`    | `/api/stores/:storeId/payments/:id` | Bearer | Payment status (re-checks Razorpay while pending) |
+| `POST`   | `/api/stores/:storeId/payments/:id/confirm` | Bearer | Staff confirms own-UPI money received |
+| `POST`   | `/api/stores/:storeId/payments/:id/cancel` | Bearer | Withdraw a pending QR |
 | `POST`   | `/api/public/stores/:storeId/orders`  | —        | Create QR Menu Cart / Order      |
 | `GET`    | `/api/stores/:storeId/orders/stream`  | Bearer   | SSE Real-time order events       |
 | `GET`    | `/api/stores/:storeId/kds/orders`     | Bearer   | Kitchen processing queue         |
-| `POST`   | `/api/public/webhooks/razorpay/:tenantId` | —   | Inbound razorpay secure webhook  |
+| `POST`   | `/api/public/webhooks/razorpay/:tenantId` | —   | Optional Razorpay webhook (signed with the tenant's webhook secret) |
+| `POST`   | `/api/public/stores/:storeId/orders/:id/verify-payment` | — | Customer checkout: server verifies Razorpay signature/status |
 | `POST`   | `/api/public/stores/:storeId/calls`   | —        | Trigger a Waiter Call            |
 | `PATCH`  | `/api/stores/:storeId/calls/:id/acknowledge` | Bearer | Claim a Waiter Call         |
 | `POST`   | `/api/public/stores/:storeId/feedback`| —        | Submit Customer Feedback         |
@@ -217,6 +225,8 @@ smo/
 - Configuration goes in `apps/backend/src/config`.
 - Real credentials live only in git-ignored `.env` files.
 - Tests are removed by request — no test runner is configured.
+- Money is only recorded as `Payment` rows (`apps/backend/src/modules/payments`). An order/table bill is paid when PAID payments cover its total; never set `SETTLED` or payment amounts directly.
+- Bill arithmetic (promo, store credits, tax after discount) lives in `packages/shared/src/pricing.mjs` and is shared by the backend and every frontend.
 
 ---
 

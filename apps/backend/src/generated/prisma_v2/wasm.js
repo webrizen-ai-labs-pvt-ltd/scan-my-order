@@ -131,6 +131,8 @@ exports.Prisma.TenantScalarFieldEnum = {
   gstin: 'gstin',
   companyLegalName: 'companyLegalName',
   registeredAddress: 'registeredAddress',
+  offlineUpiId: 'offlineUpiId',
+  offlineUpiPayeeName: 'offlineUpiPayeeName',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -147,6 +149,8 @@ exports.Prisma.StoreScalarFieldEnum = {
   banner: 'banner',
   status: 'status',
   googleReviewUrl: 'googleReviewUrl',
+  offlineUpiId: 'offlineUpiId',
+  offlineUpiPayeeName: 'offlineUpiPayeeName',
   taxRules: 'taxRules',
   loyaltyRules: 'loyaltyRules',
   createdAt: 'createdAt',
@@ -210,6 +214,7 @@ exports.Prisma.TenantPaymentGatewayScalarFieldEnum = {
   merchantId: 'merchantId',
   apiKey: 'apiKey',
   secretKey: 'secretKey',
+  webhookSecret: 'webhookSecret',
   isActive: 'isActive',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -323,6 +328,7 @@ exports.Prisma.OrderScalarFieldEnum = {
   paymentMethod: 'paymentMethod',
   cashAmount: 'cashAmount',
   onlineAmount: 'onlineAmount',
+  paidAt: 'paidAt',
   status: 'status',
   subTotal: 'subTotal',
   taxAmount: 'taxAmount',
@@ -330,8 +336,34 @@ exports.Prisma.OrderScalarFieldEnum = {
   walletDiscount: 'walletDiscount',
   promoCodeId: 'promoCodeId',
   totalAmount: 'totalAmount',
+  taxRules: 'taxRules',
+  cancelReason: 'cancelReason',
+  cancelledAt: 'cancelledAt',
+  cancelledById: 'cancelledById',
   paymentLinkId: 'paymentLinkId',
   paymentLinkUrl: 'paymentLinkUrl',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.PaymentScalarFieldEnum = {
+  id: 'id',
+  storeId: 'storeId',
+  orderId: 'orderId',
+  tableSessionId: 'tableSessionId',
+  channel: 'channel',
+  status: 'status',
+  amount: 'amount',
+  providerKind: 'providerKind',
+  providerRef: 'providerRef',
+  providerPaymentId: 'providerPaymentId',
+  qrImageUrl: 'qrImageUrl',
+  qrPayload: 'qrPayload',
+  cashTendered: 'cashTendered',
+  changeDue: 'changeDue',
+  collectedById: 'collectedById',
+  paidAt: 'paidAt',
+  expiresAt: 'expiresAt',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
 };
@@ -593,6 +625,20 @@ exports.OrderStatus = exports.$Enums.OrderStatus = {
   CANCELLED: 'CANCELLED'
 };
 
+exports.PaymentChannel = exports.$Enums.PaymentChannel = {
+  RAZORPAY: 'RAZORPAY',
+  UPI_OFFLINE: 'UPI_OFFLINE',
+  CASH: 'CASH'
+};
+
+exports.PaymentStatus = exports.$Enums.PaymentStatus = {
+  PENDING: 'PENDING',
+  PAID: 'PAID',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+  EXPIRED: 'EXPIRED'
+};
+
 exports.WaiterCallType = exports.$Enums.WaiterCallType = {
   WATER: 'WATER',
   BILL: 'BILL',
@@ -646,6 +692,7 @@ exports.Prisma.ModelName = {
   Table: 'Table',
   PromoCode: 'PromoCode',
   Order: 'Order',
+  Payment: 'Payment',
   OrderItem: 'OrderItem',
   OrderItemModifier: 'OrderItemModifier',
   WaiterCall: 'WaiterCall',

@@ -112,7 +112,11 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId }) => {
     if (!effectiveSessionId) return;
     setLoadingBill(true);
     try {
-      const res = await api.get(`/public/stores/${storeId}/sessions/${effectiveSessionId}/bill`);
+      // The bill (and PIN) is only served to guests holding this table's session token
+      const tableToken = localStorage.getItem(`smo_table_token_${storeId}_${tableNumber}`) || '';
+      const res = await api.get(`/public/stores/${storeId}/sessions/${effectiveSessionId}/bill`, {
+        headers: { 'x-table-session-token': tableToken },
+      });
       if (res.data.success) {
         setBillData(res.data.data);
         setShowBillModal(true);

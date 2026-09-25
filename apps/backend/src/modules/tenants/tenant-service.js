@@ -25,6 +25,8 @@ async function listTenants(actor, query = {}) {
       gstin: true,
       companyLegalName: true,
       registeredAddress: true,
+      offlineUpiId: true,
+      offlineUpiPayeeName: true,
       createdAt: true,
       subscription: {
         include: { plan: true }
@@ -195,6 +197,16 @@ async function createTenant(actor, input) {
   return getTenantById(actor, tenant.id);
 }
 
+function normalizeUpiId(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return null;
+  const { isValidUpiId } = require("../payments/payment-service");
+  if (!isValidUpiId(trimmed)) {
+    throw createHttpError(400, "Enter a valid UPI ID, e.g. yourshop@okhdfcbank");
+  }
+  return trimmed;
+}
+
 async function updateTenant(actor, id, input) {
   if (actor.role !== 'SUPER_ADMIN' && (actor.role !== 'TENANT_ADMIN' || actor.tenantId !== id)) {
     throw createHttpError(403, "You do not have permission to update this brand's details");
@@ -210,6 +222,12 @@ async function updateTenant(actor, id, input) {
     name,
     logo, brandColor, description, gstin, companyLegalName, registeredAddress
   };
+
+  // Offline UPI collection account (where "UPI – mark received" payments land)
+  if (input.offlineUpiId !== undefined) {
+    updateData.offlineUpiId = normalizeUpiId(input.offlineUpiId);
+    updateData.offlineUpiPayeeName = input.offlineUpiPayeeName ? String(input.offlineUpiPayeeName).trim().slice(0, 50) : null;
+  }
 
   if (actor.role === 'SUPER_ADMIN' && status) {
     updateData.status = status;
@@ -239,6 +257,7 @@ async function deleteTenant(actor, id) {
 }
 
 module.exports = {
+  normalizeUpiId,
   listTenants,
   getTenantById,
   createTenant,

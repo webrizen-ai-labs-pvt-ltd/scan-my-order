@@ -5,13 +5,33 @@ const { getPrismaClient } = require("../../lib/prisma");
 const { decrypt } = require("../../lib/encryption");
 const { billingGuard } = require("../../middleware/billing-guard");
 const { publicMenuCache } = require("../../lib/cache");
-const { createOrder, handleRazorpayWebhook } = require("../orders/order-service");
+const { createOrder } = require("../orders/order-service");
+const { verifyCheckoutPayment, handleRazorpayWebhook } = require("../payments/payment-service");
+const { rateLimit } = require("../../lib/rate-limit");
 const { createWaiterCall, getTableCallStatus, cancelWaiterCall } = require("../waiter-calls/waiter-call-service");
 const { createFeedback } = require("../feedback/feedback-service");
 const { createHttpError } = require("../../middleware/error-handler");
 const { publicNotificationRouter } = require("../notifications/notification-routes");
 
 const router = express.Router();
+
+// 4-digit PINs are guessable, so cap attempts per client and per table
+const pinAttemptLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 10,
+  keyFn: (req) => `${req.ip}:${req.params.storeId}:${req.params.tableNumber}`,
+  message: "Too many PIN attempts. Please ask your waiter for help."
+});
+const orderLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 20,
+  keyFn: (req) => `${req.ip}:${req.params.storeId}`,
+  message: "Too many orders from this device. Please wait a minute."
+});
+
+function readTableToken(req) {
+  return req.headers['x-table-session-token'] || req.query.sessionToken || req.query.clientToken || null;
+}
 
 router.use("/notifications", publicNotificationRouter);
 
@@ -120,7 +140,7 @@ router.get("/stores/:storeId/menu", asyncHandler(async (req, res) => {
 }));
 
 // POST /api/public/stores/:storeId/orders
-router.post("/stores/:storeId/orders", asyncHandler(async (req, res) => {
+router.post("/stores/:storeId/orders", orderLimiter, asyncHandler(async (req, res) => {
   const prisma = getPrismaClient();
   let tableId = req.body.tableId;
   
@@ -234,23 +254,8 @@ router.get("/customer/stream", (req, res) => {
 
 // POST /api/public/stores/:storeId/orders/:id/verify-payment
 router.post("/stores/:storeId/orders/:id/verify-payment", asyncHandler(async (req, res) => {
-  // Try to decode optional JWT to get customer actor
-  let actor = null;
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    try {
-      const { verifyJwt } = require("../../lib/jwt");
-      const token = authHeader.split(' ')[1];
-      const decoded = verifyJwt(token);
-      if (decoded && decoded.sub) {
-        const prisma = getPrismaClient();
-        actor = await prisma.user.findUnique({ where: { id: decoded.sub } });
-      }
-    } catch (err) {}
-  }
-  
-  const { verifyRazorpayPayment } = require("../orders/order-service");
-  const result = await verifyRazorpayPayment(actor, req.params.storeId, req.params.id);
+  // The server checks the Razorpay signature / order status itself; nothing from the client is trusted
+  const result = await verifyCheckoutPayment(req.params.storeId, req.params.id, req.body || {});
   res.json(createApiResponse(result));
 }));
 
@@ -315,14 +320,12 @@ router.post("/stores/:storeId/validate-promo", asyncHandler(async (req, res) => 
 // GET /api/public/stores/:storeId/tables/:tableNumber/session
 router.get("/stores/:storeId/tables/:tableNumber/session", asyncHandler(async (req, res) => {
   const { getTableSessionStatus } = require("../orders/order-service");
-  const clientToken = req.headers['x-table-session-token'] || req.query.sessionToken || null;
-  const clientPin = req.query.pin || null;
-  const result = await getTableSessionStatus(req.params.storeId, req.params.tableNumber, clientToken, clientPin);
+  const result = await getTableSessionStatus(req.params.storeId, req.params.tableNumber, readTableToken(req));
   res.json(createApiResponse(result));
 }));
 
 // POST /api/public/stores/:storeId/tables/:tableNumber/join-session
-router.post("/stores/:storeId/tables/:tableNumber/join-session", asyncHandler(async (req, res) => {
+router.post("/stores/:storeId/tables/:tableNumber/join-session", pinAttemptLimiter, asyncHandler(async (req, res) => {
   const { joinTableSession } = require("../orders/order-service");
   const { pin } = req.body || {};
   const result = await joinTableSession(req.params.storeId, req.params.tableNumber, pin);
@@ -331,19 +334,26 @@ router.post("/stores/:storeId/tables/:tableNumber/join-session", asyncHandler(as
 
 // GET /api/public/stores/:storeId/sessions/:sessionId/bill
 router.get("/stores/:storeId/sessions/:sessionId/bill", asyncHandler(async (req, res) => {
+  const token = readTableToken(req);
+  const session = await getPrismaClient().tableSession.findUnique({
+    where: { id: req.params.sessionId },
+    select: { storeId: true, sessionToken: true }
+  });
+  // Only guests holding this table's session token may see the bill (it includes the PIN)
+  if (!session || session.storeId !== req.params.storeId || !token || token !== session.sessionToken) {
+    throw createHttpError(404, "Table session not found");
+  }
   const { getTableSessionBill } = require("../orders/order-service");
-  const result = await getTableSessionBill(req.params.storeId, req.params.sessionId);
+  const result = await getTableSessionBill(req.params.storeId, req.params.sessionId, { includePin: true });
   res.json(createApiResponse(result));
 }));
 
 // POST /api/public/webhooks/razorpay/:tenantId
-router.post("/webhooks/razorpay/:tenantId", express.json(), asyncHandler(async (req, res) => {
+router.post("/webhooks/razorpay/:tenantId", asyncHandler(async (req, res) => {
   const signature = req.headers['x-razorpay-signature'];
-  if (!signature) {
-    return res.status(400).json(createApiResponse(null, "Missing signature"));
-  }
-  
-  const result = await handleRazorpayWebhook(req.params.tenantId, req.body, signature, req.rawBody);
+  if (!signature) throw createHttpError(400, "Missing signature");
+  // Signature must be checked against the exact bytes Razorpay sent (captured in app.js)
+  const result = await handleRazorpayWebhook(req.params.tenantId, req.rawBody, signature);
   res.json(createApiResponse(result));
 }));
 

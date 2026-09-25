@@ -8,7 +8,8 @@ async function runStaleOrdersJob({ storeId, tenantId, params = {} }) {
   cutoffDate.setHours(cutoffDate.getHours() - staleHours);
 
   const whereClause = {
-    status: { in: ['DRAFT', 'PENDING_VERIFICATION'] },
+    status: { in: ['DRAFT', 'PENDING_VERIFICATION', 'PENDING_PAYMENT'] },
+    paidAt: null,
     createdAt: { lt: cutoffDate }
   };
 
@@ -32,12 +33,20 @@ async function runStaleOrdersJob({ storeId, tenantId, params = {} }) {
 
   const orderIds = staleOrders.map(o => o.id);
 
+  // Abandoned checkouts: stop any QR / UPI request still waiting on these orders
+  await prisma.payment.updateMany({
+    where: { orderId: { in: orderIds }, status: 'PENDING' },
+    data: { status: 'CANCELLED' }
+  });
+
   const result = await prisma.order.updateMany({
     where: {
       id: { in: orderIds }
     },
     data: {
-      status: 'CANCELLED'
+      status: 'CANCELLED',
+      cancelReason: `Auto-cancelled: not approved or paid within ${staleHours}h`,
+      cancelledAt: new Date()
     }
   });
 

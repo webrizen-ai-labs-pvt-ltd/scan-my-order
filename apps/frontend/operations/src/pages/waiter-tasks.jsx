@@ -13,7 +13,9 @@ import {
   AlertCircleIcon,
 } from 'hugeicons-react';
 import { Receipt } from '../components/receipt';
-import { PaymentBifurcationModal } from '../components/payment-bifurcation-modal';
+import { PaymentCollectorSheet } from '../components/payments/payment-collector-sheet';
+import { sessionBillToReceipt } from '../lib/session-receipt';
+import { CancelOrderDialog } from '../components/pos/cancel-order-dialog';
 import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
 
 const playChime = () => {
@@ -103,8 +105,7 @@ export const WaiterTasks = () => {
   const [connectionStatus, setConnectionStatus] = useState('connecting');
 
   const [paymentOrder, setPaymentOrder] = useState(null);
-  const [qrUrl, setQrUrl] = useState(null);
-  const [isVerifying, setIsVerifying] = useState(false);
+  const [rejectingOrder, setRejectingOrder] = useState(null);
   const [activeTab, setActiveTab] = useState('SERVE');
 
   const [storeData, setStoreData] = useState(null);
@@ -251,19 +252,6 @@ export const WaiterTasks = () => {
               showToast(`Table ${data.data?.table?.tableNumber || ''}: new order`, 'info');
             }
 
-            if (data.type === 'ORDER_SETTLED') {
-              setPaymentOrder((prev) => {
-                if (prev && prev.id === data.data.id) {
-                  showToast('Payment received!', 'success');
-                  api.get(`/stores/${selectedStoreId}/orders/${data.data.id}`).then((orderRes) => {
-                    if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
-                  });
-                  return null;
-                }
-                return prev;
-              });
-              setQrUrl(null);
-            }
           }
 
           if ([
@@ -330,226 +318,6 @@ export const WaiterTasks = () => {
       setActionLoading(null);
     }
   };
-
-  const handleWaiterGenerateQR = async (onlineAmount) => {
-    if (!paymentOrder) return;
-    try {
-      const url = paymentOrder.tableSessionId
-        ? `/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/payment-link`
-        : `/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-link`;
-      const res = await api.post(url, { onlineAmount });
-      if (res.data.success && res.data.data.short_url) {
-        setQrUrl(res.data.data.short_url);
-        return { url: res.data.data.short_url };
-      }
-    } catch (err) {
-      console.error(err);
-      showToast(err.response?.data?.message || 'Failed to generate QR', 'error');
-    }
-  };
-
-  const handleWaiterModalSettle = async (tenderDetails) => {
-    if (!paymentOrder) return;
-    setActionLoading('settle');
-    try {
-      if (paymentOrder.tableSessionId) {
-        const sessId = paymentOrder.tableSessionId;
-        await api.post(`/stores/${selectedStoreId}/orders/sessions/${sessId}/settle`, {
-          paymentMethod: tenderDetails.paymentMethod,
-          cashAmount: tenderDetails.cashAmount,
-          onlineAmount: tenderDetails.onlineAmount,
-        });
-        const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
-        if (billRes.data.success) {
-          const b = billRes.data.data;
-          setReceiptOrder({
-            id: `TAB-${b.session.pin}`,
-            createdAt: b.session.createdAt,
-            type: 'DINE_IN',
-            paymentModel: 'POSTPAID',
-            paymentMethod: tenderDetails.paymentMethod,
-            cashAmount: tenderDetails.cashAmount,
-            onlineAmount: tenderDetails.onlineAmount,
-            table: { tableNumber: b.session.tableNumber },
-            subTotal: b.subTotal,
-            discountAmount: b.discountAmount,
-            taxAmount: b.taxAmount,
-            totalAmount: b.totalAmount,
-            items: b.aggregatedItems.map((i) => ({
-              quantity: i.quantity,
-              priceAtOrder: i.price,
-              menuItem: { name: i.name },
-              modifiers: (i.modifiers || []).map((m) => ({ modifierOption: { name: m } })),
-            })),
-          });
-        }
-        setPaymentOrder(null);
-        setQrUrl(null);
-        showToast('Table settled!', 'success');
-        fetchOrders(selectedStoreId, true);
-      } else {
-        await api.patch(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/status`, {
-          status: 'SETTLED',
-          paymentMethod: tenderDetails.paymentMethod,
-          cashAmount: tenderDetails.cashAmount,
-          onlineAmount: tenderDetails.onlineAmount,
-        });
-        const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}`);
-        if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
-        setPaymentOrder(null);
-        setQrUrl(null);
-        showToast('Order settled!', 'success');
-        fetchOrders(selectedStoreId, true);
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Failed to settle: ' + (err.response?.data?.message || err.message), 'error');
-    } finally {
-      setActionLoading(null);
-    }
-  };
-
-  const handleWaiterModalVerify = async () => {
-    if (!paymentOrder) return { success: false, message: 'No active payment' };
-    setIsVerifying(true);
-    try {
-      if (paymentOrder.tableSessionId) {
-        const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/verify-payment`, { manual: true });
-        if (res.data.success && res.data.data.status === 'SETTLED') {
-          const sessId = paymentOrder.tableSessionId;
-          const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
-          if (billRes.data.success) {
-            const b = billRes.data.data;
-            setReceiptOrder({
-              id: `TAB-${b.session.pin}`,
-              createdAt: b.session.createdAt,
-              type: 'DINE_IN',
-              paymentModel: 'POSTPAID',
-              paymentMethod: b.session.paymentMethod || 'ONLINE',
-              cashAmount: b.session.cashAmount || 0,
-              onlineAmount: b.session.onlineAmount || b.totalAmount,
-              table: { tableNumber: b.session.tableNumber },
-              subTotal: b.subTotal,
-              discountAmount: b.discountAmount,
-              taxAmount: b.taxAmount,
-              totalAmount: b.totalAmount,
-              items: b.aggregatedItems.map((i) => ({
-                quantity: i.quantity,
-                priceAtOrder: i.price,
-                menuItem: { name: i.name },
-                modifiers: (i.modifiers || []).map((m) => ({ modifierOption: { name: m } })),
-              })),
-            });
-          }
-          setPaymentOrder(null);
-          setQrUrl(null);
-          showToast('Payment received!', 'success');
-          fetchOrders(selectedStoreId, true);
-          return { success: true };
-        }
-        return { success: false, message: res.data.data?.message || 'Payment not yet confirmed.' };
-      }
-
-      let isSuccess = false;
-      try {
-        const verifyRes = await api.post(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/verify-payment`, { manual: true });
-        if (verifyRes.data.success && (verifyRes.data.data.status === 'PROCESSING' || verifyRes.data.data.status === 'SETTLED' || verifyRes.data.data.success)) {
-          isSuccess = true;
-        }
-      } catch (e) { }
-
-      if (!isSuccess) {
-        const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
-        if (res.data.success && res.data.data.status === 'success') isSuccess = true;
-      }
-
-      if (isSuccess) {
-        const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}`);
-        if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
-        setPaymentOrder(null);
-        setQrUrl(null);
-        showToast('Payment received!', 'success');
-        fetchOrders(selectedStoreId, true);
-        return { success: true };
-      }
-      return { success: false, message: 'Payment not received yet.' };
-    } catch (err) {
-      console.error(err);
-      return { success: false, message: 'Verification error' };
-    } finally {
-      setIsVerifying(false);
-    }
-  };
-
-  useEffect(() => {
-    let intervalId;
-    let attempts = 0;
-
-    if (qrUrl && paymentOrder && selectedStoreId) {
-      intervalId = setInterval(async () => {
-        attempts++;
-        if (attempts > 100) {
-          clearInterval(intervalId);
-          showToast('Payment QR expired. Please generate again.', 'error');
-          setQrUrl(null);
-          return;
-        }
-        try {
-          if (paymentOrder.tableSessionId) {
-            const res = await api.post(`/stores/${selectedStoreId}/orders/sessions/${paymentOrder.tableSessionId}/verify-payment`, { polling: true });
-            if (res.data.success && res.data.data.status === 'SETTLED') {
-              clearInterval(intervalId);
-              showToast('Payment received!', 'success');
-              const sessId = paymentOrder.tableSessionId;
-              setPaymentOrder(null);
-              setQrUrl(null);
-
-              const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${sessId}`);
-              if (billRes.data.success) {
-                const b = billRes.data.data;
-                setReceiptOrder({
-                  id: `TAB-${b.session.pin}`,
-                  createdAt: b.session.createdAt,
-                  type: 'DINE_IN',
-                  paymentModel: 'POSTPAID',
-                  table: { tableNumber: b.session.tableNumber },
-                  subTotal: b.subTotal,
-                  discountAmount: b.discountAmount,
-                  taxAmount: b.taxAmount,
-                  totalAmount: b.totalAmount,
-                  items: b.aggregatedItems.map((i) => ({
-                    quantity: i.quantity,
-                    priceAtOrder: i.price,
-                    menuItem: { name: i.name },
-                    modifiers: (i.modifiers || []).map((m) => ({ modifierOption: { name: m } })),
-                  })),
-                });
-              }
-              fetchOrders(selectedStoreId, true);
-            }
-          } else {
-            const res = await api.get(`/stores/${selectedStoreId}/orders/${paymentOrder.id}/payment-status`);
-            if (res.data.success && res.data.data.status === 'success') {
-              clearInterval(intervalId);
-              showToast('Payment received!', 'success');
-              const orderId = paymentOrder.id;
-              setPaymentOrder(null);
-              setQrUrl(null);
-              const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${orderId}`);
-              if (orderRes.data.success) setReceiptOrder(orderRes.data.data);
-              fetchOrders(selectedStoreId, true);
-            }
-          }
-        } catch (err) {
-          console.error('Polling error:', err);
-        }
-      }, 3000);
-    }
-
-    return () => {
-      if (intervalId) clearInterval(intervalId);
-    };
-  }, [qrUrl, paymentOrder, selectedStoreId, fetchOrders]);
 
   const handleStoreChange = (storeId) => {
     setSelectedStoreId(storeId);
@@ -629,18 +397,40 @@ export const WaiterTasks = () => {
     <div className="relative flex h-full flex-col bg-[#FAFAF9] dark:bg-zinc-950">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      <PaymentBifurcationModal
-        isOpen={Boolean(paymentOrder)}
-        onClose={() => { setPaymentOrder(null); setQrUrl(null); }}
-        totalAmount={paymentOrder?.totalAmount || 0}
+      <CancelOrderDialog
+        storeId={selectedStoreId}
+        order={rejectingOrder}
+        onClose={() => setRejectingOrder(null)}
+        onCancelled={() => {
+          const id = rejectingOrder.id;
+          setOrders((prev) => prev.filter((o) => o.id !== id));
+          showToast('Order rejected', 'success');
+        }}
+      />
+
+      <PaymentCollectorSheet
+        open={Boolean(paymentOrder)}
         title="Collect payment"
         subtitle={paymentOrder?.table ? `Table ${paymentOrder.table.tableNumber}` : 'Takeaway'}
-        onSettle={handleWaiterModalSettle}
-        onGenerateQR={handleWaiterGenerateQR}
-        isSubmitting={actionLoading === 'settle'}
-        isVerifying={isVerifying}
-        onVerifyPayment={handleWaiterModalVerify}
-        externalQrUrl={qrUrl}
+        storeId={selectedStoreId}
+        orderId={paymentOrder?.tableSessionId ? undefined : paymentOrder?.id}
+        tableSessionId={paymentOrder?.tableSessionId || undefined}
+        onClose={() => setPaymentOrder(null)}
+        onSettled={async (summary) => {
+          const target = paymentOrder;
+          setPaymentOrder(null);
+          showToast('Payment received!', 'success');
+          fetchOrders(selectedStoreId, true);
+          try {
+            if (target?.tableSessionId) {
+              const billRes = await api.get(`/stores/${selectedStoreId}/orders/sessions/${target.tableSessionId}`);
+              setReceiptOrder(sessionBillToReceipt(billRes.data.data, summary.payments));
+            } else if (target) {
+              const orderRes = await api.get(`/stores/${selectedStoreId}/orders/${target.id}`);
+              setReceiptOrder(orderRes.data.data);
+            }
+          } catch { /* receipt is optional */ }
+        }}
       />
 
       {receiptOrder && (
@@ -857,7 +647,7 @@ export const WaiterTasks = () => {
                       <Button
                         variant="destructive"
                         size="lg"
-                        onClick={() => updateStatus(order.id, 'CANCELLED')}
+                        onClick={() => setRejectingOrder(order)}
                         disabled={actionLoading === order.id}
                         className="rounded-none rounded-l-full w-full"
                       >
@@ -950,7 +740,6 @@ export const WaiterTasks = () => {
                             totalAmount: groupTotal,
                             orders: group.orders,
                           });
-                          setQrUrl(null);
                         }}
                       >
                         <Money01Icon size={18} className="mr-2" /> Collect ₹{groupTotal}

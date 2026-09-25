@@ -2,6 +2,7 @@ const app = require("./app");
 const { env } = require("./config/env");
 const { startAllJobs, stopAllJobs } = require("./jobs");
 const { getPrismaClient, disconnectPrisma } = require("./lib/prisma");
+const { startPaymentReconciler, stopPaymentReconciler } = require("./modules/payments/payment-service");
 
 const port = env.server.port;
 
@@ -14,11 +15,13 @@ const server = app.listen(port, "0.0.0.0", async () => {
     console.error("Failed to connect eagerly to database:", err.message);
   }
   await startAllJobs();
+  startPaymentReconciler();
 });
 
 async function handleShutdown(signal) {
   console.log(`Received ${signal}, closing server and disconnecting database...`);
   stopAllJobs();
+  stopPaymentReconciler();
   server.close(async () => {
     await disconnectPrisma();
     process.exit(0);

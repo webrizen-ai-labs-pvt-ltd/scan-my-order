@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { getSessionId } from '../lib/session';
+import { computePromoDiscount, computeOrderTotals } from '@smo/shared/pricing';
 import { useCartStore } from '../store/cart-store';
 import { useAuthStore } from '../store/authStore';
 import { GoogleLogin } from '@react-oauth/google';
@@ -496,19 +497,28 @@ export const StoreMenuPage = () => {
 
       if (paymentModel === 'PREPAID' && paymentIntent) {
         const options = {
-          key: store.razorpayKeyId,
+          key: paymentIntent.key || store.razorpayKeyId,
           amount: paymentIntent.amount,
           currency: paymentIntent.currency,
           name: store.tenant?.name,
           description: `Order at ${store.name}`,
           image: store.tenant?.logo,
           order_id: paymentIntent.id,
-          handler: async () => {
+          handler: async (response) => {
+            // The server checks Razorpay's signature/status; the order only goes to the kitchen once it's confirmed
             try {
-              await api.post(`/public/stores/${store.id}/orders/${paymentIntent.receipt}/verify-payment`);
-              showToast('Payment successful! Order sent to kitchen.', 'success');
-            } catch (err) {
-              showToast('Payment verified, but there was a slight delay.', 'success');
+              const verifyRes = await api.post(`/public/stores/${store.id}/orders/${res.data.data.order.id}/verify-payment`, {
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              });
+              if (verifyRes.data.data?.success) {
+                showToast('Payment successful! Order sent to kitchen.', 'success');
+              } else {
+                showToast('Payment received — confirming with the bank. Your order will start shortly.', 'info');
+              }
+            } catch {
+              showToast('Payment received — confirming with the bank. Your order will start shortly.', 'info');
             }
             clearCart();
             setIsCheckoutOpen(false);
@@ -649,18 +659,7 @@ export const StoreMenuPage = () => {
 
   // Bill Math
   const subTotal = getTotalPrice();
-  let discountAmount = 0;
-  if (appliedPromo) {
-    if (appliedPromo.discountType === 'PERCENTAGE') {
-      discountAmount = Math.round(subTotal * (appliedPromo.discountValue / 100));
-      if (appliedPromo.maxDiscount && discountAmount > appliedPromo.maxDiscount) {
-        discountAmount = appliedPromo.maxDiscount;
-      }
-    } else {
-      discountAmount = appliedPromo.discountValue;
-    }
-    if (discountAmount > subTotal) discountAmount = subTotal;
-  }
+  const discountAmount = computePromoDiscount(subTotal, appliedPromo);
 
   // Wallet Redemption Math
   const loyaltyRules = walletData?.settings || walletData?.storeRules;
@@ -677,11 +676,14 @@ export const StoreMenuPage = () => {
     }
   }
 
-  const taxAmount = store?.taxRules?.reduce((acc, tax) => {
-    return acc + Math.round(subTotal * (tax.rate / 100));
-  }, 0) || 0;
-
-  const finalTotal = Math.max(0, subTotal - discountAmount - appliedWalletCredits + taxAmount);
+  // Same formula as the server: tax applies after promo and store-credit discounts
+  const billTotals = computeOrderTotals({
+    subTotal,
+    promo: appliedPromo,
+    walletDiscount: appliedWalletCredits,
+    taxRules: store?.taxRules,
+  });
+  const finalTotal = billTotals.totalAmount;
 
   // ═════════════════════════════════════════════════════════════════════════
   // LOADING SKELETON
@@ -1391,10 +1393,10 @@ export const StoreMenuPage = () => {
                       <span>-₹{appliedWalletCredits}</span>
                     </div>
                   )}
-                  {store?.taxRules?.map((tax, idx) => (
+                  {billTotals.taxBreakdown.map((tax, idx) => (
                     <div key={idx} className="flex justify-between text-zinc-500 dark:text-zinc-400">
                       <span>{tax.name} ({tax.rate}%)</span>
-                      <span>₹{Math.round(subTotal * (tax.rate / 100))}</span>
+                      <span>₹{tax.amount}</span>
                     </div>
                   ))}
                   <div className="mt-1.5 flex justify-between border-t border-zinc-100 pt-2 text-base font-extrabold text-zinc-900 dark:border-zinc-800 dark:text-zinc-50">

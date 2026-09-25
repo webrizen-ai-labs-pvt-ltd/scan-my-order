@@ -107,6 +107,21 @@ enum PaymentMethod {
   SPLIT
 }
 
+// How a single tender line was collected
+enum PaymentChannel {
+  RAZORPAY     // Razorpay QR code, payment link or checkout; verified with the gateway
+  UPI_OFFLINE  // Store's own UPI ID, confirmed manually by staff
+  CASH
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
 enum OrderStatus {
   DRAFT
   PENDING_VERIFICATION
@@ -141,6 +156,9 @@ model Tenant {
   gstin            String?
   companyLegalName String?
   registeredAddress String?
+  // Default UPI ID for offline (manually confirmed) UPI collection; stores may override
+  offlineUpiId        String?
+  offlineUpiPayeeName String?
   stores           Store[]
   users            User[]
   subscription     TenantSubscription?
@@ -172,7 +190,11 @@ model Store {
   waiterCalls  WaiterCall[]
   feedbacks    Feedback[]
   googleReviewUrl String?
-  
+  // Overrides Tenant.offlineUpiId for this location when set
+  offlineUpiId        String?
+  offlineUpiPayeeName String?
+  payments            Payment[]
+
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
   taxRules     Json?       @default("[]")
   promoCodes   PromoCode[]
@@ -213,6 +235,8 @@ model User {
   reservations TableReservation[]
   pushSubscriptions PushSubscription[]
   notifications     Notification[]
+  collectedPayments Payment[] @relation("CollectedPayments")
+  cancelledOrders   Order[]   @relation("CancelledOrders")
 
   @@unique([tenantId, email])
   @@index([role])
@@ -266,6 +290,8 @@ model TenantPaymentGateway {
   merchantId   String
   apiKey       String
   secretKey    String?
+  // Encrypted Razorpay webhook secret (optional; payments are also verified by polling)
+  webhookSecret String?
   isActive     Boolean         @default(true)
   createdAt    DateTime        @default(now())
   updatedAt    DateTime        @updatedAt
@@ -454,6 +480,8 @@ model Order {
   paymentMethod   PaymentMethod?
   cashAmount      Int            @default(0)
   onlineAmount    Int            @default(0)
+  // Set once payments cover the bill; a paid order auto-settles when served
+  paidAt          DateTime?
   status          OrderStatus    @default(DRAFT)
   
   subTotal        Int            @default(0)
@@ -463,11 +491,20 @@ model Order {
   promoCodeId     String?
   promoCode       PromoCode?     @relation(fields: [promoCodeId], references: [id])
   totalAmount     Int            @default(0) 
+  // Tax rules in force when the order was placed; edits keep using these rates
+  taxRules        Json?
+
+  // Set when staff cancel the order (reason is mandatory)
+  cancelReason    String?
+  cancelledAt     DateTime?
+  cancelledById   String?
+  cancelledBy     User?          @relation("CancelledOrders", fields: [cancelledById], references: [id], onDelete: SetNull)
   
   paymentLinkId   String?
   paymentLinkUrl  String?
   
   items           OrderItem[]
+  payments        Payment[]
   feedbacks       Feedback[]
   walletTransactions CustomerWalletTransaction[]
 
@@ -479,6 +516,46 @@ model Order {
   @@index([sessionId])
   @@index([tableSessionId])
   @@index([tableId])
+}
+
+// One tender line against an order or a whole table session.
+// A bill is settled once the PAID payments cover its total.
+model Payment {
+  id                String         @id @default(cuid())
+  storeId           String
+  store             Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId           String?
+  order             Order?         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tableSessionId    String?
+  tableSession      TableSession?  @relation(fields: [tableSessionId], references: [id], onDelete: Cascade)
+
+  channel           PaymentChannel
+  status            PaymentStatus  @default(PENDING)
+  amount            Int
+
+  // Gateway tracking (RAZORPAY only)
+  providerKind      String?        // 'QR_CODE' | 'PAYMENT_LINK' | 'ORDER'
+  providerRef       String?        @unique // Razorpay qr_code / payment_link / order id
+  providerPaymentId String?        @unique // Razorpay pay_xxx once captured
+  qrImageUrl        String?        // Hosted QR image (Razorpay QR codes)
+  qrPayload         String?        // String to encode as QR (upi:// intent or link URL)
+
+  // Cash drawer details
+  cashTendered      Int?
+  changeDue         Int?
+
+  collectedById     String?
+  collectedBy       User?          @relation("CollectedPayments", fields: [collectedById], references: [id], onDelete: SetNull)
+  paidAt            DateTime?
+  expiresAt         DateTime?
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([orderId])
+  @@index([tableSessionId])
+  @@index([storeId, status])
+  @@index([status, channel])
 }
 
 model OrderItem {
@@ -561,6 +638,7 @@ model TableSession {
   cashAmount      Int?               @default(0)
   onlineAmount    Int?               @default(0)
   orders          Order[]
+  payments        Payment[]
 
   lastOrderAt     DateTime           @default(now())
   createdAt       DateTime           @default(now())

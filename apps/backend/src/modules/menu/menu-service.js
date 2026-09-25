@@ -5,7 +5,9 @@ const { storeTenantCache, publicMenuCache } = require("../../lib/cache");
 
 // Helper to check if actor has access to modify a store's data
 async function verifyStoreAccess(actor, storeId) {
-  if (!actor || actor.role === userRoles.superAdmin) return;
+  // Callers that act as the system must skip this check explicitly; a missing actor is never trusted
+  if (!actor) throw createHttpError(401, "Authentication required");
+  if (actor.role === userRoles.superAdmin) return;
   
   let tenantId = storeTenantCache.get(storeId);
   if (!tenantId) {
@@ -29,9 +31,9 @@ async function verifyStoreAccess(actor, storeId) {
     return;
   }
   
-  // Store Manager: access if explicitly assigned to store OR if belonging to the store's tenant
+  // Store Manager: scoped to their assigned store; an unassigned manager covers the whole tenant
   if (actor.role === userRoles.storeManager) {
-    if (actor.storeId === storeId || (actor.tenantId && actor.tenantId === tenantId)) {
+    if (actor.storeId === storeId || (!actor.storeId && actor.tenantId && actor.tenantId === tenantId)) {
       return;
     }
     throw createHttpError(403, "Forbidden");

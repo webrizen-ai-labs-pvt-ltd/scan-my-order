@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
+import { CancelOrderDialog } from '../components/pos/cancel-order-dialog';
 import { useAuthStore } from '../store/authStore';
 import { 
   Card, CardContent, CardHeader, CardTitle, 
@@ -9,7 +11,6 @@ import {
   Skeleton
 } from '@smo/ui';
 import { Search01Icon, FilterIcon, PrinterIcon, Download01Icon, Store01Icon, Edit02Icon, Shield01Icon, CheckmarkCircle02Icon, AlertCircleIcon, Loading03Icon } from 'hugeicons-react';
-import { OrderItemsEditModal } from '../components/order-items-edit-modal';
 
 const ORDER_STATUSES = ['DRAFT', 'PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED', 'SETTLED', 'CANCELLED'];
 const PAYMENT_MODELS = ['PREPAID', 'POSTPAID'];
@@ -17,8 +18,9 @@ const ORIGINS = ['POS', 'QR_MENU', 'KIOSK', 'AGGREGATOR'];
 
 export const Orders = () => {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const [cancellingOrder, setCancellingOrder] = useState(null);
   const isManager = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role);
-  const [editingOrder, setEditingOrder] = useState(null);
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState(user?.store?.id || null);
   const [currentStore, setCurrentStore] = useState(user?.store || null);
@@ -103,9 +105,10 @@ export const Orders = () => {
     const targetOrder = orders.find(o => o.id === orderId) || (selectedOrder?.id === orderId ? selectedOrder : null);
     if (targetOrder?.status === newStatus) return;
 
+    // Cancelling needs a reason, collected by the cancel dialog
     if (newStatus === 'CANCELLED') {
-      const ok = window.confirm(`Are you sure you want to mark Order #${orderId.slice(-6).toUpperCase()} as CANCELLED? Deducted raw ingredients will be restored to inventory.`);
-      if (!ok) return;
+      setCancellingOrder(targetOrder || { id: orderId });
+      return;
     }
 
     setUpdatingOrderId(orderId);
@@ -453,7 +456,19 @@ export const Orders = () => {
                     {selectedOrder.status.replace('_', ' ')}
                   </Badge>
                 </div>
-                
+
+                {selectedOrder.status === 'CANCELLED' && selectedOrder.cancelReason && (
+                  <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
+                    <span className="font-bold">Cancelled:</span> {selectedOrder.cancelReason}
+                    {(selectedOrder.cancelledBy?.name || selectedOrder.cancelledAt) && (
+                      <span className="block text-[11px] opacity-80">
+                        {selectedOrder.cancelledBy?.name ? `by ${selectedOrder.cancelledBy.name}` : ''}
+                        {selectedOrder.cancelledAt ? ` · ${new Date(selectedOrder.cancelledAt).toLocaleString()}` : ''}
+                      </span>
+                    )}
+                  </div>
+                )}
+
                 <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-2">
                   {selectedOrder.items.map((item, idx) => (
                     <div key={idx} className="flex justify-between text-sm">
@@ -560,7 +575,7 @@ export const Orders = () => {
                     variant="outline"
                     className="w-full border-amber-400/80 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 font-semibold"
                     onClick={() => {
-                      setEditingOrder(selectedOrder);
+                      navigate(`/dashboard/pos/orders/${selectedOrder.id}/edit?store=${selectedStoreId}&returnTo=${encodeURIComponent('/dashboard/orders')}`);
                     }}
                   >
                     <Edit02Icon size={16} className="mr-2 text-amber-600" />
@@ -579,16 +594,15 @@ export const Orders = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Manager Order Items Edit Modal */}
-      <OrderItemsEditModal
-        isOpen={!!editingOrder}
-        onClose={() => setEditingOrder(null)}
+      <CancelOrderDialog
         storeId={selectedStoreId}
-        order={editingOrder}
-        onOrderUpdated={(updatedOrder) => {
-          setSelectedOrder(updatedOrder);
-          setEditingOrder(null);
-          fetchOrders(pagination.current);
+        order={cancellingOrder}
+        onClose={() => setCancellingOrder(null)}
+        onCancelled={(updated, reason) => {
+          const id = cancellingOrder.id;
+          setOrders(prev => prev.map(o => (o.id === id ? { ...o, ...updated } : o)));
+          if (selectedOrder?.id === id) setSelectedOrder(prev => ({ ...prev, ...updated }));
+          setStatusFeedback({ text: `Order #${id.slice(-6).toUpperCase()} cancelled — ${reason}`, error: false });
         }}
       />
     </div>

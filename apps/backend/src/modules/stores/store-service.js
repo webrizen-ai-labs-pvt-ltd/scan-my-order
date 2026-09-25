@@ -190,7 +190,7 @@ async function getStoreById(actor, storeId) {
       throw createHttpError(403, "Forbidden");
     }
     if (actor.role === userRoles.storeManager) {
-      if (actor.storeId !== store.id && actor.tenantId !== store.tenantId) {
+      if (actor.storeId ? actor.storeId !== store.id : actor.tenantId !== store.tenantId) {
         throw createHttpError(403, "Forbidden");
       }
     } else if ([userRoles.waiter, userRoles.cashier, userRoles.kitchenStaff].includes(actor.role)) {
@@ -220,13 +220,24 @@ async function updateStore(actor, storeId, input) {
 
   const { name, banner, status, adminUser, adminUserId, address, contactPhone, contactEmail, operatingHours, tenantId, taxRules } = input;
 
+  // Per-store UPI override: only brand owners decide where money is paid
+  const upiOverride = {};
+  if (input.offlineUpiId !== undefined) {
+    if (actor.role !== userRoles.superAdmin && actor.role !== userRoles.tenantAdmin) {
+      throw createHttpError(403, "Only the brand owner can change the store's UPI ID");
+    }
+    const { normalizeUpiId } = require("../tenants/tenant-service");
+    upiOverride.offlineUpiId = normalizeUpiId(input.offlineUpiId);
+    upiOverride.offlineUpiPayeeName = input.offlineUpiPayeeName ? String(input.offlineUpiPayeeName).trim().slice(0, 50) : null;
+  }
+
   const store = await prisma.$transaction(async (tx) => {
     // Determine the target tenant ID based on whether we are moving the store or keeping it
     const targetTenantId = (actor.role === userRoles.superAdmin && tenantId) ? tenantId : existingStore.tenantId;
 
     const updatedStore = await tx.store.update({
       where: { id: storeId },
-      data: { name, banner, status, address, contactPhone, contactEmail, operatingHours, tenantId: targetTenantId, taxRules },
+      data: { name, banner, status, address, contactPhone, contactEmail, operatingHours, tenantId: targetTenantId, taxRules, ...upiOverride },
       include: { tenant: true }
     });
 

@@ -6,7 +6,8 @@ import {
   Building02Icon, 
   Shield01Icon, 
   AlertCircleIcon, 
-  CheckmarkCircle02Icon 
+  CheckmarkCircle02Icon,
+  SmartPhone01Icon
 } from 'hugeicons-react';
 
 const TAILWIND_COLORS = [
@@ -42,7 +43,9 @@ export const BrandForm = ({ initialData, onSuccess }) => {
     description: initialData?.description || '',
     gstin: initialData?.gstin || '',
     companyLegalName: initialData?.companyLegalName || '',
-    registeredAddress: initialData?.registeredAddress || ''
+    registeredAddress: initialData?.registeredAddress || '',
+    offlineUpiId: initialData?.offlineUpiId || '',
+    offlineUpiPayeeName: initialData?.offlineUpiPayeeName || ''
   });
 
   const handleSubmit = async (e) => {
@@ -214,6 +217,49 @@ export const BrandForm = ({ initialData, onSuccess }) => {
                     value={formData.registeredAddress} 
                     onChange={e => setFormData(p => ({...p, registeredAddress: e.target.value}))} 
                     placeholder="Full legal headquarters address" 
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section className="space-y-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-400 font-mono">03</span>
+            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
+              <SmartPhone01Icon size={16} className="text-zinc-500" />
+              Payments — own UPI QR
+            </h3>
+            <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-800" />
+          </div>
+
+          <Card className="border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950">
+            <CardContent className="p-6 space-y-4">
+              <p className="text-sm text-zinc-500">
+                Used for the POS <strong>"UPI (own QR)"</strong> option: the POS shows a QR for your UPI ID with the amount filled in,
+                and staff tap <em>Mark received</em> after seeing the money arrive. Individual stores can override this in Stores Setup.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-1.5">
+                  <Label htmlFor="offlineUpiId" className="text-zinc-600 dark:text-zinc-400">UPI ID</Label>
+                  <Input
+                    id="offlineUpiId"
+                    value={formData.offlineUpiId}
+                    onChange={e => setFormData(p => ({...p, offlineUpiId: e.target.value.trim()}))}
+                    placeholder="e.g. yourcafe@okhdfcbank"
+                    className="font-mono"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="offlineUpiPayeeName" className="text-zinc-600 dark:text-zinc-400">Name shown to payer</Label>
+                  <Input
+                    id="offlineUpiPayeeName"
+                    value={formData.offlineUpiPayeeName}
+                    onChange={e => setFormData(p => ({...p, offlineUpiPayeeName: e.target.value}))}
+                    placeholder={formData.name || 'Brand name'}
+                    maxLength={50}
                   />
                 </div>
               </div>

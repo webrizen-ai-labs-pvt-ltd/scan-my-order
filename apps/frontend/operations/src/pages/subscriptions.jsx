@@ -36,7 +36,8 @@ export const Subscriptions = () => {
     provider: 'RAZORPAY',
     merchantId: '',
     apiKey: '',
-    secretKey: ''
+    secretKey: '',
+    webhookSecret: ''
   });
 
   // Check URL params for payment redirects
@@ -103,9 +104,12 @@ export const Subscriptions = () => {
     setIsSubmitting(true);
     setStatusMsg({ text: '', error: false });
     try {
-      await api.post('/billing/gateways', gatewayForm);
+      // Blank fields keep the saved value; only send the webhook secret when it was typed
+      const { webhookSecret, ...rest } = gatewayForm;
+      const res = await api.post('/billing/gateways', webhookSecret ? { ...rest, webhookSecret } : rest);
+      setGateways(prev => [...prev.filter(g => g.provider !== 'RAZORPAY'), res.data.data]);
       setStatusMsg({ text: 'Payment Gateway credentials saved successfully!', error: false });
-      setGatewayForm({ provider: 'RAZORPAY', merchantId: '', apiKey: '', secretKey: '' });
+      setGatewayForm({ provider: 'RAZORPAY', merchantId: '', apiKey: '', secretKey: '', webhookSecret: '' });
       fetchData(); // Refresh to show Active status
     } catch (err) {
       setStatusMsg({ text: err.response?.data?.error?.message || 'Failed to save gateway credentials', error: true });
@@ -331,7 +335,21 @@ export const Subscriptions = () => {
                 <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-900/30 p-4 rounded-lg text-sm text-blue-800 dark:text-blue-300">
                   <p><strong>Bring Your Own API Key (BYOAK)</strong> allows your stores to accept digital payments from customers placing orders via QR menus or POS.</p>
                   <p className="mt-1">The keys are securely encrypted before being saved in our database.</p>
+                  <p className="mt-1">POS online payments use Razorpay <strong>QR Codes</strong> (single-use UPI QR for the exact amount). QR Codes must be activated on your Razorpay account — ask Razorpay support or check Dashboard → Payment Products. Payments are confirmed automatically by checking with Razorpay — no webhook is required.</p>
                 </div>
+                {razorpayGateway?.qrCodes && (
+                  <div className={`rounded-lg border p-3 text-xs ${razorpayGateway.qrCodes.enabled
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300'
+                    : 'border-amber-300 bg-amber-50 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-200'}`}>
+                    <strong>UPI QR Codes: {razorpayGateway.qrCodes.enabled ? 'Enabled' : 'Not available'}</strong>
+                    {!razorpayGateway.qrCodes.enabled && razorpayGateway.qrCodes.reason && <div className="mt-0.5">{razorpayGateway.qrCodes.reason}</div>}
+                  </div>
+                )}
+                {razorpayGateway?.hasKeys && (
+                  <div className="text-xs text-zinc-500">
+                    Saved keys: <span className="font-semibold">{razorpayGateway.keyMode === 'LIVE' ? 'Live mode' : razorpayGateway.keyMode === 'TEST' ? 'Test mode' : 'Unknown mode'}</span>. Leave a key field blank to keep it.
+                  </div>
+                )}
                 
                 <div className="space-y-4">
                   <div className="space-y-1.5">
@@ -349,7 +367,7 @@ export const Subscriptions = () => {
                       <Label htmlFor="apiKey">Key ID *</Label>
                       <Input 
                         id="apiKey" 
-                        required 
+                        required={!razorpayGateway?.hasKeys}
                         value={gatewayForm.apiKey} 
                         onChange={e => setGatewayForm(p => ({...p, apiKey: e.target.value}))} 
                         placeholder={razorpayGateway?.hasKeys ? "••••••••••••" : "rzp_live_..."} 
@@ -361,12 +379,30 @@ export const Subscriptions = () => {
                       <Input 
                         id="secretKey" 
                         type="password"
-                        required 
+                        required={!razorpayGateway?.hasKeys}
                         value={gatewayForm.secretKey} 
                         onChange={e => setGatewayForm(p => ({...p, secretKey: e.target.value}))} 
                         placeholder={razorpayGateway?.hasKeys ? "••••••••••••••••••••" : "Your Razorpay secret"} 
                       />
                     </div>
+                  </div>
+
+                  <div className="space-y-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3">
+                    <Label htmlFor="webhookSecret">Webhook secret (optional, faster confirmations)</Label>
+                    <Input
+                      id="webhookSecret"
+                      type="password"
+                      value={gatewayForm.webhookSecret}
+                      onChange={e => setGatewayForm(p => ({...p, webhookSecret: e.target.value}))}
+                      placeholder={razorpayGateway?.hasWebhookSecret ? "Saved — type to replace" : "Secret you set in Razorpay → Webhooks"}
+                    />
+                    {razorpayGateway?.webhookPath && (
+                      <p className="text-[11px] text-zinc-500">
+                        In Razorpay Dashboard → Webhooks, add URL{' '}
+                        <code className="break-all bg-zinc-100 dark:bg-zinc-900 px-1 rounded">{(import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/api$/, '')}{razorpayGateway.webhookPath}</code>{' '}
+                        with events <code>qr_code.credited</code>, <code>payment_link.paid</code> and <code>payment.captured</code>.
+                      </p>
+                    )}
                   </div>
                 </div>
 

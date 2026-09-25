@@ -1,9 +1,8 @@
 const crypto = require("crypto");
-const Razorpay = require("razorpay");
 const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
-const { decrypt } = require("../../lib/encryption");
+const { computeOrderTotals } = require("@smo/shared/pricing");
 const { broadcastToStore, broadcastToCustomer } = require("./sse-service");
 const { sendNotification } = require("../notifications/notification-service");
 const { evaluateMenuItemAvailability } = require("../inventory/inventory-service");
@@ -126,8 +125,54 @@ async function getOrCreateSystemOpenItem(prisma, storeId) {
   return openItem;
 }
 
+const MAX_CART_LINES = 100;
+const MAX_LINE_QUANTITY = 99;
+
+// Rejects malformed carts before any pricing happens. Custom/open dishes and
+// priced ingredients are staff-only: customers could otherwise set their own prices.
+function validateCartInput(itemsInput, { allowCustom }) {
+  if (!Array.isArray(itemsInput) || itemsInput.length === 0) {
+    throw createHttpError(400, "Order must contain at least one item");
+  }
+  if (itemsInput.length > MAX_CART_LINES) {
+    throw createHttpError(400, `An order can have at most ${MAX_CART_LINES} lines`);
+  }
+
+  for (const item of itemsInput) {
+    const quantity = item.quantity === undefined ? 1 : Number(item.quantity);
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_LINE_QUANTITY) {
+      throw createHttpError(400, `Quantity must be a whole number between 1 and ${MAX_LINE_QUANTITY}`);
+    }
+
+    const isCustom = Boolean(item.isCustom || !item.menuItemId);
+    const hasIngredients = Array.isArray(item.customIngredients) && item.customIngredients.length > 0;
+    if (!allowCustom && (isCustom || item.customPrice !== undefined || hasIngredients)) {
+      throw createHttpError(400, "Custom dishes and ingredient changes can only be added by staff");
+    }
+
+    if (isCustom) {
+      const price = Number(item.customPrice);
+      if (!Number.isInteger(price) || price < 0) {
+        throw createHttpError(400, "Custom dish price must be a whole number of rupees (0 or more)");
+      }
+    }
+
+    if (hasIngredients) {
+      for (const ing of item.customIngredients) {
+        const price = ing.price === undefined || ing.price === null || ing.price === '' ? 0 : Number(ing.price);
+        const qty = Number(ing.quantity);
+        if (!Number.isFinite(price) || price < 0 || !Number.isFinite(qty) || qty < 0) {
+          throw createHttpError(400, "Ingredient price and quantity must be 0 or more");
+        }
+      }
+    }
+  }
+}
+
 // Helper to deduce price from menu and calculate totals
-async function buildCartItems(prisma, storeId, itemsInput) {
+// alreadyOrderedIds: menu items already on the order being edited — they stay even if now sold out
+async function buildCartItems(prisma, storeId, itemsInput, { allowCustom = false, alreadyOrderedIds = new Set() } = {}) {
+  validateCartInput(itemsInput, { allowCustom });
   let totalAmount = 0;
   const items = [];
 
@@ -164,7 +209,8 @@ async function buildCartItems(prisma, storeId, itemsInput) {
     const targetMenuItemId = isCustom ? openItemRecord?.id : item.menuItemId;
     const menuItem = menuItemsMap.get(targetMenuItemId);
     
-    if (!menuItem || menuItem.storeId !== storeId || (!isCustom && (menuItem.isManuallyDisabled || menuItem.isSystemDisabled))) {
+    const soldOut = menuItem && (menuItem.isManuallyDisabled || menuItem.isSystemDisabled) && !alreadyOrderedIds.has(menuItem.id);
+    if (!menuItem || menuItem.storeId !== storeId || (!isCustom && soldOut)) {
       throw createHttpError(400, `MenuItem ${targetMenuItemId} is not available`);
     }
     
@@ -196,13 +242,15 @@ async function buildCartItems(prisma, storeId, itemsInput) {
       }
     }
     
-    const quantity = item.quantity || 1;
+    const quantity = item.quantity === undefined ? 1 : Number(item.quantity);
     totalAmount += itemPrice * quantity;
 
+    // POS sends `notes`; older clients send `kitchenNotes`
+    const lineNote = String(item.kitchenNotes || item.notes || '').slice(0, 300);
     const encodedNotes = encodeKitchenNotes(
       isCustom ? (item.customName || 'Open Custom Dish') : item.customName,
       item.customIngredients || [],
-      item.kitchenNotes || ''
+      lineNote
     );
     
     items.push({
@@ -219,56 +267,127 @@ async function buildCartItems(prisma, storeId, itemsInput) {
   return { items, totalAmount };
 }
 
-// 1. DRAFT CREATION
+// Table sessions expire after this much inactivity — but only once every order on them is closed
+const SESSION_IDLE_MS = 2 * 60 * 60 * 1000;
+const OPEN_ORDER_STATUSES = ['DRAFT', 'PENDING_VERIFICATION', 'PENDING_PAYMENT', 'PROCESSING', 'READY', 'SERVED'];
+const STAFF_ROLES = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'CASHIER', 'WAITER'];
+
+function generateSessionPin() {
+  return String(crypto.randomInt(1000, 10000));
+}
+
+/**
+ * Closes an idle session only when nothing on it is still open or unpaid.
+ * Returns the session if it is still usable, otherwise null.
+ */
+async function expireIdleSession(db, session) {
+  if (!session) return null;
+  const lastActive = session.lastOrderAt || session.updatedAt || session.createdAt;
+  if (Date.now() - lastActive.getTime() < SESSION_IDLE_MS) return session;
+
+  const openOrders = await db.order.count({
+    where: { tableSessionId: session.id, status: { in: OPEN_ORDER_STATUSES } }
+  });
+  if (openOrders > 0) return session;
+
+  await db.tableSession.update({ where: { id: session.id }, data: { status: 'SETTLED' } });
+  return null;
+}
+
+/**
+ * Finds or creates the active session for a table under a per-table advisory lock,
+ * so two simultaneous first orders can't open two sessions.
+ */
+async function resolveTableSession(prisma, storeId, tableId, origin, input) {
+  return prisma.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`table_session:${tableId}`}))`;
+
+    let session = await tx.tableSession.findFirst({
+      where: { storeId, tableId, status: 'ACTIVE' },
+      orderBy: { createdAt: 'desc' }
+    });
+    session = await expireIdleSession(tx, session);
+
+    if (!session) {
+      return tx.tableSession.create({
+        data: {
+          storeId,
+          tableId,
+          pin: generateSessionPin(),
+          sessionToken: crypto.randomBytes(24).toString('hex'),
+          status: 'ACTIVE',
+          lastOrderAt: new Date()
+        }
+      });
+    }
+
+    // Guests joining an occupied table must prove they belong to it; staff don't need the PIN
+    if (origin === 'QR_MENU') {
+      const providedToken = input.sessionToken ? String(input.sessionToken).trim() : null;
+      const providedPin = input.pin ? String(input.pin).trim() : null;
+      const isTokenValid = Boolean(providedToken && session.sessionToken && providedToken === session.sessionToken);
+      const isPinValid = Boolean(providedPin && providedPin === session.pin);
+      if (!isTokenValid && !isPinValid) {
+        throw createHttpError(403, "Invalid Table PIN. An active dining session is in progress for this table. Please enter the 4-digit table PIN.");
+      }
+    }
+
+    return tx.tableSession.update({
+      where: { id: session.id },
+      data: {
+        sessionToken: session.sessionToken || crypto.randomBytes(24).toString('hex'),
+        lastOrderAt: new Date()
+      }
+    });
+  });
+}
+
+// 1. ORDER CREATION
 async function createOrder(storeId, actor, origin, input) {
   const prisma = getPrismaClient();
-  const { type, tableId, paymentModel, items: itemsInput, promoCode } = input;
-  
-  // Validation based on Origin
-  if (origin === 'QR_MENU') {
-    if (!tableId) throw createHttpError(400, "tableId is required for QR_MENU orders");
+  const { type, paymentModel, items: itemsInput, promoCode } = input;
+  const tableId = input.tableId || null;
+
+  if (!['PREPAID', 'POSTPAID'].includes(paymentModel)) {
+    throw createHttpError(400, "paymentModel must be PREPAID or POSTPAID");
   }
-  
-  const { items, totalAmount: subTotal } = await buildCartItems(prisma, storeId, itemsInput);
-  const store = await prisma.store.findUnique({ where: { id: storeId } });
+  if (!['DINE_IN', 'TAKEAWAY', 'DELIVERY'].includes(type)) {
+    throw createHttpError(400, "type must be DINE_IN, TAKEAWAY or DELIVERY");
+  }
+  if (origin === 'QR_MENU' && !tableId) {
+    throw createHttpError(400, "tableId is required for QR_MENU orders");
+  }
 
-  let discountAmount = 0;
-  let appliedPromoCodeId = null;
+  const isStaff = origin === 'POS' && actor && STAFF_ROLES.includes(actor.role);
+  if (origin === 'POS' && !isStaff) {
+    throw createHttpError(403, "Only store staff can place POS orders");
+  }
 
-  if (promoCode) {
-    const validPromo = await prisma.promoCode.findUnique({
-       where: { storeId_code: { storeId, code: promoCode.toUpperCase() } }
-    });
-    
-    if (validPromo && validPromo.isActive && (!validPromo.validUntil || validPromo.validUntil > new Date())) {
-       if (subTotal >= validPromo.minOrderValue) {
-          if (validPromo.discountType === 'PERCENTAGE') {
-             discountAmount = Math.round(subTotal * (validPromo.discountValue / 100));
-             if (validPromo.maxDiscount && discountAmount > validPromo.maxDiscount) {
-                discountAmount = validPromo.maxDiscount;
-             }
-          } else {
-             discountAmount = validPromo.discountValue;
-          }
-          if (discountAmount > subTotal) discountAmount = subTotal;
-          appliedPromoCodeId = validPromo.id;
-       } else {
-          throw createHttpError(400, `Promo code requires minimum order value of ₹${validPromo.minOrderValue}`);
-       }
-    } else {
-       throw createHttpError(400, "Invalid or expired promo code");
+  if (tableId) {
+    const table = await prisma.table.findUnique({ where: { id: tableId }, select: { storeId: true, isActive: true } });
+    if (!table || table.storeId !== storeId || !table.isActive) {
+      throw createHttpError(400, "Table not found for this store");
     }
   }
 
-  let taxAmount = 0;
-  if (store.taxRules && Array.isArray(store.taxRules)) {
-     store.taxRules.forEach(tax => {
-        taxAmount += Math.round(subTotal * (tax.rate / 100));
-     });
+  const { items, totalAmount: subTotal } = await buildCartItems(prisma, storeId, itemsInput, { allowCustom: isStaff });
+  const store = await prisma.store.findUnique({ where: { id: storeId } });
+
+  let promo = null;
+  if (promoCode) {
+    promo = await prisma.promoCode.findUnique({
+      where: { storeId_code: { storeId, code: String(promoCode).toUpperCase() } }
+    });
+    if (!promo || !promo.isActive || (promo.validUntil && promo.validUntil <= new Date())) {
+      throw createHttpError(400, "Invalid or expired promo code");
+    }
+    if (subTotal < promo.minOrderValue) {
+      throw createHttpError(400, `Promo code requires minimum order value of ₹${promo.minOrderValue}`);
+    }
   }
 
   // Store Loyalty Credit Wallet Redemption
-  let walletDiscount = 0;
+  let walletCredits = 0;
   if (input.applyWalletCredits) {
     if (!actor) {
       throw createHttpError(401, "Please log in to redeem store credits.");
@@ -279,149 +398,52 @@ async function createOrder(storeId, actor, origin, input) {
       throw createHttpError(400, preview.reason || "Unable to redeem store credits.");
     }
     if (preview.appliedCredits > 0) {
-      if (appliedPromoCodeId && !preview.allowPromoStacking) {
+      if (promo && !preview.allowPromoStacking) {
         throw createHttpError(400, "Store credits cannot be combined with promo codes at this store.");
       }
-      walletDiscount = preview.appliedCredits;
+      walletCredits = preview.appliedCredits;
     }
   }
 
-  const totalAmount = Math.max(0, subTotal - discountAmount - walletDiscount + taxAmount);
-  
-  const { paymentMethod, cashAmount, onlineAmount } = input;
-  let resolvedPaymentMethod = null;
-  let resolvedCashAmount = 0;
-  let resolvedOnlineAmount = 0;
+  const totals = computeOrderTotals({
+    subTotal,
+    promo,
+    walletDiscount: walletCredits,
+    taxRules: store.taxRules
+  });
 
-  if (paymentMethod) {
-    if (!['CASH', 'ONLINE', 'SPLIT'].includes(paymentMethod)) {
-      throw createHttpError(400, "Invalid paymentMethod. Must be CASH, ONLINE, or SPLIT");
-    }
-    resolvedPaymentMethod = paymentMethod;
-    if (paymentMethod === 'CASH') {
-      resolvedCashAmount = totalAmount;
-      resolvedOnlineAmount = 0;
-    } else if (paymentMethod === 'ONLINE') {
-      resolvedCashAmount = 0;
-      resolvedOnlineAmount = totalAmount;
-    } else if (paymentMethod === 'SPLIT') {
-      const cAmt = Number(cashAmount) || 0;
-      const oAmt = Number(onlineAmount) || 0;
-      if (cAmt + oAmt !== totalAmount) {
-        throw createHttpError(400, `Split payment amounts (Cash ₹${cAmt} + Online ₹${oAmt}) must equal total amount ₹${totalAmount}`);
-      }
-      resolvedCashAmount = cAmt;
-      resolvedOnlineAmount = oAmt;
-    }
-  }
-
-  let status = 'DRAFT';
+  // Payment is never taken here — it is recorded as Payment rows (see payments module).
+  let status;
   if (origin === 'QR_MENU' && paymentModel === 'POSTPAID') {
     status = 'PENDING_VERIFICATION';
-  } else if (paymentModel === 'PREPAID') {
-    if (origin === 'POS' && resolvedPaymentMethod === 'CASH') {
-      status = 'SETTLED';
-    } else if (totalAmount === 0) {
-      status = 'PROCESSING';
-    } else {
-      status = 'PENDING_PAYMENT';
-    }
-  } else if (origin === 'POS' && paymentModel === 'POSTPAID') {
-    // A cashier punching a postpaid order can go straight to processing
-    status = 'PROCESSING';
+  } else if (paymentModel === 'POSTPAID') {
+    status = 'PROCESSING'; // A cashier punching a postpaid ticket sends it straight to the kitchen
+  } else {
+    status = totals.totalAmount === 0 ? 'PROCESSING' : 'PENDING_PAYMENT';
   }
 
-  // Handle Table Session Token / PIN Logic (Protected 2-Hour Rolling Inactivity)
-  let tableSession = null;
-  if (tableId) {
-    const sessionCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours
-    tableSession = await prisma.tableSession.findFirst({
-      where: {
-        storeId,
-        tableId,
-        status: 'ACTIVE'
-      }
-    });
+  const tableSession = tableId ? await resolveTableSession(prisma, storeId, tableId, origin, input) : null;
 
-    if (tableSession) {
-      const lastActive = tableSession.lastOrderAt || tableSession.updatedAt || tableSession.createdAt;
-      if (lastActive < sessionCutoff) {
-        // Auto-settle stale session after 2 hours of no new order placement
-        await prisma.tableSession.update({
-          where: { id: tableSession.id },
-          data: { status: 'SETTLED' }
-        });
-        tableSession = null;
-      }
-    }
-
-    if (!tableSession) {
-      // First order for this table dining session: generate 4-digit numeric PIN (1000 - 9999) and secure sessionToken
-      const generatedPin = String(Math.floor(1000 + Math.random() * 9000));
-      const sessionToken = crypto.randomBytes(24).toString('hex');
-      tableSession = await prisma.tableSession.create({
-        data: {
-          storeId,
-          tableId,
-          pin: generatedPin,
-          sessionToken,
-          status: 'ACTIVE',
-          lastOrderAt: new Date()
-        }
-      });
-    } else {
-      // Table has an active session in progress (< 2 hours old)
-      if (origin === 'QR_MENU') {
-        const providedToken = input.sessionToken ? String(input.sessionToken).trim() : null;
-        const providedPin = input.pin ? String(input.pin).trim() : null;
-
-        const isTokenValid = Boolean(providedToken && tableSession.sessionToken && providedToken === tableSession.sessionToken);
-        const isPinValid = Boolean(providedPin && providedPin === tableSession.pin);
-
-        if (!isTokenValid && !isPinValid) {
-          throw createHttpError(403, "Invalid Table PIN. An active dining session is in progress for this table. Please enter the 4-digit table PIN.");
-        }
-
-        // Ensure sessionToken exists and update rolling 2h inactivity timer
-        const tokenToSave = tableSession.sessionToken || crypto.randomBytes(24).toString('hex');
-        tableSession = await prisma.tableSession.update({
-          where: { id: tableSession.id },
-          data: { 
-            sessionToken: tokenToSave,
-            lastOrderAt: new Date()
-          }
-        });
-      } else {
-        // POS / Staff order refreshes rolling inactivity timer
-        tableSession = await prisma.tableSession.update({
-          where: { id: tableSession.id },
-          data: { lastOrderAt: new Date() }
-        });
-      }
-    }
-  }
-  
   const order = await prisma.order.create({
     data: {
       storeId,
       origin,
       type,
-      tableId: tableId || null,
+      tableId,
       tableSessionId: tableSession ? tableSession.id : null,
       staffId: origin === 'POS' && actor ? actor.id : null,
       customerId: origin === 'QR_MENU' && actor ? actor.id : null,
       sessionId: input.sessionId || null,
       paymentModel,
-      paymentMethod: resolvedPaymentMethod,
-      cashAmount: resolvedCashAmount,
-      onlineAmount: resolvedOnlineAmount,
       status,
-      subTotal,
-      discountAmount,
-      walletDiscount,
-      taxAmount,
-      promoCodeId: appliedPromoCodeId,
-      totalAmount,
+      paidAt: paymentModel === 'PREPAID' && totals.totalAmount === 0 ? new Date() : null,
+      subTotal: totals.subTotal,
+      discountAmount: totals.discountAmount,
+      walletDiscount: totals.walletDiscount,
+      taxAmount: totals.taxAmount,
+      promoCodeId: promo ? promo.id : null,
+      totalAmount: totals.totalAmount,
+      taxRules: Array.isArray(store.taxRules) ? store.taxRules : [],
       items: {
         create: items
       }
@@ -439,18 +461,17 @@ async function createOrder(storeId, actor, origin, input) {
       }
     }
   });
-  
+
   // Deduct applied wallet credits from customer balance
-  if (walletDiscount > 0 && actor) {
+  if (totals.walletDiscount > 0 && actor) {
     try {
       const { applyWalletCreditsOnOrder } = require("../loyalty/loyalty-service");
-      await applyWalletCreditsOnOrder(prisma, actor.id, storeId, order.id, walletDiscount);
+      await applyWalletCreditsOnOrder(prisma, actor.id, storeId, order.id, totals.walletDiscount);
     } catch (err) {
       console.error("[Loyalty Debit Error]", err.message);
     }
   }
-  
-  // Broadcast if it needs verification or went to processing
+
   if (status === 'PENDING_VERIFICATION') {
     broadcastToStore(storeId, 'ORDER_PENDING_VERIFICATION', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PENDING_VERIFICATION', order);
@@ -486,367 +507,56 @@ async function createOrder(storeId, actor, origin, input) {
         target: { customerId: order.customerId, sessionId: order.sessionId }
       }).catch(() => {});
     }
-  } else if (status === 'SETTLED') {
-    await deductInventory(prisma, order);
-    broadcastToStore(storeId, 'ORDER_SETTLED', order);
-    if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_SETTLED', order);
-    if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_SETTLED', order);
-    sendNotification({
-      storeId,
-      type: 'ORDER_SETTLED',
-      title: 'Order Settled',
-      body: `Table ${order.table?.tableNumber || 'N/A'}: Order #${order.id.slice(-6).toUpperCase()} settled.`,
-      data: { orderId: order.id, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/pos' },
-      target: { roles: ['STORE_MANAGER', 'WAITER'], storeId }
-    }).catch(() => {});
-    try {
-      const { creditOrderCashback } = require("../loyalty/loyalty-service");
-      await creditOrderCashback(order.id);
-    } catch (err) {
-      console.error("[Loyalty Cashback Error]", err.message);
-    }
+  } else if (status === 'PENDING_PAYMENT') {
+    broadcastToStore(storeId, 'ORDER_PENDING_PAYMENT', order);
   }
 
   if (tableId) {
     invalidateTablesCache(storeId);
   }
-  
-  // If prepaid, we need to generate a Razorpay order
+
+  // Customers pay prepaid QR orders through Razorpay Checkout; staff collect POS payments on the checkout screen
   let paymentIntent = null;
-  if (status === 'PENDING_PAYMENT' && order.totalAmount > 0) {
-    paymentIntent = await generateRazorpayOrder(prisma, storeId, order);
+  if (status === 'PENDING_PAYMENT' && origin === 'QR_MENU') {
+    const { createCheckoutForOrder } = require("../payments/payment-service");
+    try {
+      paymentIntent = await createCheckoutForOrder(order);
+    } catch (error) {
+      await prisma.order.update({ where: { id: order.id }, data: { status: 'CANCELLED' } });
+      throw error;
+    }
   }
-  
-  return { 
-    order, 
+
+  // Optional one-step cash settle for POS "Quick Cash"
+  let payNowSummary = null;
+  if (status === 'PENDING_PAYMENT' && origin === 'POS' && input.payNow?.channel === 'CASH') {
+    const { createPayment } = require("../payments/payment-service");
+    try {
+      const result = await createPayment(actor, storeId, {
+        orderId: order.id,
+        channel: 'CASH',
+        amount: order.totalAmount,
+        cashTendered: input.payNow.cashTendered
+      });
+      payNowSummary = result.summary;
+    } catch (error) {
+      await updateOrderStatus(actor, storeId, order.id, 'CANCELLED', true, { reason: 'Cash payment could not be recorded' });
+      throw error;
+    }
+  }
+
+  const finalOrder = payNowSummary ? await getOrderById(storeId, order.id) : serializeOrder(order);
+
+  return {
+    order: finalOrder,
     paymentIntent,
+    paymentSummary: payNowSummary,
     tableSessionId: tableSession ? tableSession.id : null,
     sessionToken: tableSession ? tableSession.sessionToken : null,
     sessionPin: tableSession ? tableSession.pin : null
   };
 }
 
-async function generateRazorpayOrder(prisma, storeId, order) {
-  const store = await prisma.store.findUnique({
-    where: { id: storeId },
-    select: { tenantId: true }
-  });
-  
-  const gateway = await prisma.tenantPaymentGateway.findUnique({
-    where: {
-      tenantId_provider: {
-        tenantId: store.tenantId,
-        provider: 'RAZORPAY'
-      }
-    }
-  });
-  
-  if (!gateway || !gateway.isActive) {
-    throw createHttpError(400, "Razorpay is not configured for this tenant");
-  }
-  
-  const razorpay = new Razorpay({
-    key_id: decrypt(gateway.apiKey),
-    key_secret: decrypt(gateway.secretKey)
-  });
-  
-  const options = {
-    amount: Math.round(order.totalAmount * 100), // Amount in paise
-    currency: "INR",
-    receipt: order.id
-  };
-  
-  try {
-    const rpOrder = await razorpay.orders.create(options);
-    return rpOrder;
-  } catch (error) {
-    const errorMsg = error.error?.description || error.message || JSON.stringify(error);
-    throw createHttpError(500, "Failed to communicate with Razorpay: " + errorMsg);
-  }
-}
-
-async function generatePaymentLink(actor, storeId, orderId, customOnlineAmount = null) {
-  await verifyStoreAccess(actor, storeId);
-  const prisma = getPrismaClient();
-  
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order || order.storeId !== storeId) {
-    throw createHttpError(404, "Order not found");
-  }
-
-  let payableAmount = order.totalAmount;
-  if (customOnlineAmount && Number(customOnlineAmount) > 0) {
-    payableAmount = Number(customOnlineAmount);
-  } else if (order.paymentMethod === 'SPLIT' && order.onlineAmount > 0) {
-    payableAmount = order.onlineAmount;
-  }
-
-  if (order.paymentLinkId && order.paymentLinkUrl && !customOnlineAmount && order.onlineAmount === payableAmount) {
-    return {
-      id: order.paymentLinkId,
-      short_url: order.paymentLinkUrl,
-      totalAmount: payableAmount
-    };
-  }
-  
-  const store = await prisma.store.findUnique({
-    where: { id: storeId },
-    select: { tenantId: true, name: true, slug: true }
-  });
-  
-  const gateway = await prisma.tenantPaymentGateway.findUnique({
-    where: {
-      tenantId_provider: {
-        tenantId: store.tenantId,
-        provider: 'RAZORPAY'
-      }
-    }
-  });
-
-  // Determine UPI VPA:
-  // 1) Gateway merchantId if contains '@' (e.g. restaurant@okhdfcbank)
-  // 2) Default restaurant UPI VPA
-  const upiVpa = (gateway?.merchantId && gateway.merchantId.includes('@'))
-    ? gateway.merchantId
-    : 'scanmyorder@okaxis';
-
-  const payeeName = store.name || 'Restaurant';
-  const orderRef = order.id.slice(-6).toUpperCase();
-  const trRef = `ORD_${order.id}_${Date.now()}`;
-  
-  // Standard NPCI UPI dynamic QR deep-link format
-  const upiUrl = `upi://pay?pa=${upiVpa}&pn=${encodeURIComponent(payeeName)}&am=${payableAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Order #${orderRef}`)}&tr=${trRef}`;
-  const qrId = `upi_qr_${order.id}_${Date.now()}`;
-
-  // Optionally create a Razorpay Order for tracking if credentials exist
-  if (gateway && gateway.isActive) {
-    try {
-      const razorpay = new Razorpay({
-        key_id: decrypt(gateway.apiKey),
-        key_secret: decrypt(gateway.secretKey)
-      });
-      await razorpay.orders.create({
-        amount: Math.round(payableAmount * 100),
-        currency: "INR",
-        receipt: `ord_${order.id.slice(-8)}_${Date.now().toString().slice(-4)}`,
-        notes: {
-          order_id: order.id,
-          payable_amount: String(payableAmount),
-          upi_vpa: upiVpa
-        }
-      });
-    } catch (e) {
-      console.warn("[UPI Dynamic QR] Notice on optional Razorpay order tracking:", e.message || e);
-    }
-  }
-
-  await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      paymentLinkId: qrId,
-      paymentLinkUrl: upiUrl,
-      onlineAmount: payableAmount,
-      paymentMethod: payableAmount < order.totalAmount ? 'SPLIT' : (order.paymentMethod || 'ONLINE'),
-      cashAmount: payableAmount < order.totalAmount ? (order.totalAmount - payableAmount) : order.cashAmount
-    }
-  });
-
-  return {
-    id: qrId,
-    short_url: upiUrl,
-    totalAmount: payableAmount,
-    is_upi_dynamic_qr: true
-  };
-}
-
-async function checkPaymentStatus(storeId, orderId) {
-  const prisma = getPrismaClient();
-  
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order || order.storeId !== storeId) {
-    throw createHttpError(404, "Order not found");
-  }
-  
-  if (order.status === 'SETTLED' || (order.status === 'PROCESSING' && order.paymentModel === 'PREPAID')) {
-    return { status: 'success' };
-  }
-  
-  if (!order.paymentLinkId) {
-    return { status: 'pending' };
-  }
-
-  // Check if Razorpay order tracking reports paid (if gateway configured)
-  try {
-    const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
-    const gateway = await prisma.tenantPaymentGateway.findUnique({
-      where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
-    });
-    if (gateway && gateway.isActive) {
-      const razorpay = new Razorpay({
-        key_id: decrypt(gateway.apiKey),
-        key_secret: decrypt(gateway.secretKey)
-      });
-      const rpOrders = await razorpay.orders.all({ receipt: orderId });
-      const paidOrder = rpOrders?.items?.find(o => o.status === 'paid');
-      if (paidOrder) {
-        const newStatus = order.paymentModel === 'PREPAID' ? 'PROCESSING' : 'SETTLED';
-        await updateOrderStatus(null, storeId, orderId, newStatus, true);
-        return { status: 'success' };
-      }
-    }
-  } catch (err) {
-    // ignore
-  }
-
-  return { status: 'pending' };
-}
-
-// 2. PAYMENT WEBHOOK VALIDATION (Razorpay)
-async function handleRazorpayWebhook(tenantId, payload, signature, rawBody) {
-  const prisma = getPrismaClient();
-  
-  const gateway = await prisma.tenantPaymentGateway.findUnique({
-    where: {
-      tenantId_provider: {
-        tenantId,
-        provider: 'RAZORPAY'
-      }
-    }
-  });
-  
-  if (!gateway) throw createHttpError(400, "Gateway not found");
-  
-  const webhookSecret = gateway.secretKey ? decrypt(gateway.secretKey) : null; 
-  if (!webhookSecret) throw createHttpError(400, "Webhook secret not configured");
-  
-  // Validate signature using raw body if available, otherwise stringified payload
-  const bodyToVerify = rawBody || JSON.stringify(payload);
-  const isValid = Razorpay.validateWebhookSignature(bodyToVerify, signature, webhookSecret);
-  
-  if (!isValid) {
-    console.error("[Webhook Error] Signature mismatch! Body length:", bodyToVerify.length, "Signature:", signature);
-    throw createHttpError(401, "Invalid webhook signature");
-  }
-  
-  console.log(`[Webhook Success] Received event: ${payload.event}`);
-  
-  console.log("[Webhook] Received Razorpay Webhook:", payload.event);
-
-  let orderId = null;
-
-  // Handle standard payment captured
-  if (payload.event === 'payment.captured' || payload.event === 'payment.authorized') {
-    orderId = payload.payload.payment.entity.notes?.order_id;
-  } 
-  // Handle payment link paid
-  else if (payload.event === 'payment_link.paid') {
-    const tableSessionId = payload.payload.payment_link.entity.notes?.tableSessionId ||
-      (payload.payload.payment_link.entity.reference_id?.startsWith('sess_') ? payload.payload.payment_link.entity.reference_id.split('_')[1] : null);
-
-    if (tableSessionId) {
-      await settleTableSession(null, null, tableSessionId, true);
-      return { success: true };
-    }
-
-    orderId = payload.payload.payment_link.entity.notes?.order_id;
-    if (!orderId && payload.payload.payment_link.entity.reference_id) {
-       orderId = payload.payload.payment_link.entity.reference_id.split('_')[0];
-    }
-  }
-
-  if (orderId) {
-    const order = await prisma.order.findUnique({ where: { id: orderId } });
-    if (order) {
-      if (order.status === 'PENDING_PAYMENT') {
-        await updateOrderStatus(null, order.storeId, order.id, 'PROCESSING', true);
-      } else if (order.paymentModel === 'POSTPAID' && order.status !== 'SETTLED' && order.status !== 'CANCELLED') {
-        // If a postpaid order receives a successful payment via Waiter generated link, it is instantly settled.
-        await updateOrderStatus(null, order.storeId, order.id, 'SETTLED', true);
-      }
-      sendNotification({
-        storeId: order.storeId,
-        type: 'PAYMENT_WEBHOOK',
-        title: 'Payment Received via Razorpay',
-        body: `Payment of ₹${order.totalAmount} captured for Order #${order.id.slice(-6).toUpperCase()}.`,
-        data: { orderId: order.id, sound: 'notification.mp3', event: payload.event },
-        target: { storeId: order.storeId, roles: ['STORE_MANAGER', 'WAITER'] }
-      }).catch(() => {});
-      if (order.customerId || order.sessionId) {
-        sendNotification({
-          storeId: order.storeId,
-          type: 'PAYMENT_WEBHOOK',
-          title: 'Payment Confirmed',
-          body: `Your payment of ₹${order.totalAmount} was processed successfully!`,
-          data: { orderId: order.id, sound: 'notification.mp3' },
-          target: { customerId: order.customerId, sessionId: order.sessionId }
-        }).catch(() => {});
-      }
-    } else {
-      console.log("[Webhook] Order not found for ID:", orderId);
-    }
-  } else {
-    console.log("[Webhook] Could not extract orderId from payload");
-  }
-  
-  return { success: true };
-}
-
-async function verifyRazorpayPayment(actor, storeId, orderId, manual = false, isPolling = false) {
-  const prisma = getPrismaClient();
-  const order = await prisma.order.findUnique({ where: { id: orderId } });
-  
-  if (!order || order.storeId !== storeId) throw createHttpError(404, "Order not found");
-
-  if (actor) {
-    if (actor.role === 'CUSTOMER') {
-      if (order.customerId !== actor.id) {
-        throw createHttpError(403, "Forbidden");
-      }
-    } else {
-      await verifyStoreAccess(actor, storeId);
-    }
-  }
-  
-  if (['PROCESSING', 'SETTLED', 'READY', 'SERVED'].includes(order.status)) {
-    return { success: true, status: order.status, message: "Order is already paid/processed." };
-  }
-
-  // Check if Razorpay order is paid (if gateway configured)
-  let rpOrderPaid = false;
-  try {
-    const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
-    const gateway = await prisma.tenantPaymentGateway.findUnique({
-      where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
-    });
-    if (gateway && gateway.isActive) {
-      const razorpay = new Razorpay({
-        key_id: decrypt(gateway.apiKey),
-        key_secret: decrypt(gateway.secretKey)
-      });
-      const rpOrders = await razorpay.orders.all({ receipt: orderId });
-      if (rpOrders?.items?.some(o => o.status === 'paid')) {
-        rpOrderPaid = true;
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  // If order was paid via gateway or staff manually verified
-  if (rpOrderPaid || (manual || !isPolling)) {
-    const newStatus = order.paymentModel === 'POSTPAID' ? 'SETTLED' : 'PROCESSING';
-    await updateOrderStatus(actor, storeId, orderId, newStatus, true);
-    return { 
-      success: true, 
-      status: newStatus, 
-      message: rpOrderPaid 
-        ? "Payment verified successfully via Razorpay Order!" 
-        : "UPI QR Payment verified successfully!" 
-    };
-  }
-
-  return { success: false, status: order.status, message: "Payment pending on UPI QR." };
-}
 
 // 3. LIFECYCLE MANAGEMENT
 async function deductInventory(prisma, order) {
@@ -1054,47 +764,80 @@ async function updateOrderItems(actor, storeId, orderId, input) {
     throw createHttpError(404, "Order not found");
   }
 
-  if (order.status === 'CANCELLED') {
-    throw createHttpError(400, "Cannot modify items in a cancelled order");
+  if (['CANCELLED', 'SETTLED'].includes(order.status)) {
+    throw createHttpError(400, `Cannot modify items in a ${order.status.toLowerCase()} order`);
   }
-
-  const { items: itemsInput } = input;
-  if (!itemsInput || !Array.isArray(itemsInput) || itemsInput.length === 0) {
-    throw createHttpError(400, "Order must contain at least one item");
+  // Once money has been taken against an order its total is locked
+  const takenPayments = await prisma.payment.count({
+    where: { orderId: order.id, status: { in: ['PAID', 'PENDING'] } }
+  });
+  if (order.paidAt || takenPayments > 0) {
+    throw createHttpError(409, "This order already has payments against it. Cancel pending payments or place a new order for extra items.");
   }
-
-  const { items: newItemsData, totalAmount: newSubTotal } = await buildCartItems(prisma, storeId, itemsInput);
-
-  // Recalculate promo discount if applicable
-  let discountAmount = 0;
-  if (order.promoCodeId && order.promoCode) {
-    const promo = order.promoCode;
-    if (newSubTotal >= promo.minOrderValue) {
-      if (promo.discountType === 'PERCENTAGE') {
-        discountAmount = Math.round(newSubTotal * (promo.discountValue / 100));
-        if (promo.maxDiscount && discountAmount > promo.maxDiscount) {
-          discountAmount = promo.maxDiscount;
-        }
-      } else {
-        discountAmount = promo.discountValue;
-      }
-      if (discountAmount > newSubTotal) discountAmount = newSubTotal;
+  if (order.tableSessionId) {
+    const sessionPayments = await prisma.payment.count({
+      where: { tableSessionId: order.tableSessionId, status: { in: ['PAID', 'PENDING'] } }
+    });
+    if (sessionPayments > 0) {
+      throw createHttpError(409, "The table bill is being paid. Cancel pending payments before editing orders.");
     }
   }
 
-  // Recalculate taxes
-  const store = await prisma.store.findUnique({ where: { id: storeId } });
-  let taxAmount = 0;
-  if (store.taxRules && Array.isArray(store.taxRules)) {
-    store.taxRules.forEach(tax => {
-      taxAmount += Math.round(newSubTotal * (tax.rate / 100));
-    });
-  }
+  const { items: itemsInput } = input;
 
-  const newTotalAmount = newSubTotal - discountAmount + taxAmount;
+  // Lines already on the order keep the price they were sold at; only new lines use today's menu
+  const existingItems = await prisma.orderItem.findMany({
+    where: { orderId: order.id },
+    include: { modifiers: true }
+  });
+  const { items: builtItems } = await buildCartItems(prisma, storeId, itemsInput, {
+    allowCustom: true,
+    alreadyOrderedIds: new Set(existingItems.map(i => i.menuItemId))
+  });
+  const existingById = new Map(existingItems.map(i => [i.id, i]));
+  const ingredientExtras = (ings) => (Array.isArray(ings) ? ings : [])
+    .reduce((sum, ing) => sum + (Number(ing.price) > 0 ? Number(ing.price) : 0), 0);
+
+  const newItemsData = builtItems.map((built, idx) => {
+    const input = itemsInput[idx];
+    const source = input.orderItemId ? existingById.get(input.orderItemId) : null;
+    const isCustom = Boolean(input.isCustom || !input.menuItemId);
+    if (!source || isCustom || source.menuItemId !== built.menuItemId) return built;
+
+    const oldModIds = source.modifiers.map(m => m.modifierOptionId).sort().join(',');
+    const newModIds = [...(input.modifiers || [])].sort().join(',');
+    if (oldModIds !== newModIds) return built;
+
+    const oldExtras = ingredientExtras(decodeKitchenNotes(source.kitchenNotes).customIngredients);
+    return {
+      ...built,
+      priceAtOrder: source.priceAtOrder - oldExtras + ingredientExtras(input.customIngredients),
+      modifiers: {
+        create: source.modifiers.map(m => ({ modifierOptionId: m.modifierOptionId, priceAtOrder: m.priceAtOrder }))
+      }
+    };
+  });
+  const newSubTotal = newItemsData.reduce((sum, itm) => sum + itm.priceAtOrder * itm.quantity, 0);
+
+  // Tax at the rates in force when the order was placed (older orders fall back to the store's current rules)
+  const store = await prisma.store.findUnique({ where: { id: storeId } });
+  const taxRules = Array.isArray(order.taxRules) ? order.taxRules : (Array.isArray(store.taxRules) ? store.taxRules : []);
+
+  // A promo that no longer meets its minimum after the edit is removed from the order
+  const promo = order.promoCode && newSubTotal >= (order.promoCode.minOrderValue || 0) ? order.promoCode : null;
+
+  const totals = computeOrderTotals({
+    subTotal: newSubTotal,
+    promo,
+    walletDiscount: order.walletDiscount,
+    taxRules
+  });
+  const { discountAmount, taxAmount, totalAmount: newTotalAmount } = totals;
+  // Credits that no longer fit the smaller bill go back to the customer
+  const walletRefund = Math.max(0, (order.walletDiscount || 0) - totals.walletDiscount);
 
   // Inventory reconciliation:
-  const wasDeducted = ['PROCESSING', 'READY', 'SERVED', 'COMPLETED', 'BILL_REQUESTED'].includes(order.status);
+  const wasDeducted = ['PROCESSING', 'READY', 'SERVED'].includes(order.status);
   if (wasDeducted) {
     await revertInventoryDeduction(prisma, order.id);
   }
@@ -1127,6 +870,9 @@ async function updateOrderItems(actor, storeId, orderId, input) {
         subTotal: newSubTotal,
         taxAmount,
         discountAmount,
+        walletDiscount: totals.walletDiscount,
+        promoCodeId: promo ? promo.id : null,
+        taxRules,
         totalAmount: newTotalAmount,
         updatedAt: new Date()
       }
@@ -1136,6 +882,17 @@ async function updateOrderItems(actor, storeId, orderId, input) {
   // Re-deduct inventory with updated items if order was already in processing
   if (wasDeducted) {
     await deductInventory(prisma, { id: order.id });
+  }
+
+  if (walletRefund > 0 && order.customerId) {
+    const { refundWalletCredits } = require("../loyalty/loyalty-service");
+    await refundWalletCredits(prisma, {
+      customerId: order.customerId,
+      storeId,
+      orderId: order.id,
+      amount: walletRefund,
+      description: `Credits returned after Order #${order.id.slice(-6).toUpperCase()} was edited`
+    }).catch(err => console.error("[Loyalty Refund Error on Edit]", err.message));
   }
 
   const updatedOrder = await getOrderById(storeId, order.id);
@@ -1149,50 +906,110 @@ async function updateOrderItems(actor, storeId, orderId, input) {
   return updatedOrder;
 }
 
-async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = false, tenderDetails = null) {
-  if (!isSystem && actor) {
+// Which status changes staff may make by hand. Payment-driven moves (→ PROCESSING after
+// a prepaid payment, → SETTLED once paid) go through the payments module as system updates.
+const STATUS_TRANSITIONS = {
+  DRAFT: ['PROCESSING', 'CANCELLED'],
+  PENDING_VERIFICATION: ['PROCESSING', 'CANCELLED'],
+  PENDING_PAYMENT: ['CANCELLED'],
+  PROCESSING: ['READY', 'CANCELLED'],
+  READY: ['SERVED', 'CANCELLED'],
+  SERVED: ['SETTLED'],
+  SETTLED: [],
+  CANCELLED: []
+};
+
+// Extra role limits on top of STATUS_TRANSITIONS
+const ROLE_ALLOWED_TARGETS = {
+  KITCHEN_STAFF: ['READY'],
+  WAITER: ['PROCESSING', 'SERVED', 'CANCELLED'],
+  CASHIER: ['PROCESSING', 'READY', 'SERVED', 'SETTLED', 'CANCELLED']
+};
+
+function assertStaffTransition(actor, order, newStatus) {
+  const allowed = STATUS_TRANSITIONS[order.status] || [];
+  if (!allowed.includes(newStatus)) {
+    throw createHttpError(409, `Cannot move an order from ${order.status} to ${newStatus}`);
+  }
+
+  const roleTargets = ROLE_ALLOWED_TARGETS[actor.role];
+  if (actor.role === 'CUSTOMER' || (roleTargets && !roleTargets.includes(newStatus))) {
+    throw createHttpError(403, `Your role cannot mark orders as ${newStatus}`);
+  }
+  // Waiters may only reject orders that haven't been accepted yet
+  if (actor.role === 'WAITER' && newStatus === 'CANCELLED' && order.status !== 'PENDING_VERIFICATION') {
+    throw createHttpError(403, "Only managers and cashiers can cancel accepted orders");
+  }
+  if (newStatus === 'SETTLED' && !order.paidAt) {
+    throw createHttpError(409, "Collect payment from the checkout screen before settling this order");
+  }
+}
+
+/**
+ * @param {object} [options]
+ * @param {string} [options.reason] Required when staff cancel an order
+ */
+async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = false, options = {}) {
+  if (!isSystem) {
+    if (!actor) throw createHttpError(401, "Authentication required");
     await verifyStoreAccess(actor, storeId);
   }
-  
+
   const prisma = getPrismaClient();
   const order = await prisma.order.findUnique({ where: { id: orderId } });
-  
+
   if (!order || order.storeId !== storeId) {
     throw createHttpError(404, "Order not found");
   }
 
-  const validStatuses = ['DRAFT', 'PENDING_VERIFICATION', 'PENDING_PAYMENT', 'PROCESSING', 'READY', 'SERVED', 'SETTLED', 'CANCELLED'];
+  const validStatuses = Object.keys(STATUS_TRANSITIONS);
   if (!validStatuses.includes(newStatus)) {
     throw createHttpError(400, `Invalid order status: ${newStatus}`);
   }
-  
+  if (order.status === newStatus) {
+    return getOrderById(storeId, orderId);
+  }
+
+  const cancelReason = typeof options.reason === 'string' ? options.reason.trim().slice(0, 200) : '';
+
+  if (!isSystem) {
+    assertStaffTransition(actor, order, newStatus);
+    if (newStatus === 'CANCELLED') {
+      if (cancelReason.length < 3) {
+        throw createHttpError(400, "Please give a reason for cancelling this order");
+      }
+      const paid = await prisma.payment.count({ where: { orderId, status: 'PAID' } });
+      if (paid > 0 || order.paidAt) {
+        throw createHttpError(409, "This order has been paid. Refund the customer before cancelling it.");
+      }
+    }
+  }
+
   // Inventory reconciliation on status change:
   const wasDeducted = ['PROCESSING', 'READY', 'SERVED', 'SETTLED'].includes(order.status);
   const willBeDeducted = ['PROCESSING', 'READY', 'SERVED', 'SETTLED'].includes(newStatus);
 
   if (newStatus === 'CANCELLED' && wasDeducted) {
-    // Revert inventory when order is cancelled
     await revertInventoryDeduction(prisma, order.id);
   } else if (willBeDeducted && !wasDeducted) {
-    // Deduct inventory if moving from DRAFT, PENDING_VERIFICATION, PENDING_PAYMENT, or CANCELLED to active/settled
     await deductInventory(prisma, order);
   }
-  
-  if (newStatus === 'SERVED' && order.paymentModel === 'PREPAID') {
+
+  // A paid order is finished once it has been served
+  if (newStatus === 'SERVED' && order.paidAt) {
     newStatus = 'SETTLED';
   }
-  
+
   const updateData = { status: newStatus };
-  if (tenderDetails) {
-    if (tenderDetails.paymentMethod) updateData.paymentMethod = tenderDetails.paymentMethod;
-    if (tenderDetails.cashAmount !== undefined) updateData.cashAmount = Number(tenderDetails.cashAmount);
-    if (tenderDetails.onlineAmount !== undefined) updateData.onlineAmount = Number(tenderDetails.onlineAmount);
-  } else if (newStatus === 'SETTLED' && !order.paymentMethod) {
-    updateData.paymentMethod = 'CASH';
-    updateData.cashAmount = order.totalAmount;
-    updateData.onlineAmount = 0;
+
+  if (newStatus === 'CANCELLED') {
+    updateData.cancelReason = cancelReason || 'Cancelled by system';
+    updateData.cancelledAt = new Date();
+    updateData.cancelledById = !isSystem && actor ? actor.id : null;
+    const { cancelPendingPaymentsFor } = require("../payments/payment-service");
+    await cancelPendingPaymentsFor(storeId, { orderId }).catch(err => console.warn("[Cancel] pending payments:", err.message));
   }
-  
+
   const updatedOrder = await prisma.order.update({
     where: { id: orderId },
     data: updateData,
@@ -1218,31 +1035,14 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
       console.error("[Loyalty Cashback Error on Status]", e.message);
     }
   } else if (newStatus === 'CANCELLED' && order.walletDiscount > 0 && order.customerId) {
-    try {
-      const refundCredits = order.walletDiscount;
-      await prisma.$transaction(async (tx) => {
-        const w = await tx.customerStoreWallet.update({
-          where: { customerId_storeId: { customerId: order.customerId, storeId } },
-          data: {
-            balance: { increment: refundCredits },
-            totalSpent: { decrement: refundCredits }
-          }
-        });
-        await tx.customerWalletTransaction.create({
-          data: {
-            walletId: w.id,
-            orderId: order.id,
-            type: 'ORDER_REFUND',
-            amount: refundCredits,
-            balanceAfter: w.balance,
-            description: `Refund of credits for cancelled Order #${order.id.slice(-6).toUpperCase()}`
-          }
-        });
-      });
-      broadcastToCustomer(order.customerId, 'CUSTOMER_WALLET_UPDATED', { storeId, balanceRefunded: refundCredits });
-    } catch (err) {
-      console.error("[Loyalty Refund Error on Cancel]", err.message);
-    }
+    const { refundWalletCredits } = require("../loyalty/loyalty-service");
+    await refundWalletCredits(prisma, {
+      customerId: order.customerId,
+      storeId,
+      orderId: order.id,
+      amount: order.walletDiscount,
+      description: `Refund of credits for cancelled Order #${order.id.slice(-6).toUpperCase()}`
+    }).catch(err => console.error("[Loyalty Refund Error on Cancel]", err.message));
   }
   
   // Broadcast updates across the store (KDS, POS, Waiter, Customer)
@@ -1335,7 +1135,7 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
         storeId,
         type: 'ORDER_CANCELLED',
         title: 'Order Cancelled',
-        body: `Table ${tableNum}: Order #${shortId} was cancelled.`,
+        body: `Table ${tableNum}: Order #${shortId} was cancelled — ${updatedOrder.cancelReason}.`,
         data: { orderId: updatedOrder.id, tableNumber: tableNum, sound: 'notification.mp3' },
         target: { storeId }
       }).catch(() => {});
@@ -1465,6 +1265,7 @@ async function getOrderHistory(actor, storeId, filters = {}) {
       include: {
         table: true,
         staff: { select: { name: true } },
+        cancelledBy: { select: { name: true } },
         items: {
           include: {
             menuItem: true,
@@ -1497,6 +1298,12 @@ async function getOrderById(storeId, orderId) {
     where: { id: orderId },
     include: {
       table: true,
+      cancelledBy: { select: { name: true } },
+      payments: {
+        where: { status: 'PAID' },
+        orderBy: { paidAt: 'asc' },
+        select: { id: true, channel: true, amount: true, cashTendered: true, changeDue: true, paidAt: true }
+      },
       items: {
         include: {
           menuItem: true,
@@ -1513,297 +1320,14 @@ async function getOrderById(storeId, orderId) {
   return serializeOrder(order);
 }
 
-// 6. TABLE SESSION SETTLEMENT & BILLING
-async function settleTableSession(actor, storeId, tableSessionId, isSystem = false, tenderDetails = null) {
-  const prisma = getPrismaClient();
-  const session = await prisma.tableSession.findUnique({
-    where: { id: tableSessionId },
-    include: { table: true }
-  });
+// 6. TABLE SESSION BILLING
+// Payment for a whole table goes through the payments module (Payment rows with tableSessionId).
 
-  if (!session) throw createHttpError(404, "Table session not found");
-  const actualStoreId = storeId || session.storeId;
-  if (!isSystem && actor) {
-    await verifyStoreAccess(actor, actualStoreId);
-  }
-
-  const activeOrders = await prisma.order.findMany({
-    where: {
-      tableSessionId,
-      status: { notIn: ['SETTLED', 'CANCELLED'] }
-    },
-    include: {
-      items: { include: { menuItem: true, modifiers: { include: { modifierOption: true } } } },
-      table: true
-    }
-  });
-
-  const totalSessionAmount = activeOrders.reduce((sum, o) => sum + o.totalAmount, 0);
-
-  let paymentMethod = tenderDetails?.paymentMethod || null;
-  let cashAmount = tenderDetails?.cashAmount !== undefined ? Number(tenderDetails.cashAmount) : 0;
-  let onlineAmount = tenderDetails?.onlineAmount !== undefined ? Number(tenderDetails.onlineAmount) : 0;
-
-  if (paymentMethod === 'CASH') {
-    cashAmount = totalSessionAmount;
-    onlineAmount = 0;
-  } else if (paymentMethod === 'ONLINE') {
-    cashAmount = 0;
-    onlineAmount = totalSessionAmount;
-  } else if (!paymentMethod && isSystem) {
-    paymentMethod = 'ONLINE';
-    cashAmount = 0;
-    onlineAmount = totalSessionAmount;
-  } else if (!paymentMethod) {
-    paymentMethod = 'CASH';
-    cashAmount = totalSessionAmount;
-    onlineAmount = 0;
-  }
-
-  if (activeOrders.length > 0) {
-    await prisma.order.updateMany({
-      where: {
-        tableSessionId,
-        status: { notIn: ['SETTLED', 'CANCELLED'] }
-      },
-      data: {
-        status: 'SETTLED',
-        paymentMethod,
-        cashAmount: activeOrders.length === 1 ? cashAmount : Math.round(cashAmount / activeOrders.length),
-        onlineAmount: activeOrders.length === 1 ? onlineAmount : Math.round(onlineAmount / activeOrders.length)
-      }
-    });
-  }
-
-  const updatedSession = await prisma.tableSession.update({
-    where: { id: tableSessionId },
-    data: {
-      status: 'SETTLED',
-      paymentMethod,
-      cashAmount,
-      onlineAmount
-    }
-  });
-
-  for (const order of activeOrders) {
-    const settledOrder = { ...order, status: 'SETTLED', paymentMethod, cashAmount, onlineAmount };
-    broadcastToStore(actualStoreId, 'ORDER_SETTLED', settledOrder);
-    if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_SETTLED', settledOrder);
-    if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_SETTLED', settledOrder);
-    try {
-      const { creditOrderCashback } = require("../loyalty/loyalty-service");
-      await creditOrderCashback(order.id);
-    } catch (e) {
-      console.error("[Loyalty Cashback Error on Session]", e.message);
-    }
-  }
-  broadcastToStore(actualStoreId, 'TABLE_SESSION_SETTLED', { tableSessionId, tableId: session.tableId });
-  invalidateTablesCache(actualStoreId);
-
-  try {
-    const tableNum = session.table?.tableNumber || 'N/A';
-    sendNotification({
-      storeId: actualStoreId,
-      type: 'TABLE_SESSION_SETTLED',
-      title: `Table ${tableNum} Settled`,
-      body: `All orders settled for Table ${tableNum} (₹${totalSessionAmount}). Table is now free.`,
-      data: { tableSessionId, tableId: session.tableId, tableNumber: tableNum, sound: 'notification.mp3', url: '/pos' },
-      target: { storeId: actualStoreId, roles: ['STORE_MANAGER', 'WAITER'] }
-    }).catch(() => {});
-
-    for (const order of activeOrders) {
-      if (order.customerId || order.sessionId) {
-        sendNotification({
-          storeId: actualStoreId,
-          type: 'TABLE_SESSION_SETTLED',
-          title: 'Bill Settled',
-          body: `Your bill for Table ${tableNum} has been fully settled. Thank you for visiting!`,
-          data: { tableSessionId, sound: 'notification.mp3' },
-          target: { customerId: order.customerId, sessionId: order.sessionId }
-        }).catch(() => {});
-        break;
-      }
-    }
-  } catch (sessNotifErr) {
-    console.warn('[Session Settle Notification Error]', sessNotifErr.message);
-  }
-
-  return { success: true, tableSessionId, settledOrdersCount: activeOrders.length, session: updatedSession };
-}
-
-async function generateSessionPaymentLink(actor, storeId, tableSessionId, customOnlineAmount = null) {
-  if (actor) await verifyStoreAccess(actor, storeId);
-  const prisma = getPrismaClient();
-
-  const session = await prisma.tableSession.findUnique({
-    where: { id: tableSessionId },
-    include: {
-      table: true,
-      orders: {
-        where: { status: { notIn: ['SETTLED', 'CANCELLED'] } }
-      }
-    }
-  });
-
-  if (!session || session.storeId !== storeId) {
-    throw createHttpError(404, "Table session not found");
-  }
-
-  if (session.orders.length === 0) {
-    throw createHttpError(400, "No unsettled orders in this session");
-  }
-
-  const totalAmount = session.orders.reduce((sum, o) => sum + o.totalAmount, 0);
-  if (totalAmount <= 0) {
-    throw createHttpError(400, "Total amount must be greater than 0");
-  }
-
-  let payableAmount = totalAmount;
-  if (customOnlineAmount && Number(customOnlineAmount) > 0) {
-    payableAmount = Number(customOnlineAmount);
-  }
-
-  // Check if an existing link exists matching amount
-  const existingLink = session.orders.find(o => o.paymentLinkUrl && o.paymentLinkId);
-  if (existingLink && !customOnlineAmount && existingLink.onlineAmount === payableAmount) {
-    return {
-      id: existingLink.paymentLinkId,
-      short_url: existingLink.paymentLinkUrl,
-      totalAmount: payableAmount
-    };
-  }
-
-  const store = await prisma.store.findUnique({
-    where: { id: storeId },
-    select: { tenantId: true, name: true, slug: true }
-  });
-
-  const gateway = await prisma.tenantPaymentGateway.findUnique({
-    where: {
-      tenantId_provider: {
-        tenantId: store.tenantId,
-        provider: 'RAZORPAY'
-      }
-    }
-  });
-
-  const upiVpa = (gateway?.merchantId && gateway.merchantId.includes('@'))
-    ? gateway.merchantId
-    : 'scanmyorder@okaxis';
-
-  const payeeName = store.name || 'Restaurant';
-  const tableNum = session.table?.tableNumber || '';
-  const trRef = `SESS_${tableSessionId}_${Date.now()}`;
-  const upiUrl = `upi://pay?pa=${upiVpa}&pn=${encodeURIComponent(payeeName)}&am=${payableAmount.toFixed(2)}&cu=INR&tn=${encodeURIComponent(`Table ${tableNum} Bill`)}&tr=${trRef}`;
-  const qrId = `upi_sess_${tableSessionId}_${Date.now()}`;
-
-  // Optionally create a Razorpay Order for tracking if gateway is configured
-  if (gateway && gateway.isActive) {
-    try {
-      const razorpay = new Razorpay({
-        key_id: decrypt(gateway.apiKey),
-        key_secret: decrypt(gateway.secretKey)
-      });
-      await razorpay.orders.create({
-        amount: Math.round(payableAmount * 100),
-        currency: "INR",
-        receipt: `sess_${tableSessionId.slice(-8)}_${Date.now().toString().slice(-4)}`,
-        notes: {
-          tableSessionId,
-          payable_amount: String(payableAmount),
-          upi_vpa: upiVpa
-        }
-      });
-    } catch (e) {
-      console.warn("[UPI Dynamic QR Session] Notice on optional Razorpay order tracking:", e.message || e);
-    }
-  }
-
-  await prisma.order.updateMany({
-    where: {
-      tableSessionId,
-      status: { notIn: ['SETTLED', 'CANCELLED'] }
-    },
-    data: {
-      paymentLinkId: qrId,
-      paymentLinkUrl: upiUrl,
-      onlineAmount: payableAmount,
-      paymentMethod: payableAmount < totalAmount ? 'SPLIT' : 'ONLINE',
-      cashAmount: payableAmount < totalAmount ? (totalAmount - payableAmount) : 0
-    }
-  });
-
-  await prisma.tableSession.update({
-    where: { id: tableSessionId },
-    data: {
-      paymentMethod: payableAmount < totalAmount ? 'SPLIT' : 'ONLINE',
-      onlineAmount: payableAmount,
-      cashAmount: payableAmount < totalAmount ? (totalAmount - payableAmount) : 0
-    }
-  });
-
-  return {
-    id: qrId,
-    short_url: upiUrl,
-    totalAmount: payableAmount,
-    is_upi_dynamic_qr: true
-  };
-}
-
-async function verifySessionPayment(actor, storeId, tableSessionId, manual = false, isPolling = false) {
-  const prisma = getPrismaClient();
-  const session = await prisma.tableSession.findUnique({
-    where: { id: tableSessionId },
-    include: {
-      orders: {
-        where: { status: { notIn: ['SETTLED', 'CANCELLED'] } }
-      }
-    }
-  });
-
-  if (!session || session.storeId !== storeId) throw createHttpError(404, "Session not found");
-  if (actor) await verifyStoreAccess(actor, storeId);
-
-  if (session.status === 'SETTLED' || session.orders.length === 0) {
-    return { success: true, status: 'SETTLED', message: "Session already settled." };
-  }
-
-  // Check if Razorpay order is paid
-  let rpOrderPaid = false;
-  try {
-    const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
-    const gateway = await prisma.tenantPaymentGateway.findUnique({
-      where: { tenantId_provider: { tenantId: store.tenantId, provider: 'RAZORPAY' } }
-    });
-    if (gateway && gateway.isActive) {
-      const razorpay = new Razorpay({
-        key_id: decrypt(gateway.apiKey),
-        key_secret: decrypt(gateway.secretKey)
-      });
-      const rpOrders = await razorpay.orders.all({ receipt: `sess_${tableSessionId.slice(-8)}` });
-      if (rpOrders?.items?.some(o => o.status === 'paid')) {
-        rpOrderPaid = true;
-      }
-    }
-  } catch (e) {
-    // ignore
-  }
-
-  if (rpOrderPaid || (manual || !isPolling)) {
-    await settleTableSession(actor, storeId, tableSessionId, true);
-    return { 
-      success: true, 
-      status: 'SETTLED', 
-      message: rpOrderPaid
-        ? "Payment confirmed via Razorpay Order and table session settled!"
-        : "UPI QR Payment confirmed and table session settled!" 
-    };
-  }
-
-  return { success: false, status: 'PENDING', message: "Payment pending on UPI QR." };
-}
-
-async function getTableSessionBill(storeId, tableSessionId) {
+/**
+ * @param {object} [options]
+ * @param {boolean} [options.includePin] Only staff callers may see the table PIN
+ */
+async function getTableSessionBill(storeId, tableSessionId, { includePin = false } = {}) {
   const prisma = getPrismaClient();
   const session = await prisma.tableSession.findUnique({
     where: { id: tableSessionId },
@@ -1845,21 +1369,22 @@ async function getTableSessionBill(storeId, tableSessionId) {
   for (const order of validOrders) {
     subTotal += order.subTotal;
     totalTax += order.taxAmount;
-    totalDiscount += order.discountAmount;
+    totalDiscount += order.discountAmount + (order.walletDiscount || 0);
     grandTotal += order.totalAmount;
 
-    for (const item of order.items) {
-      const key = `${item.menuItemId}_${item.priceAtOrder}`;
+    for (const rawItem of order.items) {
+      const item = serializeOrderItem(rawItem);
+      const modifierNames = item.modifiers.map(m => m.modifierOption?.name).filter(Boolean);
+      const key = `${item.menuItemId}_${item.priceAtOrder}_${item.displayName}_${modifierNames.join(',')}`;
       if (itemsMap.has(key)) {
-        const existing = itemsMap.get(key);
-        existing.quantity += item.quantity;
+        itemsMap.get(key).quantity += item.quantity;
       } else {
         itemsMap.set(key, {
-          name: item.menuItem?.name || 'Item',
+          name: item.displayName,
           price: item.priceAtOrder,
           quantity: item.quantity,
           dietary: item.menuItem?.dietary || 'VEG',
-          modifiers: item.modifiers.map(m => m.modifierOption?.name).filter(Boolean)
+          modifiers: modifierNames
         });
       }
     }
@@ -1868,7 +1393,7 @@ async function getTableSessionBill(storeId, tableSessionId) {
   return {
     session: {
       id: session.id,
-      pin: session.pin,
+      ...(includePin ? { pin: session.pin } : {}),
       status: session.status,
       paymentMethod: session.paymentMethod,
       cashAmount: session.cashAmount || 0,
@@ -1890,6 +1415,7 @@ async function getTableSessionBill(storeId, tableSessionId) {
       paymentModel: o.paymentModel,
       status: o.status,
       totalAmount: o.totalAmount,
+      paidAt: o.paidAt,
       createdAt: o.createdAt
     })),
     aggregatedItems: Array.from(itemsMap.values()),
@@ -1900,39 +1426,29 @@ async function getTableSessionBill(storeId, tableSessionId) {
   };
 }
 
-async function getTableSessionStatus(storeId, tableNumber, clientToken = null, clientPin = null) {
-  const prisma = getPrismaClient();
+async function findTableByNumber(prisma, storeId, tableNumber) {
+  const num = parseInt(tableNumber, 10);
+  if (!Number.isInteger(num)) throw createHttpError(400, "Invalid table number");
   const table = await prisma.table.findUnique({
-    where: {
-      storeId_tableNumber: {
-        storeId,
-        tableNumber: parseInt(tableNumber, 10)
-      }
-    }
+    where: { storeId_tableNumber: { storeId, tableNumber: num } }
   });
+  if (!table || !table.isActive) throw createHttpError(404, "Table not found");
+  return table;
+}
 
-  if (!table) throw createHttpError(404, "Table not found");
+/**
+ * Public: tells a guest whether the table is in use and whether their saved token belongs to it.
+ * Never reveals the PIN and never accepts a PIN guess (use joinTableSession, which is rate limited).
+ */
+async function getTableSessionStatus(storeId, tableNumber, clientToken = null) {
+  const prisma = getPrismaClient();
+  const table = await findTableByNumber(prisma, storeId, tableNumber);
 
-  const sessionCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
   let activeSession = await prisma.tableSession.findFirst({
-    where: {
-      storeId,
-      tableId: table.id,
-      status: 'ACTIVE'
-    }
+    where: { storeId, tableId: table.id, status: 'ACTIVE' },
+    orderBy: { createdAt: 'desc' }
   });
-
-  if (activeSession) {
-    const lastActive = activeSession.lastOrderAt || activeSession.updatedAt || activeSession.createdAt;
-    if (lastActive < sessionCutoff) {
-      // Auto-settle stale session after 2 hours of no new order placement
-      await prisma.tableSession.update({
-        where: { id: activeSession.id },
-        data: { status: 'SETTLED' }
-      });
-      activeSession = null;
-    }
-  }
+  activeSession = await expireIdleSession(prisma, activeSession);
 
   if (!activeSession) {
     return {
@@ -1945,57 +1461,32 @@ async function getTableSessionStatus(storeId, tableNumber, clientToken = null, c
     };
   }
 
+  const isJoined = Boolean(clientToken && activeSession.sessionToken && clientToken === activeSession.sessionToken);
   const lastActive = activeSession.lastOrderAt || activeSession.updatedAt || activeSession.createdAt;
-  const expiresAt = new Date(lastActive.getTime() + 2 * 60 * 60 * 1000).toISOString();
-
-  const isJoined = Boolean(
-    (clientToken && activeSession.sessionToken && clientToken === activeSession.sessionToken) ||
-    (clientPin && String(clientPin).trim() === activeSession.pin)
-  );
 
   return {
     tableNumber: table.tableNumber,
     tableId: table.id,
     hasActiveSession: true,
-    tableSessionId: activeSession.id,
+    // The session id unlocks the bill, so only guests already in the session get it
+    tableSessionId: isJoined ? activeSession.id : null,
     isJoined,
-    expiresAt
+    expiresAt: new Date(lastActive.getTime() + SESSION_IDLE_MS).toISOString()
   };
 }
 
 async function joinTableSession(storeId, tableNumber, pin) {
   const prisma = getPrismaClient();
-  const table = await prisma.table.findUnique({
-    where: {
-      storeId_tableNumber: {
-        storeId,
-        tableNumber: parseInt(tableNumber, 10)
-      }
-    }
-  });
+  const table = await findTableByNumber(prisma, storeId, tableNumber);
 
-  if (!table) throw createHttpError(404, "Table not found");
-
-  const sessionCutoff = new Date(Date.now() - 2 * 60 * 60 * 1000);
   let activeSession = await prisma.tableSession.findFirst({
-    where: {
-      storeId,
-      tableId: table.id,
-      status: 'ACTIVE'
-    }
+    where: { storeId, tableId: table.id, status: 'ACTIVE' },
+    orderBy: { createdAt: 'desc' }
   });
+  activeSession = await expireIdleSession(prisma, activeSession);
 
   if (!activeSession) {
     throw createHttpError(404, "No active dining session found on this table.");
-  }
-
-  const lastActive = activeSession.lastOrderAt || activeSession.updatedAt || activeSession.createdAt;
-  if (lastActive < sessionCutoff) {
-    await prisma.tableSession.update({
-      where: { id: activeSession.id },
-      data: { status: 'SETTLED' }
-    });
-    throw createHttpError(410, "This table session has expired due to 2 hours of inactivity.");
   }
 
   const inputPin = String(pin || '').trim();
@@ -2003,7 +1494,6 @@ async function joinTableSession(storeId, tableNumber, pin) {
     throw createHttpError(403, "Invalid Table PIN. Please enter the 4-digit PIN displayed on your companion's device or ask a waiter.");
   }
 
-  // Ensure sessionToken exists
   let sessionToken = activeSession.sessionToken;
   if (!sessionToken) {
     sessionToken = crypto.randomBytes(24).toString('hex');
@@ -2019,6 +1509,36 @@ async function joinTableSession(storeId, tableNumber, pin) {
     tableSessionId: activeSession.id,
     sessionToken,
     sessionPin: activeSession.pin
+  };
+}
+
+/**
+ * Staff: the active session for a table (used by POS to add items to an occupied table).
+ */
+async function getActiveTableSession(actor, storeId, tableId) {
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+  const session = await prisma.tableSession.findFirst({
+    where: { storeId, tableId, status: 'ACTIVE' },
+    orderBy: { createdAt: 'desc' },
+    include: {
+      table: true,
+      orders: {
+        where: { status: { not: 'CANCELLED' } },
+        orderBy: { createdAt: 'asc' },
+        include: { items: { include: { menuItem: true, modifiers: { include: { modifierOption: true } } } } }
+      }
+    }
+  });
+  if (!session) return null;
+  return {
+    id: session.id,
+    pin: session.pin,
+    tableId: session.tableId,
+    tableNumber: session.table.tableNumber,
+    createdAt: session.createdAt,
+    orders: session.orders.map(serializeOrder),
+    totalAmount: session.orders.reduce((s, o) => s + o.totalAmount, 0)
   };
 }
 
@@ -2052,21 +1572,16 @@ async function getOrderStats(actor, storeId) {
 
 module.exports = {
   createOrder,
-  handleRazorpayWebhook,
   updateOrderStatus,
   updateOrderItems,
   getKdsOrders,
   getActiveOrders,
   getOrderStats,
-  generatePaymentLink,
-  checkPaymentStatus,
-  verifyRazorpayPayment,
   getOrderById,
   getOrderHistory,
-  settleTableSession,
-  generateSessionPaymentLink,
-  verifySessionPayment,
   getTableSessionBill,
   getTableSessionStatus,
-  joinTableSession
+  joinTableSession,
+  getActiveTableSession,
+  serializeOrder
 };

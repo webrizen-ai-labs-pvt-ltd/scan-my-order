@@ -69,7 +69,9 @@ export const StoreForm = ({ initialData, isEdit }) => {
     contactEmail: initialData?.contactEmail || '',
     operatingHours: initialData?.operatingHours || '',
     status: initialData?.status || 'ACTIVE',
-    taxRules: initialData?.taxRules || []
+    taxRules: initialData?.taxRules || [],
+    offlineUpiId: initialData?.offlineUpiId || '',
+    offlineUpiPayeeName: initialData?.offlineUpiPayeeName || ''
   });
 
   const [adminData, setAdminData] = useState({
@@ -131,6 +133,11 @@ export const StoreForm = ({ initialData, isEdit }) => {
     setError('');
 
     const payload = { ...formData };
+    // Only brand owners may change where UPI money goes; the API rejects it for others
+    if (!canManageAdmins || !isEdit) {
+      delete payload.offlineUpiId;
+      delete payload.offlineUpiPayeeName;
+    }
 
     if (provisionMode === 'CREATE' && adminData.email && adminData.password) {
       payload.adminUser = adminData;
@@ -307,6 +314,30 @@ export const StoreForm = ({ initialData, isEdit }) => {
                     </div>
                   )}
                 </div>
+
+                {isEdit && canManageAdmins && (
+                  <div className="space-y-2 rounded-lg border border-zinc-200 dark:border-zinc-800 p-3">
+                    <Label htmlFor="offlineUpiId">Store UPI ID (optional override)</Label>
+                    <p className="text-xs text-zinc-500">Leave blank to use the brand's UPI ID for "UPI (own QR)" payments at this store.</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <Input
+                        id="offlineUpiId"
+                        value={formData.offlineUpiId}
+                        onChange={(e) => handleChange('offlineUpiId', e.target.value.trim())}
+                        placeholder="e.g. branch2@okicici"
+                        className="font-mono"
+                        autoComplete="off"
+                      />
+                      <Input
+                        aria-label="Name shown to payer"
+                        value={formData.offlineUpiPayeeName}
+                        onChange={(e) => handleChange('offlineUpiPayeeName', e.target.value)}
+                        placeholder="Name shown to payer"
+                        maxLength={50}
+                      />
+                    </div>
+                  </div>
+                )}
                 
                 {isEdit && (
                   <div className="space-y-2">

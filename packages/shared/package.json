@@ -7,13 +7,14 @@
     ".": "./src/index.js",
     "./node": "./src/node.js",
     "./audio": "./src/audio-player.js",
-    "./assets/*": "./assets/*"
+    "./assets/*": "./assets/*",
+    "./pricing": "./src/pricing.mjs"
   },
   "files": [
     "assets",
     "src"
   ],
   "scripts": {
-    "build": "node --check src/index.js && node --check src/node.js"
+    "build": "node --check src/index.js && node --check src/node.js && node --check src/pricing.mjs"
   }
 }

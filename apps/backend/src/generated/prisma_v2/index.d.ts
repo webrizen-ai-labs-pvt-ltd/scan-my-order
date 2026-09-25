@@ -99,6 +99,11 @@ export type PromoCode = $Result.DefaultSelection<Prisma.$PromoCodePayload>
  */
 export type Order = $Result.DefaultSelection<Prisma.$OrderPayload>
 /**
+ * Model Payment
+ * 
+ */
+export type Payment = $Result.DefaultSelection<Prisma.$PaymentPayload>
+/**
  * Model OrderItem
  * 
  */
@@ -296,6 +301,26 @@ export const PaymentMethod: {
 export type PaymentMethod = (typeof PaymentMethod)[keyof typeof PaymentMethod]
 
 
+export const PaymentChannel: {
+  RAZORPAY: 'RAZORPAY',
+  UPI_OFFLINE: 'UPI_OFFLINE',
+  CASH: 'CASH'
+};
+
+export type PaymentChannel = (typeof PaymentChannel)[keyof typeof PaymentChannel]
+
+
+export const PaymentStatus: {
+  PENDING: 'PENDING',
+  PAID: 'PAID',
+  FAILED: 'FAILED',
+  CANCELLED: 'CANCELLED',
+  EXPIRED: 'EXPIRED'
+};
+
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
+
+
 export const OrderStatus: {
   DRAFT: 'DRAFT',
   PENDING_VERIFICATION: 'PENDING_VERIFICATION',
@@ -428,6 +453,14 @@ export const PaymentModel: typeof $Enums.PaymentModel
 export type PaymentMethod = $Enums.PaymentMethod
 
 export const PaymentMethod: typeof $Enums.PaymentMethod
+
+export type PaymentChannel = $Enums.PaymentChannel
+
+export const PaymentChannel: typeof $Enums.PaymentChannel
+
+export type PaymentStatus = $Enums.PaymentStatus
+
+export const PaymentStatus: typeof $Enums.PaymentStatus
 
 export type OrderStatus = $Enums.OrderStatus
 
@@ -751,6 +784,16 @@ export class PrismaClient<
     * ```
     */
   get order(): Prisma.OrderDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.payment`: Exposes CRUD operations for the **Payment** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more Payments
+    * const payments = await prisma.payment.findMany()
+    * ```
+    */
+  get payment(): Prisma.PaymentDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.orderItem`: Exposes CRUD operations for the **OrderItem** model.
@@ -1308,6 +1351,7 @@ export namespace Prisma {
     Table: 'Table',
     PromoCode: 'PromoCode',
     Order: 'Order',
+    Payment: 'Payment',
     OrderItem: 'OrderItem',
     OrderItemModifier: 'OrderItemModifier',
     WaiterCall: 'WaiterCall',
@@ -1336,7 +1380,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "tenant" | "store" | "user" | "passkey" | "subscriptionPlan" | "tenantSubscription" | "tenantPaymentGateway" | "menuCategory" | "menuItem" | "menuModifierGroup" | "menuModifierOption" | "rawMaterial" | "stockTransaction" | "recipeIngredient" | "table" | "promoCode" | "order" | "orderItem" | "orderItemModifier" | "waiterCall" | "feedback" | "tableSession" | "tableReservation" | "customerStoreWallet" | "customerWalletTransaction" | "pushSubscription" | "notification"
+      modelProps: "tenant" | "store" | "user" | "passkey" | "subscriptionPlan" | "tenantSubscription" | "tenantPaymentGateway" | "menuCategory" | "menuItem" | "menuModifierGroup" | "menuModifierOption" | "rawMaterial" | "stockTransaction" | "recipeIngredient" | "table" | "promoCode" | "order" | "payment" | "orderItem" | "orderItemModifier" | "waiterCall" | "feedback" | "tableSession" | "tableReservation" | "customerStoreWallet" | "customerWalletTransaction" | "pushSubscription" | "notification"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -2598,6 +2642,80 @@ export namespace Prisma {
           }
         }
       }
+      Payment: {
+        payload: Prisma.$PaymentPayload<ExtArgs>
+        fields: Prisma.PaymentFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.PaymentFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.PaymentFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          findFirst: {
+            args: Prisma.PaymentFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.PaymentFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          findMany: {
+            args: Prisma.PaymentFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>[]
+          }
+          create: {
+            args: Prisma.PaymentCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          createMany: {
+            args: Prisma.PaymentCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.PaymentCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>[]
+          }
+          delete: {
+            args: Prisma.PaymentDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          update: {
+            args: Prisma.PaymentUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          deleteMany: {
+            args: Prisma.PaymentDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.PaymentUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.PaymentUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>[]
+          }
+          upsert: {
+            args: Prisma.PaymentUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$PaymentPayload>
+          }
+          aggregate: {
+            args: Prisma.PaymentAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregatePayment>
+          }
+          groupBy: {
+            args: Prisma.PaymentGroupByArgs<ExtArgs>
+            result: $Utils.Optional<PaymentGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.PaymentCountArgs<ExtArgs>
+            result: $Utils.Optional<PaymentCountAggregateOutputType> | number
+          }
+        }
+      }
       OrderItem: {
         payload: Prisma.$OrderItemPayload<ExtArgs>
         fields: Prisma.OrderItemFieldRefs
@@ -3439,6 +3557,7 @@ export namespace Prisma {
     table?: TableOmit
     promoCode?: PromoCodeOmit
     order?: OrderOmit
+    payment?: PaymentOmit
     orderItem?: OrderItemOmit
     orderItemModifier?: OrderItemModifierOmit
     waiterCall?: WaiterCallOmit
@@ -3602,6 +3721,7 @@ export namespace Prisma {
     orders: number
     waiterCalls: number
     feedbacks: number
+    payments: number
     promoCodes: number
     customerWallets: number
     pushSubscriptions: number
@@ -3619,6 +3739,7 @@ export namespace Prisma {
     orders?: boolean | StoreCountOutputTypeCountOrdersArgs
     waiterCalls?: boolean | StoreCountOutputTypeCountWaiterCallsArgs
     feedbacks?: boolean | StoreCountOutputTypeCountFeedbacksArgs
+    payments?: boolean | StoreCountOutputTypeCountPaymentsArgs
     promoCodes?: boolean | StoreCountOutputTypeCountPromoCodesArgs
     customerWallets?: boolean | StoreCountOutputTypeCountCustomerWalletsArgs
     pushSubscriptions?: boolean | StoreCountOutputTypeCountPushSubscriptionsArgs
@@ -3709,6 +3830,13 @@ export namespace Prisma {
   /**
    * StoreCountOutputType without action
    */
+  export type StoreCountOutputTypeCountPaymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PaymentWhereInput
+  }
+
+  /**
+   * StoreCountOutputType without action
+   */
   export type StoreCountOutputTypeCountPromoCodesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: PromoCodeWhereInput
   }
@@ -3748,6 +3876,8 @@ export namespace Prisma {
     reservations: number
     pushSubscriptions: number
     notifications: number
+    collectedPayments: number
+    cancelledOrders: number
   }
 
   export type UserCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -3759,6 +3889,8 @@ export namespace Prisma {
     reservations?: boolean | UserCountOutputTypeCountReservationsArgs
     pushSubscriptions?: boolean | UserCountOutputTypeCountPushSubscriptionsArgs
     notifications?: boolean | UserCountOutputTypeCountNotificationsArgs
+    collectedPayments?: boolean | UserCountOutputTypeCountCollectedPaymentsArgs
+    cancelledOrders?: boolean | UserCountOutputTypeCountCancelledOrdersArgs
   }
 
   // Custom InputTypes
@@ -3826,6 +3958,20 @@ export namespace Prisma {
    */
   export type UserCountOutputTypeCountNotificationsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: NotificationWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountCollectedPaymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PaymentWhereInput
+  }
+
+  /**
+   * UserCountOutputType without action
+   */
+  export type UserCountOutputTypeCountCancelledOrdersArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: OrderWhereInput
   }
 
 
@@ -4146,12 +4292,14 @@ export namespace Prisma {
 
   export type OrderCountOutputType = {
     items: number
+    payments: number
     feedbacks: number
     walletTransactions: number
   }
 
   export type OrderCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     items?: boolean | OrderCountOutputTypeCountItemsArgs
+    payments?: boolean | OrderCountOutputTypeCountPaymentsArgs
     feedbacks?: boolean | OrderCountOutputTypeCountFeedbacksArgs
     walletTransactions?: boolean | OrderCountOutputTypeCountWalletTransactionsArgs
   }
@@ -4172,6 +4320,13 @@ export namespace Prisma {
    */
   export type OrderCountOutputTypeCountItemsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: OrderItemWhereInput
+  }
+
+  /**
+   * OrderCountOutputType without action
+   */
+  export type OrderCountOutputTypeCountPaymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PaymentWhereInput
   }
 
   /**
@@ -4226,10 +4381,12 @@ export namespace Prisma {
 
   export type TableSessionCountOutputType = {
     orders: number
+    payments: number
   }
 
   export type TableSessionCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     orders?: boolean | TableSessionCountOutputTypeCountOrdersArgs
+    payments?: boolean | TableSessionCountOutputTypeCountPaymentsArgs
   }
 
   // Custom InputTypes
@@ -4248,6 +4405,13 @@ export namespace Prisma {
    */
   export type TableSessionCountOutputTypeCountOrdersArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: OrderWhereInput
+  }
+
+  /**
+   * TableSessionCountOutputType without action
+   */
+  export type TableSessionCountOutputTypeCountPaymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PaymentWhereInput
   }
 
 
@@ -4307,6 +4471,8 @@ export namespace Prisma {
     gstin: string | null
     companyLegalName: string | null
     registeredAddress: string | null
+    offlineUpiId: string | null
+    offlineUpiPayeeName: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -4322,6 +4488,8 @@ export namespace Prisma {
     gstin: string | null
     companyLegalName: string | null
     registeredAddress: string | null
+    offlineUpiId: string | null
+    offlineUpiPayeeName: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -4337,6 +4505,8 @@ export namespace Prisma {
     gstin: number
     companyLegalName: number
     registeredAddress: number
+    offlineUpiId: number
+    offlineUpiPayeeName: number
     createdAt: number
     updatedAt: number
     _all: number
@@ -4354,6 +4524,8 @@ export namespace Prisma {
     gstin?: true
     companyLegalName?: true
     registeredAddress?: true
+    offlineUpiId?: true
+    offlineUpiPayeeName?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -4369,6 +4541,8 @@ export namespace Prisma {
     gstin?: true
     companyLegalName?: true
     registeredAddress?: true
+    offlineUpiId?: true
+    offlineUpiPayeeName?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -4384,6 +4558,8 @@ export namespace Prisma {
     gstin?: true
     companyLegalName?: true
     registeredAddress?: true
+    offlineUpiId?: true
+    offlineUpiPayeeName?: true
     createdAt?: true
     updatedAt?: true
     _all?: true
@@ -4472,6 +4648,8 @@ export namespace Prisma {
     gstin: string | null
     companyLegalName: string | null
     registeredAddress: string | null
+    offlineUpiId: string | null
+    offlineUpiPayeeName: string | null
     createdAt: Date
     updatedAt: Date
     _count: TenantCountAggregateOutputType | null
@@ -4504,6 +4682,8 @@ export namespace Prisma {
     gstin?: boolean
     companyLegalName?: boolean
     registeredAddress?: boolean
+    offlineUpiId?: boolean
+    offlineUpiPayeeName?: boolean
     createdAt?: boolean
     updatedAt?: boolean
     stores?: boolean | Tenant$storesArgs<ExtArgs>
@@ -4524,6 +4704,8 @@ export namespace Prisma {
     gstin?: boolean
     companyLegalName?: boolean
     registeredAddress?: boolean
+    offlineUpiId?: boolean
+    offlineUpiPayeeName?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["tenant"]>
@@ -4539,6 +4721,8 @@ export namespace Prisma {
     gstin?: boolean
     companyLegalName?: boolean
     registeredAddress?: boolean
+    offlineUpiId?: boolean
+    offlineUpiPayeeName?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }, ExtArgs["result"]["tenant"]>
@@ -4554,11 +4738,13 @@ export namespace Prisma {
     gstin?: boolean
     companyLegalName?: boolean
     registeredAddress?: boolean
+    offlineUpiId?: boolean
+    offlineUpiPayeeName?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type TenantOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "slug" | "status" | "logo" | "brandColor" | "description" | "gstin" | "companyLegalName" | "registeredAddress" | "createdAt" | "updatedAt", ExtArgs["result"]["tenant"]>
+  export type TenantOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "name" | "slug" | "status" | "logo" | "brandColor" | "description" | "gstin" | "companyLegalName" | "registeredAddress" | "offlineUpiId" | "offlineUpiPayeeName" | "createdAt" | "updatedAt", ExtArgs["result"]["tenant"]>
   export type TenantInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     stores?: boolean | Tenant$storesArgs<ExtArgs>
     users?: boolean | Tenant$usersArgs<ExtArgs>
@@ -4588,6 +4774,8 @@ export namespace Prisma {
       gstin: string | null
       companyLegalName: string | null
       registeredAddress: string | null
+      offlineUpiId: string | null
+      offlineUpiPayeeName: string | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["tenant"]>
@@ -5027,6 +5215,8 @@ export namespace Prisma {
     readonly gstin: FieldRef<"Tenant", 'String'>
     readonly companyLegalName: FieldRef<"Tenant", 'String'>
     readonly registeredAddress: FieldRef<"Tenant", 'String'>
+    readonly offlineUpiId: FieldRef<"Tenant", 'String'>
+    readonly offlineUpiPayeeName: FieldRef<"Tenant", 'String'>
     readonly createdAt: FieldRef<"Tenant", 'DateTime'>
     readonly updatedAt: FieldRef<"Tenant", 'DateTime'>
   }
@@ -5547,6 +5737,8 @@ export namespace Prisma {
     banner: string | null
     status: $Enums.StoreStatus | null
     googleReviewUrl: string | null
+    offlineUpiId: string | null
+    offlineUpiPayeeName: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -5562,6 +5754,8 @@ export namespace Prisma {
     banner: string | null
     status: $Enums.StoreStatus | null
     googleReviewUrl: string | null
+    offlineUpiId: string | null
+    offlineUpiPayeeName: string | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -5578,6 +5772,8 @@ export namespace Prisma {
     banner: number
     status: number
     googleReviewUrl: number
+    offlineUpiId: number
+    offlineUpiPayeeName: number
     taxRules: number
     loyaltyRules: number
     createdAt: number
@@ -5597,6 +5793,8 @@ export namespace Prisma {
     banner?: true
     status?: true
     googleReviewUrl?: true
+    offlineUpiId?: true
+    offlineUpiPayeeName?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -5612,6 +5810,8 @@ export namespace Prisma {
     banner?: true
     status?: true
     googleReviewUrl?: true
+    offlineUpiId?: true
+    offlineUpiPayeeName?: true
     createdAt?: true
     updatedAt?: true
   }
@@ -5628,6 +5828,8 @@ export namespace Prisma {
     banner?: true
     status?: true
     googleReviewUrl?: true
+    offlineUpiId?: true
+    offlineUpiPayeeName?: true
     taxRules?: true
     loyaltyRules?: true
     createdAt?: true
@@ -5719,6 +5921,8 @@ export namespace Prisma {
     banner: string | null
     status: $Enums.StoreStatus
     googleReviewUrl: string | null
+    offlineUpiId: string | null
+    offlineUpiPayeeName: string | null
     taxRules: JsonValue | null
     loyaltyRules: JsonValue | null
     createdAt: Date
@@ -5754,6 +5958,8 @@ export namespace Prisma {
     banner?: boolean
     status?: boolean
     googleReviewUrl?: boolean
+    offlineUpiId?: boolean
+    offlineUpiPayeeName?: boolean
     taxRules?: boolean
     loyaltyRules?: boolean
     createdAt?: boolean
@@ -5769,6 +5975,7 @@ export namespace Prisma {
     orders?: boolean | Store$ordersArgs<ExtArgs>
     waiterCalls?: boolean | Store$waiterCallsArgs<ExtArgs>
     feedbacks?: boolean | Store$feedbacksArgs<ExtArgs>
+    payments?: boolean | Store$paymentsArgs<ExtArgs>
     promoCodes?: boolean | Store$promoCodesArgs<ExtArgs>
     customerWallets?: boolean | Store$customerWalletsArgs<ExtArgs>
     pushSubscriptions?: boolean | Store$pushSubscriptionsArgs<ExtArgs>
@@ -5788,6 +5995,8 @@ export namespace Prisma {
     banner?: boolean
     status?: boolean
     googleReviewUrl?: boolean
+    offlineUpiId?: boolean
+    offlineUpiPayeeName?: boolean
     taxRules?: boolean
     loyaltyRules?: boolean
     createdAt?: boolean
@@ -5807,6 +6016,8 @@ export namespace Prisma {
     banner?: boolean
     status?: boolean
     googleReviewUrl?: boolean
+    offlineUpiId?: boolean
+    offlineUpiPayeeName?: boolean
     taxRules?: boolean
     loyaltyRules?: boolean
     createdAt?: boolean
@@ -5826,13 +6037,15 @@ export namespace Prisma {
     banner?: boolean
     status?: boolean
     googleReviewUrl?: boolean
+    offlineUpiId?: boolean
+    offlineUpiPayeeName?: boolean
     taxRules?: boolean
     loyaltyRules?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type StoreOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "tenantId" | "name" | "slug" | "address" | "contactPhone" | "contactEmail" | "operatingHours" | "banner" | "status" | "googleReviewUrl" | "taxRules" | "loyaltyRules" | "createdAt" | "updatedAt", ExtArgs["result"]["store"]>
+  export type StoreOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "tenantId" | "name" | "slug" | "address" | "contactPhone" | "contactEmail" | "operatingHours" | "banner" | "status" | "googleReviewUrl" | "offlineUpiId" | "offlineUpiPayeeName" | "taxRules" | "loyaltyRules" | "createdAt" | "updatedAt", ExtArgs["result"]["store"]>
   export type StoreInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     tenant?: boolean | TenantDefaultArgs<ExtArgs>
     users?: boolean | Store$usersArgs<ExtArgs>
@@ -5845,6 +6058,7 @@ export namespace Prisma {
     orders?: boolean | Store$ordersArgs<ExtArgs>
     waiterCalls?: boolean | Store$waiterCallsArgs<ExtArgs>
     feedbacks?: boolean | Store$feedbacksArgs<ExtArgs>
+    payments?: boolean | Store$paymentsArgs<ExtArgs>
     promoCodes?: boolean | Store$promoCodesArgs<ExtArgs>
     customerWallets?: boolean | Store$customerWalletsArgs<ExtArgs>
     pushSubscriptions?: boolean | Store$pushSubscriptionsArgs<ExtArgs>
@@ -5872,6 +6086,7 @@ export namespace Prisma {
       orders: Prisma.$OrderPayload<ExtArgs>[]
       waiterCalls: Prisma.$WaiterCallPayload<ExtArgs>[]
       feedbacks: Prisma.$FeedbackPayload<ExtArgs>[]
+      payments: Prisma.$PaymentPayload<ExtArgs>[]
       promoCodes: Prisma.$PromoCodePayload<ExtArgs>[]
       customerWallets: Prisma.$CustomerStoreWalletPayload<ExtArgs>[]
       pushSubscriptions: Prisma.$PushSubscriptionPayload<ExtArgs>[]
@@ -5889,6 +6104,8 @@ export namespace Prisma {
       banner: string | null
       status: $Enums.StoreStatus
       googleReviewUrl: string | null
+      offlineUpiId: string | null
+      offlineUpiPayeeName: string | null
       taxRules: Prisma.JsonValue | null
       loyaltyRules: Prisma.JsonValue | null
       createdAt: Date
@@ -6298,6 +6515,7 @@ export namespace Prisma {
     orders<T extends Store$ordersArgs<ExtArgs> = {}>(args?: Subset<T, Store$ordersArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     waiterCalls<T extends Store$waiterCallsArgs<ExtArgs> = {}>(args?: Subset<T, Store$waiterCallsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$WaiterCallPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     feedbacks<T extends Store$feedbacksArgs<ExtArgs> = {}>(args?: Subset<T, Store$feedbacksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FeedbackPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    payments<T extends Store$paymentsArgs<ExtArgs> = {}>(args?: Subset<T, Store$paymentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     promoCodes<T extends Store$promoCodesArgs<ExtArgs> = {}>(args?: Subset<T, Store$promoCodesArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PromoCodePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     customerWallets<T extends Store$customerWalletsArgs<ExtArgs> = {}>(args?: Subset<T, Store$customerWalletsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CustomerStoreWalletPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     pushSubscriptions<T extends Store$pushSubscriptionsArgs<ExtArgs> = {}>(args?: Subset<T, Store$pushSubscriptionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PushSubscriptionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
@@ -6342,6 +6560,8 @@ export namespace Prisma {
     readonly banner: FieldRef<"Store", 'String'>
     readonly status: FieldRef<"Store", 'StoreStatus'>
     readonly googleReviewUrl: FieldRef<"Store", 'String'>
+    readonly offlineUpiId: FieldRef<"Store", 'String'>
+    readonly offlineUpiPayeeName: FieldRef<"Store", 'String'>
     readonly taxRules: FieldRef<"Store", 'Json'>
     readonly loyaltyRules: FieldRef<"Store", 'Json'>
     readonly createdAt: FieldRef<"Store", 'DateTime'>
@@ -6982,6 +7202,30 @@ export namespace Prisma {
   }
 
   /**
+   * Store.payments
+   */
+  export type Store$paymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    where?: PaymentWhereInput
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    cursor?: PaymentWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
+  }
+
+  /**
    * Store.promoCodes
    */
   export type Store$promoCodesArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -7342,6 +7586,8 @@ export namespace Prisma {
     reservations?: boolean | User$reservationsArgs<ExtArgs>
     pushSubscriptions?: boolean | User$pushSubscriptionsArgs<ExtArgs>
     notifications?: boolean | User$notificationsArgs<ExtArgs>
+    collectedPayments?: boolean | User$collectedPaymentsArgs<ExtArgs>
+    cancelledOrders?: boolean | User$cancelledOrdersArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["user"]>
 
@@ -7412,6 +7658,8 @@ export namespace Prisma {
     reservations?: boolean | User$reservationsArgs<ExtArgs>
     pushSubscriptions?: boolean | User$pushSubscriptionsArgs<ExtArgs>
     notifications?: boolean | User$notificationsArgs<ExtArgs>
+    collectedPayments?: boolean | User$collectedPaymentsArgs<ExtArgs>
+    cancelledOrders?: boolean | User$cancelledOrdersArgs<ExtArgs>
     _count?: boolean | UserCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type UserIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -7436,6 +7684,8 @@ export namespace Prisma {
       reservations: Prisma.$TableReservationPayload<ExtArgs>[]
       pushSubscriptions: Prisma.$PushSubscriptionPayload<ExtArgs>[]
       notifications: Prisma.$NotificationPayload<ExtArgs>[]
+      collectedPayments: Prisma.$PaymentPayload<ExtArgs>[]
+      cancelledOrders: Prisma.$OrderPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -7856,6 +8106,8 @@ export namespace Prisma {
     reservations<T extends User$reservationsArgs<ExtArgs> = {}>(args?: Subset<T, User$reservationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$TableReservationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     pushSubscriptions<T extends User$pushSubscriptionsArgs<ExtArgs> = {}>(args?: Subset<T, User$pushSubscriptionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PushSubscriptionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     notifications<T extends User$notificationsArgs<ExtArgs> = {}>(args?: Subset<T, User$notificationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$NotificationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    collectedPayments<T extends User$collectedPaymentsArgs<ExtArgs> = {}>(args?: Subset<T, User$collectedPaymentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    cancelledOrders<T extends User$cancelledOrdersArgs<ExtArgs> = {}>(args?: Subset<T, User$cancelledOrdersArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -8522,6 +8774,54 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: NotificationScalarFieldEnum | NotificationScalarFieldEnum[]
+  }
+
+  /**
+   * User.collectedPayments
+   */
+  export type User$collectedPaymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    where?: PaymentWhereInput
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    cursor?: PaymentWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
+  }
+
+  /**
+   * User.cancelledOrders
+   */
+  export type User$cancelledOrdersArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Order
+     */
+    select?: OrderSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Order
+     */
+    omit?: OrderOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderInclude<ExtArgs> | null
+    where?: OrderWhereInput
+    orderBy?: OrderOrderByWithRelationInput | OrderOrderByWithRelationInput[]
+    cursor?: OrderWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: OrderScalarFieldEnum | OrderScalarFieldEnum[]
   }
 
   /**
@@ -11943,6 +12243,7 @@ export namespace Prisma {
     merchantId: string | null
     apiKey: string | null
     secretKey: string | null
+    webhookSecret: string | null
     isActive: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -11955,6 +12256,7 @@ export namespace Prisma {
     merchantId: string | null
     apiKey: string | null
     secretKey: string | null
+    webhookSecret: string | null
     isActive: boolean | null
     createdAt: Date | null
     updatedAt: Date | null
@@ -11967,6 +12269,7 @@ export namespace Prisma {
     merchantId: number
     apiKey: number
     secretKey: number
+    webhookSecret: number
     isActive: number
     createdAt: number
     updatedAt: number
@@ -11981,6 +12284,7 @@ export namespace Prisma {
     merchantId?: true
     apiKey?: true
     secretKey?: true
+    webhookSecret?: true
     isActive?: true
     createdAt?: true
     updatedAt?: true
@@ -11993,6 +12297,7 @@ export namespace Prisma {
     merchantId?: true
     apiKey?: true
     secretKey?: true
+    webhookSecret?: true
     isActive?: true
     createdAt?: true
     updatedAt?: true
@@ -12005,6 +12310,7 @@ export namespace Prisma {
     merchantId?: true
     apiKey?: true
     secretKey?: true
+    webhookSecret?: true
     isActive?: true
     createdAt?: true
     updatedAt?: true
@@ -12090,6 +12396,7 @@ export namespace Prisma {
     merchantId: string
     apiKey: string
     secretKey: string | null
+    webhookSecret: string | null
     isActive: boolean
     createdAt: Date
     updatedAt: Date
@@ -12119,6 +12426,7 @@ export namespace Prisma {
     merchantId?: boolean
     apiKey?: boolean
     secretKey?: boolean
+    webhookSecret?: boolean
     isActive?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -12132,6 +12440,7 @@ export namespace Prisma {
     merchantId?: boolean
     apiKey?: boolean
     secretKey?: boolean
+    webhookSecret?: boolean
     isActive?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -12145,6 +12454,7 @@ export namespace Prisma {
     merchantId?: boolean
     apiKey?: boolean
     secretKey?: boolean
+    webhookSecret?: boolean
     isActive?: boolean
     createdAt?: boolean
     updatedAt?: boolean
@@ -12158,12 +12468,13 @@ export namespace Prisma {
     merchantId?: boolean
     apiKey?: boolean
     secretKey?: boolean
+    webhookSecret?: boolean
     isActive?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type TenantPaymentGatewayOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "tenantId" | "provider" | "merchantId" | "apiKey" | "secretKey" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["tenantPaymentGateway"]>
+  export type TenantPaymentGatewayOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "tenantId" | "provider" | "merchantId" | "apiKey" | "secretKey" | "webhookSecret" | "isActive" | "createdAt" | "updatedAt", ExtArgs["result"]["tenantPaymentGateway"]>
   export type TenantPaymentGatewayInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     tenant?: boolean | TenantDefaultArgs<ExtArgs>
   }
@@ -12186,6 +12497,7 @@ export namespace Prisma {
       merchantId: string
       apiKey: string
       secretKey: string | null
+      webhookSecret: string | null
       isActive: boolean
       createdAt: Date
       updatedAt: Date
@@ -12619,6 +12931,7 @@ export namespace Prisma {
     readonly merchantId: FieldRef<"TenantPaymentGateway", 'String'>
     readonly apiKey: FieldRef<"TenantPaymentGateway", 'String'>
     readonly secretKey: FieldRef<"TenantPaymentGateway", 'String'>
+    readonly webhookSecret: FieldRef<"TenantPaymentGateway", 'String'>
     readonly isActive: FieldRef<"TenantPaymentGateway", 'Boolean'>
     readonly createdAt: FieldRef<"TenantPaymentGateway", 'DateTime'>
     readonly updatedAt: FieldRef<"TenantPaymentGateway", 'DateTime'>
@@ -23684,6 +23997,7 @@ export namespace Prisma {
     paymentMethod: $Enums.PaymentMethod | null
     cashAmount: number | null
     onlineAmount: number | null
+    paidAt: Date | null
     status: $Enums.OrderStatus | null
     subTotal: number | null
     taxAmount: number | null
@@ -23691,6 +24005,9 @@ export namespace Prisma {
     walletDiscount: number | null
     promoCodeId: string | null
     totalAmount: number | null
+    cancelReason: string | null
+    cancelledAt: Date | null
+    cancelledById: string | null
     paymentLinkId: string | null
     paymentLinkUrl: string | null
     createdAt: Date | null
@@ -23711,6 +24028,7 @@ export namespace Prisma {
     paymentMethod: $Enums.PaymentMethod | null
     cashAmount: number | null
     onlineAmount: number | null
+    paidAt: Date | null
     status: $Enums.OrderStatus | null
     subTotal: number | null
     taxAmount: number | null
@@ -23718,6 +24036,9 @@ export namespace Prisma {
     walletDiscount: number | null
     promoCodeId: string | null
     totalAmount: number | null
+    cancelReason: string | null
+    cancelledAt: Date | null
+    cancelledById: string | null
     paymentLinkId: string | null
     paymentLinkUrl: string | null
     createdAt: Date | null
@@ -23738,6 +24059,7 @@ export namespace Prisma {
     paymentMethod: number
     cashAmount: number
     onlineAmount: number
+    paidAt: number
     status: number
     subTotal: number
     taxAmount: number
@@ -23745,6 +24067,10 @@ export namespace Prisma {
     walletDiscount: number
     promoCodeId: number
     totalAmount: number
+    taxRules: number
+    cancelReason: number
+    cancelledAt: number
+    cancelledById: number
     paymentLinkId: number
     paymentLinkUrl: number
     createdAt: number
@@ -23787,6 +24113,7 @@ export namespace Prisma {
     paymentMethod?: true
     cashAmount?: true
     onlineAmount?: true
+    paidAt?: true
     status?: true
     subTotal?: true
     taxAmount?: true
@@ -23794,6 +24121,9 @@ export namespace Prisma {
     walletDiscount?: true
     promoCodeId?: true
     totalAmount?: true
+    cancelReason?: true
+    cancelledAt?: true
+    cancelledById?: true
     paymentLinkId?: true
     paymentLinkUrl?: true
     createdAt?: true
@@ -23814,6 +24144,7 @@ export namespace Prisma {
     paymentMethod?: true
     cashAmount?: true
     onlineAmount?: true
+    paidAt?: true
     status?: true
     subTotal?: true
     taxAmount?: true
@@ -23821,6 +24152,9 @@ export namespace Prisma {
     walletDiscount?: true
     promoCodeId?: true
     totalAmount?: true
+    cancelReason?: true
+    cancelledAt?: true
+    cancelledById?: true
     paymentLinkId?: true
     paymentLinkUrl?: true
     createdAt?: true
@@ -23841,6 +24175,7 @@ export namespace Prisma {
     paymentMethod?: true
     cashAmount?: true
     onlineAmount?: true
+    paidAt?: true
     status?: true
     subTotal?: true
     taxAmount?: true
@@ -23848,6 +24183,10 @@ export namespace Prisma {
     walletDiscount?: true
     promoCodeId?: true
     totalAmount?: true
+    taxRules?: true
+    cancelReason?: true
+    cancelledAt?: true
+    cancelledById?: true
     paymentLinkId?: true
     paymentLinkUrl?: true
     createdAt?: true
@@ -23955,6 +24294,7 @@ export namespace Prisma {
     paymentMethod: $Enums.PaymentMethod | null
     cashAmount: number
     onlineAmount: number
+    paidAt: Date | null
     status: $Enums.OrderStatus
     subTotal: number
     taxAmount: number
@@ -23962,6 +24302,10 @@ export namespace Prisma {
     walletDiscount: number
     promoCodeId: string | null
     totalAmount: number
+    taxRules: JsonValue | null
+    cancelReason: string | null
+    cancelledAt: Date | null
+    cancelledById: string | null
     paymentLinkId: string | null
     paymentLinkUrl: string | null
     createdAt: Date
@@ -24001,6 +24345,7 @@ export namespace Prisma {
     paymentMethod?: boolean
     cashAmount?: boolean
     onlineAmount?: boolean
+    paidAt?: boolean
     status?: boolean
     subTotal?: boolean
     taxAmount?: boolean
@@ -24008,6 +24353,10 @@ export namespace Prisma {
     walletDiscount?: boolean
     promoCodeId?: boolean
     totalAmount?: boolean
+    taxRules?: boolean
+    cancelReason?: boolean
+    cancelledAt?: boolean
+    cancelledById?: boolean
     paymentLinkId?: boolean
     paymentLinkUrl?: boolean
     createdAt?: boolean
@@ -24018,7 +24367,9 @@ export namespace Prisma {
     staff?: boolean | Order$staffArgs<ExtArgs>
     customer?: boolean | Order$customerArgs<ExtArgs>
     promoCode?: boolean | Order$promoCodeArgs<ExtArgs>
+    cancelledBy?: boolean | Order$cancelledByArgs<ExtArgs>
     items?: boolean | Order$itemsArgs<ExtArgs>
+    payments?: boolean | Order$paymentsArgs<ExtArgs>
     feedbacks?: boolean | Order$feedbacksArgs<ExtArgs>
     walletTransactions?: boolean | Order$walletTransactionsArgs<ExtArgs>
     _count?: boolean | OrderCountOutputTypeDefaultArgs<ExtArgs>
@@ -24038,6 +24389,7 @@ export namespace Prisma {
     paymentMethod?: boolean
     cashAmount?: boolean
     onlineAmount?: boolean
+    paidAt?: boolean
     status?: boolean
     subTotal?: boolean
     taxAmount?: boolean
@@ -24045,6 +24397,10 @@ export namespace Prisma {
     walletDiscount?: boolean
     promoCodeId?: boolean
     totalAmount?: boolean
+    taxRules?: boolean
+    cancelReason?: boolean
+    cancelledAt?: boolean
+    cancelledById?: boolean
     paymentLinkId?: boolean
     paymentLinkUrl?: boolean
     createdAt?: boolean
@@ -24055,6 +24411,7 @@ export namespace Prisma {
     staff?: boolean | Order$staffArgs<ExtArgs>
     customer?: boolean | Order$customerArgs<ExtArgs>
     promoCode?: boolean | Order$promoCodeArgs<ExtArgs>
+    cancelledBy?: boolean | Order$cancelledByArgs<ExtArgs>
   }, ExtArgs["result"]["order"]>
 
   export type OrderSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
@@ -24071,6 +24428,7 @@ export namespace Prisma {
     paymentMethod?: boolean
     cashAmount?: boolean
     onlineAmount?: boolean
+    paidAt?: boolean
     status?: boolean
     subTotal?: boolean
     taxAmount?: boolean
@@ -24078,6 +24436,10 @@ export namespace Prisma {
     walletDiscount?: boolean
     promoCodeId?: boolean
     totalAmount?: boolean
+    taxRules?: boolean
+    cancelReason?: boolean
+    cancelledAt?: boolean
+    cancelledById?: boolean
     paymentLinkId?: boolean
     paymentLinkUrl?: boolean
     createdAt?: boolean
@@ -24088,6 +24450,7 @@ export namespace Prisma {
     staff?: boolean | Order$staffArgs<ExtArgs>
     customer?: boolean | Order$customerArgs<ExtArgs>
     promoCode?: boolean | Order$promoCodeArgs<ExtArgs>
+    cancelledBy?: boolean | Order$cancelledByArgs<ExtArgs>
   }, ExtArgs["result"]["order"]>
 
   export type OrderSelectScalar = {
@@ -24104,6 +24467,7 @@ export namespace Prisma {
     paymentMethod?: boolean
     cashAmount?: boolean
     onlineAmount?: boolean
+    paidAt?: boolean
     status?: boolean
     subTotal?: boolean
     taxAmount?: boolean
@@ -24111,13 +24475,17 @@ export namespace Prisma {
     walletDiscount?: boolean
     promoCodeId?: boolean
     totalAmount?: boolean
+    taxRules?: boolean
+    cancelReason?: boolean
+    cancelledAt?: boolean
+    cancelledById?: boolean
     paymentLinkId?: boolean
     paymentLinkUrl?: boolean
     createdAt?: boolean
     updatedAt?: boolean
   }
 
-  export type OrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "storeId" | "origin" | "type" | "tableId" | "tableSessionId" | "staffId" | "customerId" | "sessionId" | "paymentModel" | "paymentMethod" | "cashAmount" | "onlineAmount" | "status" | "subTotal" | "taxAmount" | "discountAmount" | "walletDiscount" | "promoCodeId" | "totalAmount" | "paymentLinkId" | "paymentLinkUrl" | "createdAt" | "updatedAt", ExtArgs["result"]["order"]>
+  export type OrderOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "storeId" | "origin" | "type" | "tableId" | "tableSessionId" | "staffId" | "customerId" | "sessionId" | "paymentModel" | "paymentMethod" | "cashAmount" | "onlineAmount" | "paidAt" | "status" | "subTotal" | "taxAmount" | "discountAmount" | "walletDiscount" | "promoCodeId" | "totalAmount" | "taxRules" | "cancelReason" | "cancelledAt" | "cancelledById" | "paymentLinkId" | "paymentLinkUrl" | "createdAt" | "updatedAt", ExtArgs["result"]["order"]>
   export type OrderInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     store?: boolean | StoreDefaultArgs<ExtArgs>
     table?: boolean | Order$tableArgs<ExtArgs>
@@ -24125,7 +24493,9 @@ export namespace Prisma {
     staff?: boolean | Order$staffArgs<ExtArgs>
     customer?: boolean | Order$customerArgs<ExtArgs>
     promoCode?: boolean | Order$promoCodeArgs<ExtArgs>
+    cancelledBy?: boolean | Order$cancelledByArgs<ExtArgs>
     items?: boolean | Order$itemsArgs<ExtArgs>
+    payments?: boolean | Order$paymentsArgs<ExtArgs>
     feedbacks?: boolean | Order$feedbacksArgs<ExtArgs>
     walletTransactions?: boolean | Order$walletTransactionsArgs<ExtArgs>
     _count?: boolean | OrderCountOutputTypeDefaultArgs<ExtArgs>
@@ -24137,6 +24507,7 @@ export namespace Prisma {
     staff?: boolean | Order$staffArgs<ExtArgs>
     customer?: boolean | Order$customerArgs<ExtArgs>
     promoCode?: boolean | Order$promoCodeArgs<ExtArgs>
+    cancelledBy?: boolean | Order$cancelledByArgs<ExtArgs>
   }
   export type OrderIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     store?: boolean | StoreDefaultArgs<ExtArgs>
@@ -24145,6 +24516,7 @@ export namespace Prisma {
     staff?: boolean | Order$staffArgs<ExtArgs>
     customer?: boolean | Order$customerArgs<ExtArgs>
     promoCode?: boolean | Order$promoCodeArgs<ExtArgs>
+    cancelledBy?: boolean | Order$cancelledByArgs<ExtArgs>
   }
 
   export type $OrderPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -24156,7 +24528,9 @@ export namespace Prisma {
       staff: Prisma.$UserPayload<ExtArgs> | null
       customer: Prisma.$UserPayload<ExtArgs> | null
       promoCode: Prisma.$PromoCodePayload<ExtArgs> | null
+      cancelledBy: Prisma.$UserPayload<ExtArgs> | null
       items: Prisma.$OrderItemPayload<ExtArgs>[]
+      payments: Prisma.$PaymentPayload<ExtArgs>[]
       feedbacks: Prisma.$FeedbackPayload<ExtArgs>[]
       walletTransactions: Prisma.$CustomerWalletTransactionPayload<ExtArgs>[]
     }
@@ -24174,6 +24548,7 @@ export namespace Prisma {
       paymentMethod: $Enums.PaymentMethod | null
       cashAmount: number
       onlineAmount: number
+      paidAt: Date | null
       status: $Enums.OrderStatus
       subTotal: number
       taxAmount: number
@@ -24181,6 +24556,10 @@ export namespace Prisma {
       walletDiscount: number
       promoCodeId: string | null
       totalAmount: number
+      taxRules: Prisma.JsonValue | null
+      cancelReason: string | null
+      cancelledAt: Date | null
+      cancelledById: string | null
       paymentLinkId: string | null
       paymentLinkUrl: string | null
       createdAt: Date
@@ -24585,7 +24964,9 @@ export namespace Prisma {
     staff<T extends Order$staffArgs<ExtArgs> = {}>(args?: Subset<T, Order$staffArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     customer<T extends Order$customerArgs<ExtArgs> = {}>(args?: Subset<T, Order$customerArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     promoCode<T extends Order$promoCodeArgs<ExtArgs> = {}>(args?: Subset<T, Order$promoCodeArgs<ExtArgs>>): Prisma__PromoCodeClient<$Result.GetResult<Prisma.$PromoCodePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    cancelledBy<T extends Order$cancelledByArgs<ExtArgs> = {}>(args?: Subset<T, Order$cancelledByArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
     items<T extends Order$itemsArgs<ExtArgs> = {}>(args?: Subset<T, Order$itemsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrderItemPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    payments<T extends Order$paymentsArgs<ExtArgs> = {}>(args?: Subset<T, Order$paymentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     feedbacks<T extends Order$feedbacksArgs<ExtArgs> = {}>(args?: Subset<T, Order$feedbacksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$FeedbackPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     walletTransactions<T extends Order$walletTransactionsArgs<ExtArgs> = {}>(args?: Subset<T, Order$walletTransactionsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$CustomerWalletTransactionPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
@@ -24630,6 +25011,7 @@ export namespace Prisma {
     readonly paymentMethod: FieldRef<"Order", 'PaymentMethod'>
     readonly cashAmount: FieldRef<"Order", 'Int'>
     readonly onlineAmount: FieldRef<"Order", 'Int'>
+    readonly paidAt: FieldRef<"Order", 'DateTime'>
     readonly status: FieldRef<"Order", 'OrderStatus'>
     readonly subTotal: FieldRef<"Order", 'Int'>
     readonly taxAmount: FieldRef<"Order", 'Int'>
@@ -24637,6 +25019,10 @@ export namespace Prisma {
     readonly walletDiscount: FieldRef<"Order", 'Int'>
     readonly promoCodeId: FieldRef<"Order", 'String'>
     readonly totalAmount: FieldRef<"Order", 'Int'>
+    readonly taxRules: FieldRef<"Order", 'Json'>
+    readonly cancelReason: FieldRef<"Order", 'String'>
+    readonly cancelledAt: FieldRef<"Order", 'DateTime'>
+    readonly cancelledById: FieldRef<"Order", 'String'>
     readonly paymentLinkId: FieldRef<"Order", 'String'>
     readonly paymentLinkUrl: FieldRef<"Order", 'String'>
     readonly createdAt: FieldRef<"Order", 'DateTime'>
@@ -25132,6 +25518,25 @@ export namespace Prisma {
   }
 
   /**
+   * Order.cancelledBy
+   */
+  export type Order$cancelledByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the User
+     */
+    select?: UserSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the User
+     */
+    omit?: UserOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: UserInclude<ExtArgs> | null
+    where?: UserWhereInput
+  }
+
+  /**
    * Order.items
    */
   export type Order$itemsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -25153,6 +25558,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: OrderItemScalarFieldEnum | OrderItemScalarFieldEnum[]
+  }
+
+  /**
+   * Order.payments
+   */
+  export type Order$paymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    where?: PaymentWhereInput
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    cursor?: PaymentWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
   }
 
   /**
@@ -25219,6 +25648,1369 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: OrderInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model Payment
+   */
+
+  export type AggregatePayment = {
+    _count: PaymentCountAggregateOutputType | null
+    _avg: PaymentAvgAggregateOutputType | null
+    _sum: PaymentSumAggregateOutputType | null
+    _min: PaymentMinAggregateOutputType | null
+    _max: PaymentMaxAggregateOutputType | null
+  }
+
+  export type PaymentAvgAggregateOutputType = {
+    amount: number | null
+    cashTendered: number | null
+    changeDue: number | null
+  }
+
+  export type PaymentSumAggregateOutputType = {
+    amount: number | null
+    cashTendered: number | null
+    changeDue: number | null
+  }
+
+  export type PaymentMinAggregateOutputType = {
+    id: string | null
+    storeId: string | null
+    orderId: string | null
+    tableSessionId: string | null
+    channel: $Enums.PaymentChannel | null
+    status: $Enums.PaymentStatus | null
+    amount: number | null
+    providerKind: string | null
+    providerRef: string | null
+    providerPaymentId: string | null
+    qrImageUrl: string | null
+    qrPayload: string | null
+    cashTendered: number | null
+    changeDue: number | null
+    collectedById: string | null
+    paidAt: Date | null
+    expiresAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PaymentMaxAggregateOutputType = {
+    id: string | null
+    storeId: string | null
+    orderId: string | null
+    tableSessionId: string | null
+    channel: $Enums.PaymentChannel | null
+    status: $Enums.PaymentStatus | null
+    amount: number | null
+    providerKind: string | null
+    providerRef: string | null
+    providerPaymentId: string | null
+    qrImageUrl: string | null
+    qrPayload: string | null
+    cashTendered: number | null
+    changeDue: number | null
+    collectedById: string | null
+    paidAt: Date | null
+    expiresAt: Date | null
+    createdAt: Date | null
+    updatedAt: Date | null
+  }
+
+  export type PaymentCountAggregateOutputType = {
+    id: number
+    storeId: number
+    orderId: number
+    tableSessionId: number
+    channel: number
+    status: number
+    amount: number
+    providerKind: number
+    providerRef: number
+    providerPaymentId: number
+    qrImageUrl: number
+    qrPayload: number
+    cashTendered: number
+    changeDue: number
+    collectedById: number
+    paidAt: number
+    expiresAt: number
+    createdAt: number
+    updatedAt: number
+    _all: number
+  }
+
+
+  export type PaymentAvgAggregateInputType = {
+    amount?: true
+    cashTendered?: true
+    changeDue?: true
+  }
+
+  export type PaymentSumAggregateInputType = {
+    amount?: true
+    cashTendered?: true
+    changeDue?: true
+  }
+
+  export type PaymentMinAggregateInputType = {
+    id?: true
+    storeId?: true
+    orderId?: true
+    tableSessionId?: true
+    channel?: true
+    status?: true
+    amount?: true
+    providerKind?: true
+    providerRef?: true
+    providerPaymentId?: true
+    qrImageUrl?: true
+    qrPayload?: true
+    cashTendered?: true
+    changeDue?: true
+    collectedById?: true
+    paidAt?: true
+    expiresAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PaymentMaxAggregateInputType = {
+    id?: true
+    storeId?: true
+    orderId?: true
+    tableSessionId?: true
+    channel?: true
+    status?: true
+    amount?: true
+    providerKind?: true
+    providerRef?: true
+    providerPaymentId?: true
+    qrImageUrl?: true
+    qrPayload?: true
+    cashTendered?: true
+    changeDue?: true
+    collectedById?: true
+    paidAt?: true
+    expiresAt?: true
+    createdAt?: true
+    updatedAt?: true
+  }
+
+  export type PaymentCountAggregateInputType = {
+    id?: true
+    storeId?: true
+    orderId?: true
+    tableSessionId?: true
+    channel?: true
+    status?: true
+    amount?: true
+    providerKind?: true
+    providerRef?: true
+    providerPaymentId?: true
+    qrImageUrl?: true
+    qrPayload?: true
+    cashTendered?: true
+    changeDue?: true
+    collectedById?: true
+    paidAt?: true
+    expiresAt?: true
+    createdAt?: true
+    updatedAt?: true
+    _all?: true
+  }
+
+  export type PaymentAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Payment to aggregate.
+     */
+    where?: PaymentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Payments to fetch.
+     */
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: PaymentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Payments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Payments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned Payments
+    **/
+    _count?: true | PaymentCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: PaymentAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: PaymentSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: PaymentMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: PaymentMaxAggregateInputType
+  }
+
+  export type GetPaymentAggregateType<T extends PaymentAggregateArgs> = {
+        [P in keyof T & keyof AggregatePayment]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregatePayment[P]>
+      : GetScalarType<T[P], AggregatePayment[P]>
+  }
+
+
+
+
+  export type PaymentGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: PaymentWhereInput
+    orderBy?: PaymentOrderByWithAggregationInput | PaymentOrderByWithAggregationInput[]
+    by: PaymentScalarFieldEnum[] | PaymentScalarFieldEnum
+    having?: PaymentScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: PaymentCountAggregateInputType | true
+    _avg?: PaymentAvgAggregateInputType
+    _sum?: PaymentSumAggregateInputType
+    _min?: PaymentMinAggregateInputType
+    _max?: PaymentMaxAggregateInputType
+  }
+
+  export type PaymentGroupByOutputType = {
+    id: string
+    storeId: string
+    orderId: string | null
+    tableSessionId: string | null
+    channel: $Enums.PaymentChannel
+    status: $Enums.PaymentStatus
+    amount: number
+    providerKind: string | null
+    providerRef: string | null
+    providerPaymentId: string | null
+    qrImageUrl: string | null
+    qrPayload: string | null
+    cashTendered: number | null
+    changeDue: number | null
+    collectedById: string | null
+    paidAt: Date | null
+    expiresAt: Date | null
+    createdAt: Date
+    updatedAt: Date
+    _count: PaymentCountAggregateOutputType | null
+    _avg: PaymentAvgAggregateOutputType | null
+    _sum: PaymentSumAggregateOutputType | null
+    _min: PaymentMinAggregateOutputType | null
+    _max: PaymentMaxAggregateOutputType | null
+  }
+
+  type GetPaymentGroupByPayload<T extends PaymentGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<PaymentGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof PaymentGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], PaymentGroupByOutputType[P]>
+            : GetScalarType<T[P], PaymentGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type PaymentSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    storeId?: boolean
+    orderId?: boolean
+    tableSessionId?: boolean
+    channel?: boolean
+    status?: boolean
+    amount?: boolean
+    providerKind?: boolean
+    providerRef?: boolean
+    providerPaymentId?: boolean
+    qrImageUrl?: boolean
+    qrPayload?: boolean
+    cashTendered?: boolean
+    changeDue?: boolean
+    collectedById?: boolean
+    paidAt?: boolean
+    expiresAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    store?: boolean | StoreDefaultArgs<ExtArgs>
+    order?: boolean | Payment$orderArgs<ExtArgs>
+    tableSession?: boolean | Payment$tableSessionArgs<ExtArgs>
+    collectedBy?: boolean | Payment$collectedByArgs<ExtArgs>
+  }, ExtArgs["result"]["payment"]>
+
+  export type PaymentSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    storeId?: boolean
+    orderId?: boolean
+    tableSessionId?: boolean
+    channel?: boolean
+    status?: boolean
+    amount?: boolean
+    providerKind?: boolean
+    providerRef?: boolean
+    providerPaymentId?: boolean
+    qrImageUrl?: boolean
+    qrPayload?: boolean
+    cashTendered?: boolean
+    changeDue?: boolean
+    collectedById?: boolean
+    paidAt?: boolean
+    expiresAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    store?: boolean | StoreDefaultArgs<ExtArgs>
+    order?: boolean | Payment$orderArgs<ExtArgs>
+    tableSession?: boolean | Payment$tableSessionArgs<ExtArgs>
+    collectedBy?: boolean | Payment$collectedByArgs<ExtArgs>
+  }, ExtArgs["result"]["payment"]>
+
+  export type PaymentSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    storeId?: boolean
+    orderId?: boolean
+    tableSessionId?: boolean
+    channel?: boolean
+    status?: boolean
+    amount?: boolean
+    providerKind?: boolean
+    providerRef?: boolean
+    providerPaymentId?: boolean
+    qrImageUrl?: boolean
+    qrPayload?: boolean
+    cashTendered?: boolean
+    changeDue?: boolean
+    collectedById?: boolean
+    paidAt?: boolean
+    expiresAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+    store?: boolean | StoreDefaultArgs<ExtArgs>
+    order?: boolean | Payment$orderArgs<ExtArgs>
+    tableSession?: boolean | Payment$tableSessionArgs<ExtArgs>
+    collectedBy?: boolean | Payment$collectedByArgs<ExtArgs>
+  }, ExtArgs["result"]["payment"]>
+
+  export type PaymentSelectScalar = {
+    id?: boolean
+    storeId?: boolean
+    orderId?: boolean
+    tableSessionId?: boolean
+    channel?: boolean
+    status?: boolean
+    amount?: boolean
+    providerKind?: boolean
+    providerRef?: boolean
+    providerPaymentId?: boolean
+    qrImageUrl?: boolean
+    qrPayload?: boolean
+    cashTendered?: boolean
+    changeDue?: boolean
+    collectedById?: boolean
+    paidAt?: boolean
+    expiresAt?: boolean
+    createdAt?: boolean
+    updatedAt?: boolean
+  }
+
+  export type PaymentOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "storeId" | "orderId" | "tableSessionId" | "channel" | "status" | "amount" | "providerKind" | "providerRef" | "providerPaymentId" | "qrImageUrl" | "qrPayload" | "cashTendered" | "changeDue" | "collectedById" | "paidAt" | "expiresAt" | "createdAt" | "updatedAt", ExtArgs["result"]["payment"]>
+  export type PaymentInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    store?: boolean | StoreDefaultArgs<ExtArgs>
+    order?: boolean | Payment$orderArgs<ExtArgs>
+    tableSession?: boolean | Payment$tableSessionArgs<ExtArgs>
+    collectedBy?: boolean | Payment$collectedByArgs<ExtArgs>
+  }
+  export type PaymentIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    store?: boolean | StoreDefaultArgs<ExtArgs>
+    order?: boolean | Payment$orderArgs<ExtArgs>
+    tableSession?: boolean | Payment$tableSessionArgs<ExtArgs>
+    collectedBy?: boolean | Payment$collectedByArgs<ExtArgs>
+  }
+  export type PaymentIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    store?: boolean | StoreDefaultArgs<ExtArgs>
+    order?: boolean | Payment$orderArgs<ExtArgs>
+    tableSession?: boolean | Payment$tableSessionArgs<ExtArgs>
+    collectedBy?: boolean | Payment$collectedByArgs<ExtArgs>
+  }
+
+  export type $PaymentPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "Payment"
+    objects: {
+      store: Prisma.$StorePayload<ExtArgs>
+      order: Prisma.$OrderPayload<ExtArgs> | null
+      tableSession: Prisma.$TableSessionPayload<ExtArgs> | null
+      collectedBy: Prisma.$UserPayload<ExtArgs> | null
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      storeId: string
+      orderId: string | null
+      tableSessionId: string | null
+      channel: $Enums.PaymentChannel
+      status: $Enums.PaymentStatus
+      amount: number
+      providerKind: string | null
+      providerRef: string | null
+      providerPaymentId: string | null
+      qrImageUrl: string | null
+      qrPayload: string | null
+      cashTendered: number | null
+      changeDue: number | null
+      collectedById: string | null
+      paidAt: Date | null
+      expiresAt: Date | null
+      createdAt: Date
+      updatedAt: Date
+    }, ExtArgs["result"]["payment"]>
+    composites: {}
+  }
+
+  type PaymentGetPayload<S extends boolean | null | undefined | PaymentDefaultArgs> = $Result.GetResult<Prisma.$PaymentPayload, S>
+
+  type PaymentCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<PaymentFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: PaymentCountAggregateInputType | true
+    }
+
+  export interface PaymentDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['Payment'], meta: { name: 'Payment' } }
+    /**
+     * Find zero or one Payment that matches the filter.
+     * @param {PaymentFindUniqueArgs} args - Arguments to find a Payment
+     * @example
+     * // Get one Payment
+     * const payment = await prisma.payment.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends PaymentFindUniqueArgs>(args: SelectSubset<T, PaymentFindUniqueArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one Payment that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {PaymentFindUniqueOrThrowArgs} args - Arguments to find a Payment
+     * @example
+     * // Get one Payment
+     * const payment = await prisma.payment.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends PaymentFindUniqueOrThrowArgs>(args: SelectSubset<T, PaymentFindUniqueOrThrowArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Payment that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentFindFirstArgs} args - Arguments to find a Payment
+     * @example
+     * // Get one Payment
+     * const payment = await prisma.payment.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends PaymentFindFirstArgs>(args?: SelectSubset<T, PaymentFindFirstArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first Payment that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentFindFirstOrThrowArgs} args - Arguments to find a Payment
+     * @example
+     * // Get one Payment
+     * const payment = await prisma.payment.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends PaymentFindFirstOrThrowArgs>(args?: SelectSubset<T, PaymentFindFirstOrThrowArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more Payments that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all Payments
+     * const payments = await prisma.payment.findMany()
+     * 
+     * // Get first 10 Payments
+     * const payments = await prisma.payment.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const paymentWithIdOnly = await prisma.payment.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends PaymentFindManyArgs>(args?: SelectSubset<T, PaymentFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a Payment.
+     * @param {PaymentCreateArgs} args - Arguments to create a Payment.
+     * @example
+     * // Create one Payment
+     * const Payment = await prisma.payment.create({
+     *   data: {
+     *     // ... data to create a Payment
+     *   }
+     * })
+     * 
+     */
+    create<T extends PaymentCreateArgs>(args: SelectSubset<T, PaymentCreateArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many Payments.
+     * @param {PaymentCreateManyArgs} args - Arguments to create many Payments.
+     * @example
+     * // Create many Payments
+     * const payment = await prisma.payment.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends PaymentCreateManyArgs>(args?: SelectSubset<T, PaymentCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many Payments and returns the data saved in the database.
+     * @param {PaymentCreateManyAndReturnArgs} args - Arguments to create many Payments.
+     * @example
+     * // Create many Payments
+     * const payment = await prisma.payment.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many Payments and only return the `id`
+     * const paymentWithIdOnly = await prisma.payment.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends PaymentCreateManyAndReturnArgs>(args?: SelectSubset<T, PaymentCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a Payment.
+     * @param {PaymentDeleteArgs} args - Arguments to delete one Payment.
+     * @example
+     * // Delete one Payment
+     * const Payment = await prisma.payment.delete({
+     *   where: {
+     *     // ... filter to delete one Payment
+     *   }
+     * })
+     * 
+     */
+    delete<T extends PaymentDeleteArgs>(args: SelectSubset<T, PaymentDeleteArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one Payment.
+     * @param {PaymentUpdateArgs} args - Arguments to update one Payment.
+     * @example
+     * // Update one Payment
+     * const payment = await prisma.payment.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends PaymentUpdateArgs>(args: SelectSubset<T, PaymentUpdateArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more Payments.
+     * @param {PaymentDeleteManyArgs} args - Arguments to filter Payments to delete.
+     * @example
+     * // Delete a few Payments
+     * const { count } = await prisma.payment.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends PaymentDeleteManyArgs>(args?: SelectSubset<T, PaymentDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Payments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many Payments
+     * const payment = await prisma.payment.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends PaymentUpdateManyArgs>(args: SelectSubset<T, PaymentUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more Payments and returns the data updated in the database.
+     * @param {PaymentUpdateManyAndReturnArgs} args - Arguments to update many Payments.
+     * @example
+     * // Update many Payments
+     * const payment = await prisma.payment.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more Payments and only return the `id`
+     * const paymentWithIdOnly = await prisma.payment.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends PaymentUpdateManyAndReturnArgs>(args: SelectSubset<T, PaymentUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one Payment.
+     * @param {PaymentUpsertArgs} args - Arguments to update or create a Payment.
+     * @example
+     * // Update or create a Payment
+     * const payment = await prisma.payment.upsert({
+     *   create: {
+     *     // ... data to create a Payment
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the Payment we want to update
+     *   }
+     * })
+     */
+    upsert<T extends PaymentUpsertArgs>(args: SelectSubset<T, PaymentUpsertArgs<ExtArgs>>): Prisma__PaymentClient<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of Payments.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentCountArgs} args - Arguments to filter Payments to count.
+     * @example
+     * // Count the number of Payments
+     * const count = await prisma.payment.count({
+     *   where: {
+     *     // ... the filter for the Payments we want to count
+     *   }
+     * })
+    **/
+    count<T extends PaymentCountArgs>(
+      args?: Subset<T, PaymentCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], PaymentCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a Payment.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends PaymentAggregateArgs>(args: Subset<T, PaymentAggregateArgs>): Prisma.PrismaPromise<GetPaymentAggregateType<T>>
+
+    /**
+     * Group by Payment.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {PaymentGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends PaymentGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: PaymentGroupByArgs['orderBy'] }
+        : { orderBy?: PaymentGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, PaymentGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetPaymentGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the Payment model
+   */
+  readonly fields: PaymentFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for Payment.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__PaymentClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    store<T extends StoreDefaultArgs<ExtArgs> = {}>(args?: Subset<T, StoreDefaultArgs<ExtArgs>>): Prisma__StoreClient<$Result.GetResult<Prisma.$StorePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    order<T extends Payment$orderArgs<ExtArgs> = {}>(args?: Subset<T, Payment$orderArgs<ExtArgs>>): Prisma__OrderClient<$Result.GetResult<Prisma.$OrderPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    tableSession<T extends Payment$tableSessionArgs<ExtArgs> = {}>(args?: Subset<T, Payment$tableSessionArgs<ExtArgs>>): Prisma__TableSessionClient<$Result.GetResult<Prisma.$TableSessionPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    collectedBy<T extends Payment$collectedByArgs<ExtArgs> = {}>(args?: Subset<T, Payment$collectedByArgs<ExtArgs>>): Prisma__UserClient<$Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the Payment model
+   */
+  interface PaymentFieldRefs {
+    readonly id: FieldRef<"Payment", 'String'>
+    readonly storeId: FieldRef<"Payment", 'String'>
+    readonly orderId: FieldRef<"Payment", 'String'>
+    readonly tableSessionId: FieldRef<"Payment", 'String'>
+    readonly channel: FieldRef<"Payment", 'PaymentChannel'>
+    readonly status: FieldRef<"Payment", 'PaymentStatus'>
+    readonly amount: FieldRef<"Payment", 'Int'>
+    readonly providerKind: FieldRef<"Payment", 'String'>
+    readonly providerRef: FieldRef<"Payment", 'String'>
+    readonly providerPaymentId: FieldRef<"Payment", 'String'>
+    readonly qrImageUrl: FieldRef<"Payment", 'String'>
+    readonly qrPayload: FieldRef<"Payment", 'String'>
+    readonly cashTendered: FieldRef<"Payment", 'Int'>
+    readonly changeDue: FieldRef<"Payment", 'Int'>
+    readonly collectedById: FieldRef<"Payment", 'String'>
+    readonly paidAt: FieldRef<"Payment", 'DateTime'>
+    readonly expiresAt: FieldRef<"Payment", 'DateTime'>
+    readonly createdAt: FieldRef<"Payment", 'DateTime'>
+    readonly updatedAt: FieldRef<"Payment", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * Payment findUnique
+   */
+  export type PaymentFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payment to fetch.
+     */
+    where: PaymentWhereUniqueInput
+  }
+
+  /**
+   * Payment findUniqueOrThrow
+   */
+  export type PaymentFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payment to fetch.
+     */
+    where: PaymentWhereUniqueInput
+  }
+
+  /**
+   * Payment findFirst
+   */
+  export type PaymentFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payment to fetch.
+     */
+    where?: PaymentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Payments to fetch.
+     */
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Payments.
+     */
+    cursor?: PaymentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Payments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Payments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Payments.
+     */
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
+  }
+
+  /**
+   * Payment findFirstOrThrow
+   */
+  export type PaymentFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payment to fetch.
+     */
+    where?: PaymentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Payments to fetch.
+     */
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for Payments.
+     */
+    cursor?: PaymentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Payments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Payments.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of Payments.
+     */
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
+  }
+
+  /**
+   * Payment findMany
+   */
+  export type PaymentFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter, which Payments to fetch.
+     */
+    where?: PaymentWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of Payments to fetch.
+     */
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing Payments.
+     */
+    cursor?: PaymentWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` Payments from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` Payments.
+     */
+    skip?: number
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
+  }
+
+  /**
+   * Payment create
+   */
+  export type PaymentCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * The data needed to create a Payment.
+     */
+    data: XOR<PaymentCreateInput, PaymentUncheckedCreateInput>
+  }
+
+  /**
+   * Payment createMany
+   */
+  export type PaymentCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many Payments.
+     */
+    data: PaymentCreateManyInput | PaymentCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * Payment createManyAndReturn
+   */
+  export type PaymentCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * The data used to create many Payments.
+     */
+    data: PaymentCreateManyInput | PaymentCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * Payment update
+   */
+  export type PaymentUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * The data needed to update a Payment.
+     */
+    data: XOR<PaymentUpdateInput, PaymentUncheckedUpdateInput>
+    /**
+     * Choose, which Payment to update.
+     */
+    where: PaymentWhereUniqueInput
+  }
+
+  /**
+   * Payment updateMany
+   */
+  export type PaymentUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update Payments.
+     */
+    data: XOR<PaymentUpdateManyMutationInput, PaymentUncheckedUpdateManyInput>
+    /**
+     * Filter which Payments to update
+     */
+    where?: PaymentWhereInput
+    /**
+     * Limit how many Payments to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * Payment updateManyAndReturn
+   */
+  export type PaymentUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * The data used to update Payments.
+     */
+    data: XOR<PaymentUpdateManyMutationInput, PaymentUncheckedUpdateManyInput>
+    /**
+     * Filter which Payments to update
+     */
+    where?: PaymentWhereInput
+    /**
+     * Limit how many Payments to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * Payment upsert
+   */
+  export type PaymentUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * The filter to search for the Payment to update in case it exists.
+     */
+    where: PaymentWhereUniqueInput
+    /**
+     * In case the Payment found by the `where` argument doesn't exist, create a new Payment with this data.
+     */
+    create: XOR<PaymentCreateInput, PaymentUncheckedCreateInput>
+    /**
+     * In case the Payment was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<PaymentUpdateInput, PaymentUncheckedUpdateInput>
+  }
+
+  /**
+   * Payment delete
+   */
+  export type PaymentDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    /**
+     * Filter which Payment to delete.
+     */
+    where: PaymentWhereUniqueInput
+  }
+
+  /**
+   * Payment deleteMany
+   */
+  export type PaymentDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which Payments to delete
+     */
+    where?: PaymentWhereInput
+    /**
+     * Limit how many Payments to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * Payment.order
+   */
+  export type Payment$orderArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Order
+     */
+    select?: OrderSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Order
+     */
+    omit?: OrderOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: OrderInclude<ExtArgs> | null
+    where?: OrderWhereInput
+  }
+
+  /**
+   * Payment.tableSession
+   */
+  export type Payment$tableSessionArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the TableSession
+     */
+    select?: TableSessionSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the TableSession
+     */
+    omit?: TableSessionOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: TableSessionInclude<ExtArgs> | null
+    where?: TableSessionWhereInput
+  }
+
+  /**
+   * Payment.collectedBy
+   */
+  export type Payment$collectedByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the User
+     */
+    select?: UserSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the User
+     */
+    omit?: UserOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: UserInclude<ExtArgs> | null
+    where?: UserWhereInput
+  }
+
+  /**
+   * Payment without action
+   */
+  export type PaymentDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
   }
 
 
@@ -29994,6 +31786,7 @@ export namespace Prisma {
     store?: boolean | StoreDefaultArgs<ExtArgs>
     table?: boolean | TableDefaultArgs<ExtArgs>
     orders?: boolean | TableSession$ordersArgs<ExtArgs>
+    payments?: boolean | TableSession$paymentsArgs<ExtArgs>
     _count?: boolean | TableSessionCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["tableSession"]>
 
@@ -30051,6 +31844,7 @@ export namespace Prisma {
     store?: boolean | StoreDefaultArgs<ExtArgs>
     table?: boolean | TableDefaultArgs<ExtArgs>
     orders?: boolean | TableSession$ordersArgs<ExtArgs>
+    payments?: boolean | TableSession$paymentsArgs<ExtArgs>
     _count?: boolean | TableSessionCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type TableSessionIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -30068,6 +31862,7 @@ export namespace Prisma {
       store: Prisma.$StorePayload<ExtArgs>
       table: Prisma.$TablePayload<ExtArgs>
       orders: Prisma.$OrderPayload<ExtArgs>[]
+      payments: Prisma.$PaymentPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -30479,6 +32274,7 @@ export namespace Prisma {
     store<T extends StoreDefaultArgs<ExtArgs> = {}>(args?: Subset<T, StoreDefaultArgs<ExtArgs>>): Prisma__StoreClient<$Result.GetResult<Prisma.$StorePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     table<T extends TableDefaultArgs<ExtArgs> = {}>(args?: Subset<T, TableDefaultArgs<ExtArgs>>): Prisma__TableClient<$Result.GetResult<Prisma.$TablePayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
     orders<T extends TableSession$ordersArgs<ExtArgs> = {}>(args?: Subset<T, TableSession$ordersArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$OrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    payments<T extends TableSession$paymentsArgs<ExtArgs> = {}>(args?: Subset<T, TableSession$paymentsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PaymentPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -30937,6 +32733,30 @@ export namespace Prisma {
     take?: number
     skip?: number
     distinct?: OrderScalarFieldEnum | OrderScalarFieldEnum[]
+  }
+
+  /**
+   * TableSession.payments
+   */
+  export type TableSession$paymentsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the Payment
+     */
+    select?: PaymentSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the Payment
+     */
+    omit?: PaymentOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: PaymentInclude<ExtArgs> | null
+    where?: PaymentWhereInput
+    orderBy?: PaymentOrderByWithRelationInput | PaymentOrderByWithRelationInput[]
+    cursor?: PaymentWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: PaymentScalarFieldEnum | PaymentScalarFieldEnum[]
   }
 
   /**
@@ -36913,6 +38733,8 @@ export namespace Prisma {
     gstin: 'gstin',
     companyLegalName: 'companyLegalName',
     registeredAddress: 'registeredAddress',
+    offlineUpiId: 'offlineUpiId',
+    offlineUpiPayeeName: 'offlineUpiPayeeName',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
   };
@@ -36932,6 +38754,8 @@ export namespace Prisma {
     banner: 'banner',
     status: 'status',
     googleReviewUrl: 'googleReviewUrl',
+    offlineUpiId: 'offlineUpiId',
+    offlineUpiPayeeName: 'offlineUpiPayeeName',
     taxRules: 'taxRules',
     loyaltyRules: 'loyaltyRules',
     createdAt: 'createdAt',
@@ -37010,6 +38834,7 @@ export namespace Prisma {
     merchantId: 'merchantId',
     apiKey: 'apiKey',
     secretKey: 'secretKey',
+    webhookSecret: 'webhookSecret',
     isActive: 'isActive',
     createdAt: 'createdAt',
     updatedAt: 'updatedAt'
@@ -37153,6 +38978,7 @@ export namespace Prisma {
     paymentMethod: 'paymentMethod',
     cashAmount: 'cashAmount',
     onlineAmount: 'onlineAmount',
+    paidAt: 'paidAt',
     status: 'status',
     subTotal: 'subTotal',
     taxAmount: 'taxAmount',
@@ -37160,6 +38986,10 @@ export namespace Prisma {
     walletDiscount: 'walletDiscount',
     promoCodeId: 'promoCodeId',
     totalAmount: 'totalAmount',
+    taxRules: 'taxRules',
+    cancelReason: 'cancelReason',
+    cancelledAt: 'cancelledAt',
+    cancelledById: 'cancelledById',
     paymentLinkId: 'paymentLinkId',
     paymentLinkUrl: 'paymentLinkUrl',
     createdAt: 'createdAt',
@@ -37167,6 +38997,31 @@ export namespace Prisma {
   };
 
   export type OrderScalarFieldEnum = (typeof OrderScalarFieldEnum)[keyof typeof OrderScalarFieldEnum]
+
+
+  export const PaymentScalarFieldEnum: {
+    id: 'id',
+    storeId: 'storeId',
+    orderId: 'orderId',
+    tableSessionId: 'tableSessionId',
+    channel: 'channel',
+    status: 'status',
+    amount: 'amount',
+    providerKind: 'providerKind',
+    providerRef: 'providerRef',
+    providerPaymentId: 'providerPaymentId',
+    qrImageUrl: 'qrImageUrl',
+    qrPayload: 'qrPayload',
+    cashTendered: 'cashTendered',
+    changeDue: 'changeDue',
+    collectedById: 'collectedById',
+    paidAt: 'paidAt',
+    expiresAt: 'expiresAt',
+    createdAt: 'createdAt',
+    updatedAt: 'updatedAt'
+  };
+
+  export type PaymentScalarFieldEnum = (typeof PaymentScalarFieldEnum)[keyof typeof PaymentScalarFieldEnum]
 
 
   export const OrderItemScalarFieldEnum: {
@@ -37707,6 +39562,34 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'PaymentChannel'
+   */
+  export type EnumPaymentChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentChannel'>
+    
+
+
+  /**
+   * Reference to a field of type 'PaymentChannel[]'
+   */
+  export type ListEnumPaymentChannelFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentChannel[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'PaymentStatus'
+   */
+  export type EnumPaymentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentStatus'>
+    
+
+
+  /**
+   * Reference to a field of type 'PaymentStatus[]'
+   */
+  export type ListEnumPaymentStatusFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'PaymentStatus[]'>
+    
+
+
+  /**
    * Reference to a field of type 'WaiterCallType'
    */
   export type EnumWaiterCallTypeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'WaiterCallType'>
@@ -37793,6 +39676,8 @@ export namespace Prisma {
     gstin?: StringNullableFilter<"Tenant"> | string | null
     companyLegalName?: StringNullableFilter<"Tenant"> | string | null
     registeredAddress?: StringNullableFilter<"Tenant"> | string | null
+    offlineUpiId?: StringNullableFilter<"Tenant"> | string | null
+    offlineUpiPayeeName?: StringNullableFilter<"Tenant"> | string | null
     createdAt?: DateTimeFilter<"Tenant"> | Date | string
     updatedAt?: DateTimeFilter<"Tenant"> | Date | string
     stores?: StoreListRelationFilter
@@ -37812,6 +39697,8 @@ export namespace Prisma {
     gstin?: SortOrderInput | SortOrder
     companyLegalName?: SortOrderInput | SortOrder
     registeredAddress?: SortOrderInput | SortOrder
+    offlineUpiId?: SortOrderInput | SortOrder
+    offlineUpiPayeeName?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     stores?: StoreOrderByRelationAggregateInput
@@ -37834,6 +39721,8 @@ export namespace Prisma {
     gstin?: StringNullableFilter<"Tenant"> | string | null
     companyLegalName?: StringNullableFilter<"Tenant"> | string | null
     registeredAddress?: StringNullableFilter<"Tenant"> | string | null
+    offlineUpiId?: StringNullableFilter<"Tenant"> | string | null
+    offlineUpiPayeeName?: StringNullableFilter<"Tenant"> | string | null
     createdAt?: DateTimeFilter<"Tenant"> | Date | string
     updatedAt?: DateTimeFilter<"Tenant"> | Date | string
     stores?: StoreListRelationFilter
@@ -37853,6 +39742,8 @@ export namespace Prisma {
     gstin?: SortOrderInput | SortOrder
     companyLegalName?: SortOrderInput | SortOrder
     registeredAddress?: SortOrderInput | SortOrder
+    offlineUpiId?: SortOrderInput | SortOrder
+    offlineUpiPayeeName?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: TenantCountOrderByAggregateInput
@@ -37874,6 +39765,8 @@ export namespace Prisma {
     gstin?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
     companyLegalName?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
     registeredAddress?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
+    offlineUpiId?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
+    offlineUpiPayeeName?: StringNullableWithAggregatesFilter<"Tenant"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Tenant"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Tenant"> | Date | string
   }
@@ -37893,6 +39786,8 @@ export namespace Prisma {
     banner?: StringNullableFilter<"Store"> | string | null
     status?: EnumStoreStatusFilter<"Store"> | $Enums.StoreStatus
     googleReviewUrl?: StringNullableFilter<"Store"> | string | null
+    offlineUpiId?: StringNullableFilter<"Store"> | string | null
+    offlineUpiPayeeName?: StringNullableFilter<"Store"> | string | null
     taxRules?: JsonNullableFilter<"Store">
     loyaltyRules?: JsonNullableFilter<"Store">
     createdAt?: DateTimeFilter<"Store"> | Date | string
@@ -37908,6 +39803,7 @@ export namespace Prisma {
     orders?: OrderListRelationFilter
     waiterCalls?: WaiterCallListRelationFilter
     feedbacks?: FeedbackListRelationFilter
+    payments?: PaymentListRelationFilter
     promoCodes?: PromoCodeListRelationFilter
     customerWallets?: CustomerStoreWalletListRelationFilter
     pushSubscriptions?: PushSubscriptionListRelationFilter
@@ -37926,6 +39822,8 @@ export namespace Prisma {
     banner?: SortOrderInput | SortOrder
     status?: SortOrder
     googleReviewUrl?: SortOrderInput | SortOrder
+    offlineUpiId?: SortOrderInput | SortOrder
+    offlineUpiPayeeName?: SortOrderInput | SortOrder
     taxRules?: SortOrderInput | SortOrder
     loyaltyRules?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -37941,6 +39839,7 @@ export namespace Prisma {
     orders?: OrderOrderByRelationAggregateInput
     waiterCalls?: WaiterCallOrderByRelationAggregateInput
     feedbacks?: FeedbackOrderByRelationAggregateInput
+    payments?: PaymentOrderByRelationAggregateInput
     promoCodes?: PromoCodeOrderByRelationAggregateInput
     customerWallets?: CustomerStoreWalletOrderByRelationAggregateInput
     pushSubscriptions?: PushSubscriptionOrderByRelationAggregateInput
@@ -37963,6 +39862,8 @@ export namespace Prisma {
     banner?: StringNullableFilter<"Store"> | string | null
     status?: EnumStoreStatusFilter<"Store"> | $Enums.StoreStatus
     googleReviewUrl?: StringNullableFilter<"Store"> | string | null
+    offlineUpiId?: StringNullableFilter<"Store"> | string | null
+    offlineUpiPayeeName?: StringNullableFilter<"Store"> | string | null
     taxRules?: JsonNullableFilter<"Store">
     loyaltyRules?: JsonNullableFilter<"Store">
     createdAt?: DateTimeFilter<"Store"> | Date | string
@@ -37978,6 +39879,7 @@ export namespace Prisma {
     orders?: OrderListRelationFilter
     waiterCalls?: WaiterCallListRelationFilter
     feedbacks?: FeedbackListRelationFilter
+    payments?: PaymentListRelationFilter
     promoCodes?: PromoCodeListRelationFilter
     customerWallets?: CustomerStoreWalletListRelationFilter
     pushSubscriptions?: PushSubscriptionListRelationFilter
@@ -37996,6 +39898,8 @@ export namespace Prisma {
     banner?: SortOrderInput | SortOrder
     status?: SortOrder
     googleReviewUrl?: SortOrderInput | SortOrder
+    offlineUpiId?: SortOrderInput | SortOrder
+    offlineUpiPayeeName?: SortOrderInput | SortOrder
     taxRules?: SortOrderInput | SortOrder
     loyaltyRules?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -38020,6 +39924,8 @@ export namespace Prisma {
     banner?: StringNullableWithAggregatesFilter<"Store"> | string | null
     status?: EnumStoreStatusWithAggregatesFilter<"Store"> | $Enums.StoreStatus
     googleReviewUrl?: StringNullableWithAggregatesFilter<"Store"> | string | null
+    offlineUpiId?: StringNullableWithAggregatesFilter<"Store"> | string | null
+    offlineUpiPayeeName?: StringNullableWithAggregatesFilter<"Store"> | string | null
     taxRules?: JsonNullableWithAggregatesFilter<"Store">
     loyaltyRules?: JsonNullableWithAggregatesFilter<"Store">
     createdAt?: DateTimeWithAggregatesFilter<"Store"> | Date | string
@@ -38054,6 +39960,8 @@ export namespace Prisma {
     reservations?: TableReservationListRelationFilter
     pushSubscriptions?: PushSubscriptionListRelationFilter
     notifications?: NotificationListRelationFilter
+    collectedPayments?: PaymentListRelationFilter
+    cancelledOrders?: OrderListRelationFilter
   }
 
   export type UserOrderByWithRelationInput = {
@@ -38081,6 +39989,8 @@ export namespace Prisma {
     reservations?: TableReservationOrderByRelationAggregateInput
     pushSubscriptions?: PushSubscriptionOrderByRelationAggregateInput
     notifications?: NotificationOrderByRelationAggregateInput
+    collectedPayments?: PaymentOrderByRelationAggregateInput
+    cancelledOrders?: OrderOrderByRelationAggregateInput
   }
 
   export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -38112,6 +40022,8 @@ export namespace Prisma {
     reservations?: TableReservationListRelationFilter
     pushSubscriptions?: PushSubscriptionListRelationFilter
     notifications?: NotificationListRelationFilter
+    collectedPayments?: PaymentListRelationFilter
+    cancelledOrders?: OrderListRelationFilter
   }, "id" | "tenantId_email">
 
   export type UserOrderByWithAggregationInput = {
@@ -38381,6 +40293,7 @@ export namespace Prisma {
     merchantId?: StringFilter<"TenantPaymentGateway"> | string
     apiKey?: StringFilter<"TenantPaymentGateway"> | string
     secretKey?: StringNullableFilter<"TenantPaymentGateway"> | string | null
+    webhookSecret?: StringNullableFilter<"TenantPaymentGateway"> | string | null
     isActive?: BoolFilter<"TenantPaymentGateway"> | boolean
     createdAt?: DateTimeFilter<"TenantPaymentGateway"> | Date | string
     updatedAt?: DateTimeFilter<"TenantPaymentGateway"> | Date | string
@@ -38394,6 +40307,7 @@ export namespace Prisma {
     merchantId?: SortOrder
     apiKey?: SortOrder
     secretKey?: SortOrderInput | SortOrder
+    webhookSecret?: SortOrderInput | SortOrder
     isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -38411,6 +40325,7 @@ export namespace Prisma {
     merchantId?: StringFilter<"TenantPaymentGateway"> | string
     apiKey?: StringFilter<"TenantPaymentGateway"> | string
     secretKey?: StringNullableFilter<"TenantPaymentGateway"> | string | null
+    webhookSecret?: StringNullableFilter<"TenantPaymentGateway"> | string | null
     isActive?: BoolFilter<"TenantPaymentGateway"> | boolean
     createdAt?: DateTimeFilter<"TenantPaymentGateway"> | Date | string
     updatedAt?: DateTimeFilter<"TenantPaymentGateway"> | Date | string
@@ -38424,6 +40339,7 @@ export namespace Prisma {
     merchantId?: SortOrder
     apiKey?: SortOrder
     secretKey?: SortOrderInput | SortOrder
+    webhookSecret?: SortOrderInput | SortOrder
     isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -38442,6 +40358,7 @@ export namespace Prisma {
     merchantId?: StringWithAggregatesFilter<"TenantPaymentGateway"> | string
     apiKey?: StringWithAggregatesFilter<"TenantPaymentGateway"> | string
     secretKey?: StringNullableWithAggregatesFilter<"TenantPaymentGateway"> | string | null
+    webhookSecret?: StringNullableWithAggregatesFilter<"TenantPaymentGateway"> | string | null
     isActive?: BoolWithAggregatesFilter<"TenantPaymentGateway"> | boolean
     createdAt?: DateTimeWithAggregatesFilter<"TenantPaymentGateway"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"TenantPaymentGateway"> | Date | string
@@ -39142,6 +41059,7 @@ export namespace Prisma {
     paymentMethod?: EnumPaymentMethodNullableFilter<"Order"> | $Enums.PaymentMethod | null
     cashAmount?: IntFilter<"Order"> | number
     onlineAmount?: IntFilter<"Order"> | number
+    paidAt?: DateTimeNullableFilter<"Order"> | Date | string | null
     status?: EnumOrderStatusFilter<"Order"> | $Enums.OrderStatus
     subTotal?: IntFilter<"Order"> | number
     taxAmount?: IntFilter<"Order"> | number
@@ -39149,6 +41067,10 @@ export namespace Prisma {
     walletDiscount?: IntFilter<"Order"> | number
     promoCodeId?: StringNullableFilter<"Order"> | string | null
     totalAmount?: IntFilter<"Order"> | number
+    taxRules?: JsonNullableFilter<"Order">
+    cancelReason?: StringNullableFilter<"Order"> | string | null
+    cancelledAt?: DateTimeNullableFilter<"Order"> | Date | string | null
+    cancelledById?: StringNullableFilter<"Order"> | string | null
     paymentLinkId?: StringNullableFilter<"Order"> | string | null
     paymentLinkUrl?: StringNullableFilter<"Order"> | string | null
     createdAt?: DateTimeFilter<"Order"> | Date | string
@@ -39159,7 +41081,9 @@ export namespace Prisma {
     staff?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
     customer?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
     promoCode?: XOR<PromoCodeNullableScalarRelationFilter, PromoCodeWhereInput> | null
+    cancelledBy?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
     items?: OrderItemListRelationFilter
+    payments?: PaymentListRelationFilter
     feedbacks?: FeedbackListRelationFilter
     walletTransactions?: CustomerWalletTransactionListRelationFilter
   }
@@ -39178,6 +41102,7 @@ export namespace Prisma {
     paymentMethod?: SortOrderInput | SortOrder
     cashAmount?: SortOrder
     onlineAmount?: SortOrder
+    paidAt?: SortOrderInput | SortOrder
     status?: SortOrder
     subTotal?: SortOrder
     taxAmount?: SortOrder
@@ -39185,6 +41110,10 @@ export namespace Prisma {
     walletDiscount?: SortOrder
     promoCodeId?: SortOrderInput | SortOrder
     totalAmount?: SortOrder
+    taxRules?: SortOrderInput | SortOrder
+    cancelReason?: SortOrderInput | SortOrder
+    cancelledAt?: SortOrderInput | SortOrder
+    cancelledById?: SortOrderInput | SortOrder
     paymentLinkId?: SortOrderInput | SortOrder
     paymentLinkUrl?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -39195,7 +41124,9 @@ export namespace Prisma {
     staff?: UserOrderByWithRelationInput
     customer?: UserOrderByWithRelationInput
     promoCode?: PromoCodeOrderByWithRelationInput
+    cancelledBy?: UserOrderByWithRelationInput
     items?: OrderItemOrderByRelationAggregateInput
+    payments?: PaymentOrderByRelationAggregateInput
     feedbacks?: FeedbackOrderByRelationAggregateInput
     walletTransactions?: CustomerWalletTransactionOrderByRelationAggregateInput
   }
@@ -39217,6 +41148,7 @@ export namespace Prisma {
     paymentMethod?: EnumPaymentMethodNullableFilter<"Order"> | $Enums.PaymentMethod | null
     cashAmount?: IntFilter<"Order"> | number
     onlineAmount?: IntFilter<"Order"> | number
+    paidAt?: DateTimeNullableFilter<"Order"> | Date | string | null
     status?: EnumOrderStatusFilter<"Order"> | $Enums.OrderStatus
     subTotal?: IntFilter<"Order"> | number
     taxAmount?: IntFilter<"Order"> | number
@@ -39224,6 +41156,10 @@ export namespace Prisma {
     walletDiscount?: IntFilter<"Order"> | number
     promoCodeId?: StringNullableFilter<"Order"> | string | null
     totalAmount?: IntFilter<"Order"> | number
+    taxRules?: JsonNullableFilter<"Order">
+    cancelReason?: StringNullableFilter<"Order"> | string | null
+    cancelledAt?: DateTimeNullableFilter<"Order"> | Date | string | null
+    cancelledById?: StringNullableFilter<"Order"> | string | null
     paymentLinkId?: StringNullableFilter<"Order"> | string | null
     paymentLinkUrl?: StringNullableFilter<"Order"> | string | null
     createdAt?: DateTimeFilter<"Order"> | Date | string
@@ -39234,7 +41170,9 @@ export namespace Prisma {
     staff?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
     customer?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
     promoCode?: XOR<PromoCodeNullableScalarRelationFilter, PromoCodeWhereInput> | null
+    cancelledBy?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
     items?: OrderItemListRelationFilter
+    payments?: PaymentListRelationFilter
     feedbacks?: FeedbackListRelationFilter
     walletTransactions?: CustomerWalletTransactionListRelationFilter
   }, "id">
@@ -39253,6 +41191,7 @@ export namespace Prisma {
     paymentMethod?: SortOrderInput | SortOrder
     cashAmount?: SortOrder
     onlineAmount?: SortOrder
+    paidAt?: SortOrderInput | SortOrder
     status?: SortOrder
     subTotal?: SortOrder
     taxAmount?: SortOrder
@@ -39260,6 +41199,10 @@ export namespace Prisma {
     walletDiscount?: SortOrder
     promoCodeId?: SortOrderInput | SortOrder
     totalAmount?: SortOrder
+    taxRules?: SortOrderInput | SortOrder
+    cancelReason?: SortOrderInput | SortOrder
+    cancelledAt?: SortOrderInput | SortOrder
+    cancelledById?: SortOrderInput | SortOrder
     paymentLinkId?: SortOrderInput | SortOrder
     paymentLinkUrl?: SortOrderInput | SortOrder
     createdAt?: SortOrder
@@ -39288,6 +41231,7 @@ export namespace Prisma {
     paymentMethod?: EnumPaymentMethodNullableWithAggregatesFilter<"Order"> | $Enums.PaymentMethod | null
     cashAmount?: IntWithAggregatesFilter<"Order"> | number
     onlineAmount?: IntWithAggregatesFilter<"Order"> | number
+    paidAt?: DateTimeNullableWithAggregatesFilter<"Order"> | Date | string | null
     status?: EnumOrderStatusWithAggregatesFilter<"Order"> | $Enums.OrderStatus
     subTotal?: IntWithAggregatesFilter<"Order"> | number
     taxAmount?: IntWithAggregatesFilter<"Order"> | number
@@ -39295,10 +41239,150 @@ export namespace Prisma {
     walletDiscount?: IntWithAggregatesFilter<"Order"> | number
     promoCodeId?: StringNullableWithAggregatesFilter<"Order"> | string | null
     totalAmount?: IntWithAggregatesFilter<"Order"> | number
+    taxRules?: JsonNullableWithAggregatesFilter<"Order">
+    cancelReason?: StringNullableWithAggregatesFilter<"Order"> | string | null
+    cancelledAt?: DateTimeNullableWithAggregatesFilter<"Order"> | Date | string | null
+    cancelledById?: StringNullableWithAggregatesFilter<"Order"> | string | null
     paymentLinkId?: StringNullableWithAggregatesFilter<"Order"> | string | null
     paymentLinkUrl?: StringNullableWithAggregatesFilter<"Order"> | string | null
     createdAt?: DateTimeWithAggregatesFilter<"Order"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Order"> | Date | string
+  }
+
+  export type PaymentWhereInput = {
+    AND?: PaymentWhereInput | PaymentWhereInput[]
+    OR?: PaymentWhereInput[]
+    NOT?: PaymentWhereInput | PaymentWhereInput[]
+    id?: StringFilter<"Payment"> | string
+    storeId?: StringFilter<"Payment"> | string
+    orderId?: StringNullableFilter<"Payment"> | string | null
+    tableSessionId?: StringNullableFilter<"Payment"> | string | null
+    channel?: EnumPaymentChannelFilter<"Payment"> | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFilter<"Payment"> | $Enums.PaymentStatus
+    amount?: IntFilter<"Payment"> | number
+    providerKind?: StringNullableFilter<"Payment"> | string | null
+    providerRef?: StringNullableFilter<"Payment"> | string | null
+    providerPaymentId?: StringNullableFilter<"Payment"> | string | null
+    qrImageUrl?: StringNullableFilter<"Payment"> | string | null
+    qrPayload?: StringNullableFilter<"Payment"> | string | null
+    cashTendered?: IntNullableFilter<"Payment"> | number | null
+    changeDue?: IntNullableFilter<"Payment"> | number | null
+    collectedById?: StringNullableFilter<"Payment"> | string | null
+    paidAt?: DateTimeNullableFilter<"Payment"> | Date | string | null
+    expiresAt?: DateTimeNullableFilter<"Payment"> | Date | string | null
+    createdAt?: DateTimeFilter<"Payment"> | Date | string
+    updatedAt?: DateTimeFilter<"Payment"> | Date | string
+    store?: XOR<StoreScalarRelationFilter, StoreWhereInput>
+    order?: XOR<OrderNullableScalarRelationFilter, OrderWhereInput> | null
+    tableSession?: XOR<TableSessionNullableScalarRelationFilter, TableSessionWhereInput> | null
+    collectedBy?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
+  }
+
+  export type PaymentOrderByWithRelationInput = {
+    id?: SortOrder
+    storeId?: SortOrder
+    orderId?: SortOrderInput | SortOrder
+    tableSessionId?: SortOrderInput | SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    amount?: SortOrder
+    providerKind?: SortOrderInput | SortOrder
+    providerRef?: SortOrderInput | SortOrder
+    providerPaymentId?: SortOrderInput | SortOrder
+    qrImageUrl?: SortOrderInput | SortOrder
+    qrPayload?: SortOrderInput | SortOrder
+    cashTendered?: SortOrderInput | SortOrder
+    changeDue?: SortOrderInput | SortOrder
+    collectedById?: SortOrderInput | SortOrder
+    paidAt?: SortOrderInput | SortOrder
+    expiresAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    store?: StoreOrderByWithRelationInput
+    order?: OrderOrderByWithRelationInput
+    tableSession?: TableSessionOrderByWithRelationInput
+    collectedBy?: UserOrderByWithRelationInput
+  }
+
+  export type PaymentWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    providerRef?: string
+    providerPaymentId?: string
+    AND?: PaymentWhereInput | PaymentWhereInput[]
+    OR?: PaymentWhereInput[]
+    NOT?: PaymentWhereInput | PaymentWhereInput[]
+    storeId?: StringFilter<"Payment"> | string
+    orderId?: StringNullableFilter<"Payment"> | string | null
+    tableSessionId?: StringNullableFilter<"Payment"> | string | null
+    channel?: EnumPaymentChannelFilter<"Payment"> | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFilter<"Payment"> | $Enums.PaymentStatus
+    amount?: IntFilter<"Payment"> | number
+    providerKind?: StringNullableFilter<"Payment"> | string | null
+    qrImageUrl?: StringNullableFilter<"Payment"> | string | null
+    qrPayload?: StringNullableFilter<"Payment"> | string | null
+    cashTendered?: IntNullableFilter<"Payment"> | number | null
+    changeDue?: IntNullableFilter<"Payment"> | number | null
+    collectedById?: StringNullableFilter<"Payment"> | string | null
+    paidAt?: DateTimeNullableFilter<"Payment"> | Date | string | null
+    expiresAt?: DateTimeNullableFilter<"Payment"> | Date | string | null
+    createdAt?: DateTimeFilter<"Payment"> | Date | string
+    updatedAt?: DateTimeFilter<"Payment"> | Date | string
+    store?: XOR<StoreScalarRelationFilter, StoreWhereInput>
+    order?: XOR<OrderNullableScalarRelationFilter, OrderWhereInput> | null
+    tableSession?: XOR<TableSessionNullableScalarRelationFilter, TableSessionWhereInput> | null
+    collectedBy?: XOR<UserNullableScalarRelationFilter, UserWhereInput> | null
+  }, "id" | "providerRef" | "providerPaymentId">
+
+  export type PaymentOrderByWithAggregationInput = {
+    id?: SortOrder
+    storeId?: SortOrder
+    orderId?: SortOrderInput | SortOrder
+    tableSessionId?: SortOrderInput | SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    amount?: SortOrder
+    providerKind?: SortOrderInput | SortOrder
+    providerRef?: SortOrderInput | SortOrder
+    providerPaymentId?: SortOrderInput | SortOrder
+    qrImageUrl?: SortOrderInput | SortOrder
+    qrPayload?: SortOrderInput | SortOrder
+    cashTendered?: SortOrderInput | SortOrder
+    changeDue?: SortOrderInput | SortOrder
+    collectedById?: SortOrderInput | SortOrder
+    paidAt?: SortOrderInput | SortOrder
+    expiresAt?: SortOrderInput | SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+    _count?: PaymentCountOrderByAggregateInput
+    _avg?: PaymentAvgOrderByAggregateInput
+    _max?: PaymentMaxOrderByAggregateInput
+    _min?: PaymentMinOrderByAggregateInput
+    _sum?: PaymentSumOrderByAggregateInput
+  }
+
+  export type PaymentScalarWhereWithAggregatesInput = {
+    AND?: PaymentScalarWhereWithAggregatesInput | PaymentScalarWhereWithAggregatesInput[]
+    OR?: PaymentScalarWhereWithAggregatesInput[]
+    NOT?: PaymentScalarWhereWithAggregatesInput | PaymentScalarWhereWithAggregatesInput[]
+    id?: StringWithAggregatesFilter<"Payment"> | string
+    storeId?: StringWithAggregatesFilter<"Payment"> | string
+    orderId?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    tableSessionId?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    channel?: EnumPaymentChannelWithAggregatesFilter<"Payment"> | $Enums.PaymentChannel
+    status?: EnumPaymentStatusWithAggregatesFilter<"Payment"> | $Enums.PaymentStatus
+    amount?: IntWithAggregatesFilter<"Payment"> | number
+    providerKind?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    providerRef?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    providerPaymentId?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    qrImageUrl?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    qrPayload?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    cashTendered?: IntNullableWithAggregatesFilter<"Payment"> | number | null
+    changeDue?: IntNullableWithAggregatesFilter<"Payment"> | number | null
+    collectedById?: StringNullableWithAggregatesFilter<"Payment"> | string | null
+    paidAt?: DateTimeNullableWithAggregatesFilter<"Payment"> | Date | string | null
+    expiresAt?: DateTimeNullableWithAggregatesFilter<"Payment"> | Date | string | null
+    createdAt?: DateTimeWithAggregatesFilter<"Payment"> | Date | string
+    updatedAt?: DateTimeWithAggregatesFilter<"Payment"> | Date | string
   }
 
   export type OrderItemWhereInput = {
@@ -39589,6 +41673,7 @@ export namespace Prisma {
     store?: XOR<StoreScalarRelationFilter, StoreWhereInput>
     table?: XOR<TableScalarRelationFilter, TableWhereInput>
     orders?: OrderListRelationFilter
+    payments?: PaymentListRelationFilter
   }
 
   export type TableSessionOrderByWithRelationInput = {
@@ -39607,6 +41692,7 @@ export namespace Prisma {
     store?: StoreOrderByWithRelationInput
     table?: TableOrderByWithRelationInput
     orders?: OrderOrderByRelationAggregateInput
+    payments?: PaymentOrderByRelationAggregateInput
   }
 
   export type TableSessionWhereUniqueInput = Prisma.AtLeast<{
@@ -39628,6 +41714,7 @@ export namespace Prisma {
     store?: XOR<StoreScalarRelationFilter, StoreWhereInput>
     table?: XOR<TableScalarRelationFilter, TableWhereInput>
     orders?: OrderListRelationFilter
+    payments?: PaymentListRelationFilter
   }, "id" | "sessionToken">
 
   export type TableSessionOrderByWithAggregationInput = {
@@ -40112,6 +42199,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     stores?: StoreCreateNestedManyWithoutTenantInput
@@ -40131,6 +42220,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     stores?: StoreUncheckedCreateNestedManyWithoutTenantInput
@@ -40150,6 +42241,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     stores?: StoreUpdateManyWithoutTenantNestedInput
@@ -40169,6 +42262,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     stores?: StoreUncheckedUpdateManyWithoutTenantNestedInput
@@ -40188,6 +42283,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -40203,6 +42300,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -40218,6 +42317,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -40233,6 +42334,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -40248,6 +42351,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -40266,6 +42370,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -40280,6 +42386,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -40297,6 +42404,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -40312,6 +42421,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -40330,6 +42440,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -40344,6 +42456,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -40362,6 +42475,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -40379,6 +42494,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -40397,6 +42514,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -40426,6 +42545,8 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateInput = {
@@ -40451,6 +42572,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUpdateInput = {
@@ -40476,6 +42599,8 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateInput = {
@@ -40501,6 +42626,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserCreateManyInput = {
@@ -40790,6 +42917,7 @@ export namespace Prisma {
     merchantId: string
     apiKey: string
     secretKey?: string | null
+    webhookSecret?: string | null
     isActive?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -40803,6 +42931,7 @@ export namespace Prisma {
     merchantId: string
     apiKey: string
     secretKey?: string | null
+    webhookSecret?: string | null
     isActive?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -40814,6 +42943,7 @@ export namespace Prisma {
     merchantId?: StringFieldUpdateOperationsInput | string
     apiKey?: StringFieldUpdateOperationsInput | string
     secretKey?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -40827,6 +42957,7 @@ export namespace Prisma {
     merchantId?: StringFieldUpdateOperationsInput | string
     apiKey?: StringFieldUpdateOperationsInput | string
     secretKey?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -40839,6 +42970,7 @@ export namespace Prisma {
     merchantId: string
     apiKey: string
     secretKey?: string | null
+    webhookSecret?: string | null
     isActive?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -40850,6 +42982,7 @@ export namespace Prisma {
     merchantId?: StringFieldUpdateOperationsInput | string
     apiKey?: StringFieldUpdateOperationsInput | string
     secretKey?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -40862,6 +42995,7 @@ export namespace Prisma {
     merchantId?: StringFieldUpdateOperationsInput | string
     apiKey?: StringFieldUpdateOperationsInput | string
     secretKey?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -41578,12 +43712,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -41594,7 +43732,9 @@ export namespace Prisma {
     staff?: UserCreateNestedOneWithoutStaffOrdersInput
     customer?: UserCreateNestedOneWithoutCustomerOrdersInput
     promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
   }
@@ -41613,6 +43753,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -41620,11 +43761,16 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
   }
@@ -41638,12 +43784,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -41654,7 +43804,9 @@ export namespace Prisma {
     staff?: UserUpdateOneWithoutStaffOrdersNestedInput
     customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
     promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
   }
@@ -41673,6 +43825,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -41680,11 +43833,16 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
   }
@@ -41703,6 +43861,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -41710,6 +43869,10 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -41725,12 +43888,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -41751,6 +43918,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -41758,8 +43926,162 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentCreateInput = {
+    id?: string
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    store: StoreCreateNestedOneWithoutPaymentsInput
+    order?: OrderCreateNestedOneWithoutPaymentsInput
+    tableSession?: TableSessionCreateNestedOneWithoutPaymentsInput
+    collectedBy?: UserCreateNestedOneWithoutCollectedPaymentsInput
+  }
+
+  export type PaymentUncheckedCreateInput = {
+    id?: string
+    storeId: string
+    orderId?: string | null
+    tableSessionId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    collectedById?: string | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    store?: StoreUpdateOneRequiredWithoutPaymentsNestedInput
+    order?: OrderUpdateOneWithoutPaymentsNestedInput
+    tableSession?: TableSessionUpdateOneWithoutPaymentsNestedInput
+    collectedBy?: UserUpdateOneWithoutCollectedPaymentsNestedInput
+  }
+
+  export type PaymentUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    collectedById?: NullableStringFieldUpdateOperationsInput | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentCreateManyInput = {
+    id?: string
+    storeId: string
+    orderId?: string | null
+    tableSessionId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    collectedById?: string | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    collectedById?: NullableStringFieldUpdateOperationsInput | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -42032,6 +44354,7 @@ export namespace Prisma {
     store: StoreCreateNestedOneWithoutTableSessionsInput
     table: TableCreateNestedOneWithoutSessionsInput
     orders?: OrderCreateNestedManyWithoutTableSessionInput
+    payments?: PaymentCreateNestedManyWithoutTableSessionInput
   }
 
   export type TableSessionUncheckedCreateInput = {
@@ -42048,6 +44371,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     orders?: OrderUncheckedCreateNestedManyWithoutTableSessionInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutTableSessionInput
   }
 
   export type TableSessionUpdateInput = {
@@ -42064,6 +44388,7 @@ export namespace Prisma {
     store?: StoreUpdateOneRequiredWithoutTableSessionsNestedInput
     table?: TableUpdateOneRequiredWithoutSessionsNestedInput
     orders?: OrderUpdateManyWithoutTableSessionNestedInput
+    payments?: PaymentUpdateManyWithoutTableSessionNestedInput
   }
 
   export type TableSessionUncheckedUpdateInput = {
@@ -42080,6 +44405,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     orders?: OrderUncheckedUpdateManyWithoutTableSessionNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutTableSessionNestedInput
   }
 
   export type TableSessionCreateManyInput = {
@@ -42679,6 +45005,8 @@ export namespace Prisma {
     gstin?: SortOrder
     companyLegalName?: SortOrder
     registeredAddress?: SortOrder
+    offlineUpiId?: SortOrder
+    offlineUpiPayeeName?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -42694,6 +45022,8 @@ export namespace Prisma {
     gstin?: SortOrder
     companyLegalName?: SortOrder
     registeredAddress?: SortOrder
+    offlineUpiId?: SortOrder
+    offlineUpiPayeeName?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -42709,6 +45039,8 @@ export namespace Prisma {
     gstin?: SortOrder
     companyLegalName?: SortOrder
     registeredAddress?: SortOrder
+    offlineUpiId?: SortOrder
+    offlineUpiPayeeName?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -42862,6 +45194,12 @@ export namespace Prisma {
     none?: FeedbackWhereInput
   }
 
+  export type PaymentListRelationFilter = {
+    every?: PaymentWhereInput
+    some?: PaymentWhereInput
+    none?: PaymentWhereInput
+  }
+
   export type PromoCodeListRelationFilter = {
     every?: PromoCodeWhereInput
     some?: PromoCodeWhereInput
@@ -42922,6 +45260,10 @@ export namespace Prisma {
     _count?: SortOrder
   }
 
+  export type PaymentOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type PromoCodeOrderByRelationAggregateInput = {
     _count?: SortOrder
   }
@@ -42955,6 +45297,8 @@ export namespace Prisma {
     banner?: SortOrder
     status?: SortOrder
     googleReviewUrl?: SortOrder
+    offlineUpiId?: SortOrder
+    offlineUpiPayeeName?: SortOrder
     taxRules?: SortOrder
     loyaltyRules?: SortOrder
     createdAt?: SortOrder
@@ -42972,6 +45316,8 @@ export namespace Prisma {
     banner?: SortOrder
     status?: SortOrder
     googleReviewUrl?: SortOrder
+    offlineUpiId?: SortOrder
+    offlineUpiPayeeName?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -42987,6 +45333,8 @@ export namespace Prisma {
     banner?: SortOrder
     status?: SortOrder
     googleReviewUrl?: SortOrder
+    offlineUpiId?: SortOrder
+    offlineUpiPayeeName?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
   }
@@ -43436,6 +45784,7 @@ export namespace Prisma {
     merchantId?: SortOrder
     apiKey?: SortOrder
     secretKey?: SortOrder
+    webhookSecret?: SortOrder
     isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -43448,6 +45797,7 @@ export namespace Prisma {
     merchantId?: SortOrder
     apiKey?: SortOrder
     secretKey?: SortOrder
+    webhookSecret?: SortOrder
     isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -43460,6 +45810,7 @@ export namespace Prisma {
     merchantId?: SortOrder
     apiKey?: SortOrder
     secretKey?: SortOrder
+    webhookSecret?: SortOrder
     isActive?: SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
@@ -44172,6 +46523,7 @@ export namespace Prisma {
     paymentMethod?: SortOrder
     cashAmount?: SortOrder
     onlineAmount?: SortOrder
+    paidAt?: SortOrder
     status?: SortOrder
     subTotal?: SortOrder
     taxAmount?: SortOrder
@@ -44179,6 +46531,10 @@ export namespace Prisma {
     walletDiscount?: SortOrder
     promoCodeId?: SortOrder
     totalAmount?: SortOrder
+    taxRules?: SortOrder
+    cancelReason?: SortOrder
+    cancelledAt?: SortOrder
+    cancelledById?: SortOrder
     paymentLinkId?: SortOrder
     paymentLinkUrl?: SortOrder
     createdAt?: SortOrder
@@ -44209,6 +46565,7 @@ export namespace Prisma {
     paymentMethod?: SortOrder
     cashAmount?: SortOrder
     onlineAmount?: SortOrder
+    paidAt?: SortOrder
     status?: SortOrder
     subTotal?: SortOrder
     taxAmount?: SortOrder
@@ -44216,6 +46573,9 @@ export namespace Prisma {
     walletDiscount?: SortOrder
     promoCodeId?: SortOrder
     totalAmount?: SortOrder
+    cancelReason?: SortOrder
+    cancelledAt?: SortOrder
+    cancelledById?: SortOrder
     paymentLinkId?: SortOrder
     paymentLinkUrl?: SortOrder
     createdAt?: SortOrder
@@ -44236,6 +46596,7 @@ export namespace Prisma {
     paymentMethod?: SortOrder
     cashAmount?: SortOrder
     onlineAmount?: SortOrder
+    paidAt?: SortOrder
     status?: SortOrder
     subTotal?: SortOrder
     taxAmount?: SortOrder
@@ -44243,6 +46604,9 @@ export namespace Prisma {
     walletDiscount?: SortOrder
     promoCodeId?: SortOrder
     totalAmount?: SortOrder
+    cancelReason?: SortOrder
+    cancelledAt?: SortOrder
+    cancelledById?: SortOrder
     paymentLinkId?: SortOrder
     paymentLinkUrl?: SortOrder
     createdAt?: SortOrder
@@ -44307,6 +46671,123 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumOrderStatusFilter<$PrismaModel>
     _max?: NestedEnumOrderStatusFilter<$PrismaModel>
+  }
+
+  export type EnumPaymentChannelFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentChannel | EnumPaymentChannelFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentChannel[] | ListEnumPaymentChannelFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentChannel[] | ListEnumPaymentChannelFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentChannelFilter<$PrismaModel> | $Enums.PaymentChannel
+  }
+
+  export type EnumPaymentStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentStatus | EnumPaymentStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentStatusFilter<$PrismaModel> | $Enums.PaymentStatus
+  }
+
+  export type OrderNullableScalarRelationFilter = {
+    is?: OrderWhereInput | null
+    isNot?: OrderWhereInput | null
+  }
+
+  export type PaymentCountOrderByAggregateInput = {
+    id?: SortOrder
+    storeId?: SortOrder
+    orderId?: SortOrder
+    tableSessionId?: SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    amount?: SortOrder
+    providerKind?: SortOrder
+    providerRef?: SortOrder
+    providerPaymentId?: SortOrder
+    qrImageUrl?: SortOrder
+    qrPayload?: SortOrder
+    cashTendered?: SortOrder
+    changeDue?: SortOrder
+    collectedById?: SortOrder
+    paidAt?: SortOrder
+    expiresAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PaymentAvgOrderByAggregateInput = {
+    amount?: SortOrder
+    cashTendered?: SortOrder
+    changeDue?: SortOrder
+  }
+
+  export type PaymentMaxOrderByAggregateInput = {
+    id?: SortOrder
+    storeId?: SortOrder
+    orderId?: SortOrder
+    tableSessionId?: SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    amount?: SortOrder
+    providerKind?: SortOrder
+    providerRef?: SortOrder
+    providerPaymentId?: SortOrder
+    qrImageUrl?: SortOrder
+    qrPayload?: SortOrder
+    cashTendered?: SortOrder
+    changeDue?: SortOrder
+    collectedById?: SortOrder
+    paidAt?: SortOrder
+    expiresAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PaymentMinOrderByAggregateInput = {
+    id?: SortOrder
+    storeId?: SortOrder
+    orderId?: SortOrder
+    tableSessionId?: SortOrder
+    channel?: SortOrder
+    status?: SortOrder
+    amount?: SortOrder
+    providerKind?: SortOrder
+    providerRef?: SortOrder
+    providerPaymentId?: SortOrder
+    qrImageUrl?: SortOrder
+    qrPayload?: SortOrder
+    cashTendered?: SortOrder
+    changeDue?: SortOrder
+    collectedById?: SortOrder
+    paidAt?: SortOrder
+    expiresAt?: SortOrder
+    createdAt?: SortOrder
+    updatedAt?: SortOrder
+  }
+
+  export type PaymentSumOrderByAggregateInput = {
+    amount?: SortOrder
+    cashTendered?: SortOrder
+    changeDue?: SortOrder
+  }
+
+  export type EnumPaymentChannelWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentChannel | EnumPaymentChannelFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentChannel[] | ListEnumPaymentChannelFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentChannel[] | ListEnumPaymentChannelFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentChannelWithAggregatesFilter<$PrismaModel> | $Enums.PaymentChannel
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumPaymentChannelFilter<$PrismaModel>
+    _max?: NestedEnumPaymentChannelFilter<$PrismaModel>
+  }
+
+  export type EnumPaymentStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentStatus | EnumPaymentStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentStatusWithAggregatesFilter<$PrismaModel> | $Enums.PaymentStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumPaymentStatusFilter<$PrismaModel>
+    _max?: NestedEnumPaymentStatusFilter<$PrismaModel>
   }
 
   export type OrderScalarRelationFilter = {
@@ -44460,11 +46941,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedEnumWaiterCallStatusFilter<$PrismaModel>
     _max?: NestedEnumWaiterCallStatusFilter<$PrismaModel>
-  }
-
-  export type OrderNullableScalarRelationFilter = {
-    is?: OrderWhereInput | null
-    isNot?: OrderWhereInput | null
   }
 
   export type FeedbackCountOrderByAggregateInput = {
@@ -45097,6 +47573,13 @@ export namespace Prisma {
     connect?: FeedbackWhereUniqueInput | FeedbackWhereUniqueInput[]
   }
 
+  export type PaymentCreateNestedManyWithoutStoreInput = {
+    create?: XOR<PaymentCreateWithoutStoreInput, PaymentUncheckedCreateWithoutStoreInput> | PaymentCreateWithoutStoreInput[] | PaymentUncheckedCreateWithoutStoreInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutStoreInput | PaymentCreateOrConnectWithoutStoreInput[]
+    createMany?: PaymentCreateManyStoreInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+  }
+
   export type PromoCodeCreateNestedManyWithoutStoreInput = {
     create?: XOR<PromoCodeCreateWithoutStoreInput, PromoCodeUncheckedCreateWithoutStoreInput> | PromoCodeCreateWithoutStoreInput[] | PromoCodeUncheckedCreateWithoutStoreInput[]
     connectOrCreate?: PromoCodeCreateOrConnectWithoutStoreInput | PromoCodeCreateOrConnectWithoutStoreInput[]
@@ -45193,6 +47676,13 @@ export namespace Prisma {
     connectOrCreate?: FeedbackCreateOrConnectWithoutStoreInput | FeedbackCreateOrConnectWithoutStoreInput[]
     createMany?: FeedbackCreateManyStoreInputEnvelope
     connect?: FeedbackWhereUniqueInput | FeedbackWhereUniqueInput[]
+  }
+
+  export type PaymentUncheckedCreateNestedManyWithoutStoreInput = {
+    create?: XOR<PaymentCreateWithoutStoreInput, PaymentUncheckedCreateWithoutStoreInput> | PaymentCreateWithoutStoreInput[] | PaymentUncheckedCreateWithoutStoreInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutStoreInput | PaymentCreateOrConnectWithoutStoreInput[]
+    createMany?: PaymentCreateManyStoreInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
   }
 
   export type PromoCodeUncheckedCreateNestedManyWithoutStoreInput = {
@@ -45373,6 +47863,20 @@ export namespace Prisma {
     update?: FeedbackUpdateWithWhereUniqueWithoutStoreInput | FeedbackUpdateWithWhereUniqueWithoutStoreInput[]
     updateMany?: FeedbackUpdateManyWithWhereWithoutStoreInput | FeedbackUpdateManyWithWhereWithoutStoreInput[]
     deleteMany?: FeedbackScalarWhereInput | FeedbackScalarWhereInput[]
+  }
+
+  export type PaymentUpdateManyWithoutStoreNestedInput = {
+    create?: XOR<PaymentCreateWithoutStoreInput, PaymentUncheckedCreateWithoutStoreInput> | PaymentCreateWithoutStoreInput[] | PaymentUncheckedCreateWithoutStoreInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutStoreInput | PaymentCreateOrConnectWithoutStoreInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutStoreInput | PaymentUpsertWithWhereUniqueWithoutStoreInput[]
+    createMany?: PaymentCreateManyStoreInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutStoreInput | PaymentUpdateWithWhereUniqueWithoutStoreInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutStoreInput | PaymentUpdateManyWithWhereWithoutStoreInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
   }
 
   export type PromoCodeUpdateManyWithoutStoreNestedInput = {
@@ -45571,6 +48075,20 @@ export namespace Prisma {
     deleteMany?: FeedbackScalarWhereInput | FeedbackScalarWhereInput[]
   }
 
+  export type PaymentUncheckedUpdateManyWithoutStoreNestedInput = {
+    create?: XOR<PaymentCreateWithoutStoreInput, PaymentUncheckedCreateWithoutStoreInput> | PaymentCreateWithoutStoreInput[] | PaymentUncheckedCreateWithoutStoreInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutStoreInput | PaymentCreateOrConnectWithoutStoreInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutStoreInput | PaymentUpsertWithWhereUniqueWithoutStoreInput[]
+    createMany?: PaymentCreateManyStoreInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutStoreInput | PaymentUpdateWithWhereUniqueWithoutStoreInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutStoreInput | PaymentUpdateManyWithWhereWithoutStoreInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+  }
+
   export type PromoCodeUncheckedUpdateManyWithoutStoreNestedInput = {
     create?: XOR<PromoCodeCreateWithoutStoreInput, PromoCodeUncheckedCreateWithoutStoreInput> | PromoCodeCreateWithoutStoreInput[] | PromoCodeUncheckedCreateWithoutStoreInput[]
     connectOrCreate?: PromoCodeCreateOrConnectWithoutStoreInput | PromoCodeCreateOrConnectWithoutStoreInput[]
@@ -45695,6 +48213,20 @@ export namespace Prisma {
     connect?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
   }
 
+  export type PaymentCreateNestedManyWithoutCollectedByInput = {
+    create?: XOR<PaymentCreateWithoutCollectedByInput, PaymentUncheckedCreateWithoutCollectedByInput> | PaymentCreateWithoutCollectedByInput[] | PaymentUncheckedCreateWithoutCollectedByInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutCollectedByInput | PaymentCreateOrConnectWithoutCollectedByInput[]
+    createMany?: PaymentCreateManyCollectedByInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+  }
+
+  export type OrderCreateNestedManyWithoutCancelledByInput = {
+    create?: XOR<OrderCreateWithoutCancelledByInput, OrderUncheckedCreateWithoutCancelledByInput> | OrderCreateWithoutCancelledByInput[] | OrderUncheckedCreateWithoutCancelledByInput[]
+    connectOrCreate?: OrderCreateOrConnectWithoutCancelledByInput | OrderCreateOrConnectWithoutCancelledByInput[]
+    createMany?: OrderCreateManyCancelledByInputEnvelope
+    connect?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+  }
+
   export type PasskeyUncheckedCreateNestedManyWithoutUserInput = {
     create?: XOR<PasskeyCreateWithoutUserInput, PasskeyUncheckedCreateWithoutUserInput> | PasskeyCreateWithoutUserInput[] | PasskeyUncheckedCreateWithoutUserInput[]
     connectOrCreate?: PasskeyCreateOrConnectWithoutUserInput | PasskeyCreateOrConnectWithoutUserInput[]
@@ -45749,6 +48281,20 @@ export namespace Prisma {
     connectOrCreate?: NotificationCreateOrConnectWithoutUserInput | NotificationCreateOrConnectWithoutUserInput[]
     createMany?: NotificationCreateManyUserInputEnvelope
     connect?: NotificationWhereUniqueInput | NotificationWhereUniqueInput[]
+  }
+
+  export type PaymentUncheckedCreateNestedManyWithoutCollectedByInput = {
+    create?: XOR<PaymentCreateWithoutCollectedByInput, PaymentUncheckedCreateWithoutCollectedByInput> | PaymentCreateWithoutCollectedByInput[] | PaymentUncheckedCreateWithoutCollectedByInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutCollectedByInput | PaymentCreateOrConnectWithoutCollectedByInput[]
+    createMany?: PaymentCreateManyCollectedByInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+  }
+
+  export type OrderUncheckedCreateNestedManyWithoutCancelledByInput = {
+    create?: XOR<OrderCreateWithoutCancelledByInput, OrderUncheckedCreateWithoutCancelledByInput> | OrderCreateWithoutCancelledByInput[] | OrderUncheckedCreateWithoutCancelledByInput[]
+    connectOrCreate?: OrderCreateOrConnectWithoutCancelledByInput | OrderCreateOrConnectWithoutCancelledByInput[]
+    createMany?: OrderCreateManyCancelledByInputEnvelope
+    connect?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
   }
 
   export type EnumUserRoleFieldUpdateOperationsInput = {
@@ -45895,6 +48441,34 @@ export namespace Prisma {
     deleteMany?: NotificationScalarWhereInput | NotificationScalarWhereInput[]
   }
 
+  export type PaymentUpdateManyWithoutCollectedByNestedInput = {
+    create?: XOR<PaymentCreateWithoutCollectedByInput, PaymentUncheckedCreateWithoutCollectedByInput> | PaymentCreateWithoutCollectedByInput[] | PaymentUncheckedCreateWithoutCollectedByInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutCollectedByInput | PaymentCreateOrConnectWithoutCollectedByInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutCollectedByInput | PaymentUpsertWithWhereUniqueWithoutCollectedByInput[]
+    createMany?: PaymentCreateManyCollectedByInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutCollectedByInput | PaymentUpdateWithWhereUniqueWithoutCollectedByInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutCollectedByInput | PaymentUpdateManyWithWhereWithoutCollectedByInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+  }
+
+  export type OrderUpdateManyWithoutCancelledByNestedInput = {
+    create?: XOR<OrderCreateWithoutCancelledByInput, OrderUncheckedCreateWithoutCancelledByInput> | OrderCreateWithoutCancelledByInput[] | OrderUncheckedCreateWithoutCancelledByInput[]
+    connectOrCreate?: OrderCreateOrConnectWithoutCancelledByInput | OrderCreateOrConnectWithoutCancelledByInput[]
+    upsert?: OrderUpsertWithWhereUniqueWithoutCancelledByInput | OrderUpsertWithWhereUniqueWithoutCancelledByInput[]
+    createMany?: OrderCreateManyCancelledByInputEnvelope
+    set?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+    disconnect?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+    delete?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+    connect?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+    update?: OrderUpdateWithWhereUniqueWithoutCancelledByInput | OrderUpdateWithWhereUniqueWithoutCancelledByInput[]
+    updateMany?: OrderUpdateManyWithWhereWithoutCancelledByInput | OrderUpdateManyWithWhereWithoutCancelledByInput[]
+    deleteMany?: OrderScalarWhereInput | OrderScalarWhereInput[]
+  }
+
   export type PasskeyUncheckedUpdateManyWithoutUserNestedInput = {
     create?: XOR<PasskeyCreateWithoutUserInput, PasskeyUncheckedCreateWithoutUserInput> | PasskeyCreateWithoutUserInput[] | PasskeyUncheckedCreateWithoutUserInput[]
     connectOrCreate?: PasskeyCreateOrConnectWithoutUserInput | PasskeyCreateOrConnectWithoutUserInput[]
@@ -46005,6 +48579,34 @@ export namespace Prisma {
     update?: NotificationUpdateWithWhereUniqueWithoutUserInput | NotificationUpdateWithWhereUniqueWithoutUserInput[]
     updateMany?: NotificationUpdateManyWithWhereWithoutUserInput | NotificationUpdateManyWithWhereWithoutUserInput[]
     deleteMany?: NotificationScalarWhereInput | NotificationScalarWhereInput[]
+  }
+
+  export type PaymentUncheckedUpdateManyWithoutCollectedByNestedInput = {
+    create?: XOR<PaymentCreateWithoutCollectedByInput, PaymentUncheckedCreateWithoutCollectedByInput> | PaymentCreateWithoutCollectedByInput[] | PaymentUncheckedCreateWithoutCollectedByInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutCollectedByInput | PaymentCreateOrConnectWithoutCollectedByInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutCollectedByInput | PaymentUpsertWithWhereUniqueWithoutCollectedByInput[]
+    createMany?: PaymentCreateManyCollectedByInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutCollectedByInput | PaymentUpdateWithWhereUniqueWithoutCollectedByInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutCollectedByInput | PaymentUpdateManyWithWhereWithoutCollectedByInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+  }
+
+  export type OrderUncheckedUpdateManyWithoutCancelledByNestedInput = {
+    create?: XOR<OrderCreateWithoutCancelledByInput, OrderUncheckedCreateWithoutCancelledByInput> | OrderCreateWithoutCancelledByInput[] | OrderUncheckedCreateWithoutCancelledByInput[]
+    connectOrCreate?: OrderCreateOrConnectWithoutCancelledByInput | OrderCreateOrConnectWithoutCancelledByInput[]
+    upsert?: OrderUpsertWithWhereUniqueWithoutCancelledByInput | OrderUpsertWithWhereUniqueWithoutCancelledByInput[]
+    createMany?: OrderCreateManyCancelledByInputEnvelope
+    set?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+    disconnect?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+    delete?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+    connect?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+    update?: OrderUpdateWithWhereUniqueWithoutCancelledByInput | OrderUpdateWithWhereUniqueWithoutCancelledByInput[]
+    updateMany?: OrderUpdateManyWithWhereWithoutCancelledByInput | OrderUpdateManyWithWhereWithoutCancelledByInput[]
+    deleteMany?: OrderScalarWhereInput | OrderScalarWhereInput[]
   }
 
   export type UserCreateNestedOneWithoutPasskeysInput = {
@@ -46973,11 +49575,24 @@ export namespace Prisma {
     connect?: PromoCodeWhereUniqueInput
   }
 
+  export type UserCreateNestedOneWithoutCancelledOrdersInput = {
+    create?: XOR<UserCreateWithoutCancelledOrdersInput, UserUncheckedCreateWithoutCancelledOrdersInput>
+    connectOrCreate?: UserCreateOrConnectWithoutCancelledOrdersInput
+    connect?: UserWhereUniqueInput
+  }
+
   export type OrderItemCreateNestedManyWithoutOrderInput = {
     create?: XOR<OrderItemCreateWithoutOrderInput, OrderItemUncheckedCreateWithoutOrderInput> | OrderItemCreateWithoutOrderInput[] | OrderItemUncheckedCreateWithoutOrderInput[]
     connectOrCreate?: OrderItemCreateOrConnectWithoutOrderInput | OrderItemCreateOrConnectWithoutOrderInput[]
     createMany?: OrderItemCreateManyOrderInputEnvelope
     connect?: OrderItemWhereUniqueInput | OrderItemWhereUniqueInput[]
+  }
+
+  export type PaymentCreateNestedManyWithoutOrderInput = {
+    create?: XOR<PaymentCreateWithoutOrderInput, PaymentUncheckedCreateWithoutOrderInput> | PaymentCreateWithoutOrderInput[] | PaymentUncheckedCreateWithoutOrderInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutOrderInput | PaymentCreateOrConnectWithoutOrderInput[]
+    createMany?: PaymentCreateManyOrderInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
   }
 
   export type FeedbackCreateNestedManyWithoutOrderInput = {
@@ -46999,6 +49614,13 @@ export namespace Prisma {
     connectOrCreate?: OrderItemCreateOrConnectWithoutOrderInput | OrderItemCreateOrConnectWithoutOrderInput[]
     createMany?: OrderItemCreateManyOrderInputEnvelope
     connect?: OrderItemWhereUniqueInput | OrderItemWhereUniqueInput[]
+  }
+
+  export type PaymentUncheckedCreateNestedManyWithoutOrderInput = {
+    create?: XOR<PaymentCreateWithoutOrderInput, PaymentUncheckedCreateWithoutOrderInput> | PaymentCreateWithoutOrderInput[] | PaymentUncheckedCreateWithoutOrderInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutOrderInput | PaymentCreateOrConnectWithoutOrderInput[]
+    createMany?: PaymentCreateManyOrderInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
   }
 
   export type FeedbackUncheckedCreateNestedManyWithoutOrderInput = {
@@ -47093,6 +49715,16 @@ export namespace Prisma {
     update?: XOR<XOR<PromoCodeUpdateToOneWithWhereWithoutOrdersInput, PromoCodeUpdateWithoutOrdersInput>, PromoCodeUncheckedUpdateWithoutOrdersInput>
   }
 
+  export type UserUpdateOneWithoutCancelledOrdersNestedInput = {
+    create?: XOR<UserCreateWithoutCancelledOrdersInput, UserUncheckedCreateWithoutCancelledOrdersInput>
+    connectOrCreate?: UserCreateOrConnectWithoutCancelledOrdersInput
+    upsert?: UserUpsertWithoutCancelledOrdersInput
+    disconnect?: UserWhereInput | boolean
+    delete?: UserWhereInput | boolean
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutCancelledOrdersInput, UserUpdateWithoutCancelledOrdersInput>, UserUncheckedUpdateWithoutCancelledOrdersInput>
+  }
+
   export type OrderItemUpdateManyWithoutOrderNestedInput = {
     create?: XOR<OrderItemCreateWithoutOrderInput, OrderItemUncheckedCreateWithoutOrderInput> | OrderItemCreateWithoutOrderInput[] | OrderItemUncheckedCreateWithoutOrderInput[]
     connectOrCreate?: OrderItemCreateOrConnectWithoutOrderInput | OrderItemCreateOrConnectWithoutOrderInput[]
@@ -47105,6 +49737,20 @@ export namespace Prisma {
     update?: OrderItemUpdateWithWhereUniqueWithoutOrderInput | OrderItemUpdateWithWhereUniqueWithoutOrderInput[]
     updateMany?: OrderItemUpdateManyWithWhereWithoutOrderInput | OrderItemUpdateManyWithWhereWithoutOrderInput[]
     deleteMany?: OrderItemScalarWhereInput | OrderItemScalarWhereInput[]
+  }
+
+  export type PaymentUpdateManyWithoutOrderNestedInput = {
+    create?: XOR<PaymentCreateWithoutOrderInput, PaymentUncheckedCreateWithoutOrderInput> | PaymentCreateWithoutOrderInput[] | PaymentUncheckedCreateWithoutOrderInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutOrderInput | PaymentCreateOrConnectWithoutOrderInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutOrderInput | PaymentUpsertWithWhereUniqueWithoutOrderInput[]
+    createMany?: PaymentCreateManyOrderInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutOrderInput | PaymentUpdateWithWhereUniqueWithoutOrderInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutOrderInput | PaymentUpdateManyWithWhereWithoutOrderInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
   }
 
   export type FeedbackUpdateManyWithoutOrderNestedInput = {
@@ -47149,6 +49795,20 @@ export namespace Prisma {
     deleteMany?: OrderItemScalarWhereInput | OrderItemScalarWhereInput[]
   }
 
+  export type PaymentUncheckedUpdateManyWithoutOrderNestedInput = {
+    create?: XOR<PaymentCreateWithoutOrderInput, PaymentUncheckedCreateWithoutOrderInput> | PaymentCreateWithoutOrderInput[] | PaymentUncheckedCreateWithoutOrderInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutOrderInput | PaymentCreateOrConnectWithoutOrderInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutOrderInput | PaymentUpsertWithWhereUniqueWithoutOrderInput[]
+    createMany?: PaymentCreateManyOrderInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutOrderInput | PaymentUpdateWithWhereUniqueWithoutOrderInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutOrderInput | PaymentUpdateManyWithWhereWithoutOrderInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+  }
+
   export type FeedbackUncheckedUpdateManyWithoutOrderNestedInput = {
     create?: XOR<FeedbackCreateWithoutOrderInput, FeedbackUncheckedCreateWithoutOrderInput> | FeedbackCreateWithoutOrderInput[] | FeedbackUncheckedCreateWithoutOrderInput[]
     connectOrCreate?: FeedbackCreateOrConnectWithoutOrderInput | FeedbackCreateOrConnectWithoutOrderInput[]
@@ -47175,6 +49835,76 @@ export namespace Prisma {
     update?: CustomerWalletTransactionUpdateWithWhereUniqueWithoutOrderInput | CustomerWalletTransactionUpdateWithWhereUniqueWithoutOrderInput[]
     updateMany?: CustomerWalletTransactionUpdateManyWithWhereWithoutOrderInput | CustomerWalletTransactionUpdateManyWithWhereWithoutOrderInput[]
     deleteMany?: CustomerWalletTransactionScalarWhereInput | CustomerWalletTransactionScalarWhereInput[]
+  }
+
+  export type StoreCreateNestedOneWithoutPaymentsInput = {
+    create?: XOR<StoreCreateWithoutPaymentsInput, StoreUncheckedCreateWithoutPaymentsInput>
+    connectOrCreate?: StoreCreateOrConnectWithoutPaymentsInput
+    connect?: StoreWhereUniqueInput
+  }
+
+  export type OrderCreateNestedOneWithoutPaymentsInput = {
+    create?: XOR<OrderCreateWithoutPaymentsInput, OrderUncheckedCreateWithoutPaymentsInput>
+    connectOrCreate?: OrderCreateOrConnectWithoutPaymentsInput
+    connect?: OrderWhereUniqueInput
+  }
+
+  export type TableSessionCreateNestedOneWithoutPaymentsInput = {
+    create?: XOR<TableSessionCreateWithoutPaymentsInput, TableSessionUncheckedCreateWithoutPaymentsInput>
+    connectOrCreate?: TableSessionCreateOrConnectWithoutPaymentsInput
+    connect?: TableSessionWhereUniqueInput
+  }
+
+  export type UserCreateNestedOneWithoutCollectedPaymentsInput = {
+    create?: XOR<UserCreateWithoutCollectedPaymentsInput, UserUncheckedCreateWithoutCollectedPaymentsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutCollectedPaymentsInput
+    connect?: UserWhereUniqueInput
+  }
+
+  export type EnumPaymentChannelFieldUpdateOperationsInput = {
+    set?: $Enums.PaymentChannel
+  }
+
+  export type EnumPaymentStatusFieldUpdateOperationsInput = {
+    set?: $Enums.PaymentStatus
+  }
+
+  export type StoreUpdateOneRequiredWithoutPaymentsNestedInput = {
+    create?: XOR<StoreCreateWithoutPaymentsInput, StoreUncheckedCreateWithoutPaymentsInput>
+    connectOrCreate?: StoreCreateOrConnectWithoutPaymentsInput
+    upsert?: StoreUpsertWithoutPaymentsInput
+    connect?: StoreWhereUniqueInput
+    update?: XOR<XOR<StoreUpdateToOneWithWhereWithoutPaymentsInput, StoreUpdateWithoutPaymentsInput>, StoreUncheckedUpdateWithoutPaymentsInput>
+  }
+
+  export type OrderUpdateOneWithoutPaymentsNestedInput = {
+    create?: XOR<OrderCreateWithoutPaymentsInput, OrderUncheckedCreateWithoutPaymentsInput>
+    connectOrCreate?: OrderCreateOrConnectWithoutPaymentsInput
+    upsert?: OrderUpsertWithoutPaymentsInput
+    disconnect?: OrderWhereInput | boolean
+    delete?: OrderWhereInput | boolean
+    connect?: OrderWhereUniqueInput
+    update?: XOR<XOR<OrderUpdateToOneWithWhereWithoutPaymentsInput, OrderUpdateWithoutPaymentsInput>, OrderUncheckedUpdateWithoutPaymentsInput>
+  }
+
+  export type TableSessionUpdateOneWithoutPaymentsNestedInput = {
+    create?: XOR<TableSessionCreateWithoutPaymentsInput, TableSessionUncheckedCreateWithoutPaymentsInput>
+    connectOrCreate?: TableSessionCreateOrConnectWithoutPaymentsInput
+    upsert?: TableSessionUpsertWithoutPaymentsInput
+    disconnect?: TableSessionWhereInput | boolean
+    delete?: TableSessionWhereInput | boolean
+    connect?: TableSessionWhereUniqueInput
+    update?: XOR<XOR<TableSessionUpdateToOneWithWhereWithoutPaymentsInput, TableSessionUpdateWithoutPaymentsInput>, TableSessionUncheckedUpdateWithoutPaymentsInput>
+  }
+
+  export type UserUpdateOneWithoutCollectedPaymentsNestedInput = {
+    create?: XOR<UserCreateWithoutCollectedPaymentsInput, UserUncheckedCreateWithoutCollectedPaymentsInput>
+    connectOrCreate?: UserCreateOrConnectWithoutCollectedPaymentsInput
+    upsert?: UserUpsertWithoutCollectedPaymentsInput
+    disconnect?: UserWhereInput | boolean
+    delete?: UserWhereInput | boolean
+    connect?: UserWhereUniqueInput
+    update?: XOR<XOR<UserUpdateToOneWithWhereWithoutCollectedPaymentsInput, UserUpdateWithoutCollectedPaymentsInput>, UserUncheckedUpdateWithoutCollectedPaymentsInput>
   }
 
   export type OrderCreateNestedOneWithoutItemsInput = {
@@ -47376,11 +50106,25 @@ export namespace Prisma {
     connect?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
   }
 
+  export type PaymentCreateNestedManyWithoutTableSessionInput = {
+    create?: XOR<PaymentCreateWithoutTableSessionInput, PaymentUncheckedCreateWithoutTableSessionInput> | PaymentCreateWithoutTableSessionInput[] | PaymentUncheckedCreateWithoutTableSessionInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutTableSessionInput | PaymentCreateOrConnectWithoutTableSessionInput[]
+    createMany?: PaymentCreateManyTableSessionInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+  }
+
   export type OrderUncheckedCreateNestedManyWithoutTableSessionInput = {
     create?: XOR<OrderCreateWithoutTableSessionInput, OrderUncheckedCreateWithoutTableSessionInput> | OrderCreateWithoutTableSessionInput[] | OrderUncheckedCreateWithoutTableSessionInput[]
     connectOrCreate?: OrderCreateOrConnectWithoutTableSessionInput | OrderCreateOrConnectWithoutTableSessionInput[]
     createMany?: OrderCreateManyTableSessionInputEnvelope
     connect?: OrderWhereUniqueInput | OrderWhereUniqueInput[]
+  }
+
+  export type PaymentUncheckedCreateNestedManyWithoutTableSessionInput = {
+    create?: XOR<PaymentCreateWithoutTableSessionInput, PaymentUncheckedCreateWithoutTableSessionInput> | PaymentCreateWithoutTableSessionInput[] | PaymentUncheckedCreateWithoutTableSessionInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutTableSessionInput | PaymentCreateOrConnectWithoutTableSessionInput[]
+    createMany?: PaymentCreateManyTableSessionInputEnvelope
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
   }
 
   export type EnumTableSessionStatusFieldUpdateOperationsInput = {
@@ -47417,6 +50161,20 @@ export namespace Prisma {
     deleteMany?: OrderScalarWhereInput | OrderScalarWhereInput[]
   }
 
+  export type PaymentUpdateManyWithoutTableSessionNestedInput = {
+    create?: XOR<PaymentCreateWithoutTableSessionInput, PaymentUncheckedCreateWithoutTableSessionInput> | PaymentCreateWithoutTableSessionInput[] | PaymentUncheckedCreateWithoutTableSessionInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutTableSessionInput | PaymentCreateOrConnectWithoutTableSessionInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutTableSessionInput | PaymentUpsertWithWhereUniqueWithoutTableSessionInput[]
+    createMany?: PaymentCreateManyTableSessionInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutTableSessionInput | PaymentUpdateWithWhereUniqueWithoutTableSessionInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutTableSessionInput | PaymentUpdateManyWithWhereWithoutTableSessionInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+  }
+
   export type OrderUncheckedUpdateManyWithoutTableSessionNestedInput = {
     create?: XOR<OrderCreateWithoutTableSessionInput, OrderUncheckedCreateWithoutTableSessionInput> | OrderCreateWithoutTableSessionInput[] | OrderUncheckedCreateWithoutTableSessionInput[]
     connectOrCreate?: OrderCreateOrConnectWithoutTableSessionInput | OrderCreateOrConnectWithoutTableSessionInput[]
@@ -47429,6 +50187,20 @@ export namespace Prisma {
     update?: OrderUpdateWithWhereUniqueWithoutTableSessionInput | OrderUpdateWithWhereUniqueWithoutTableSessionInput[]
     updateMany?: OrderUpdateManyWithWhereWithoutTableSessionInput | OrderUpdateManyWithWhereWithoutTableSessionInput[]
     deleteMany?: OrderScalarWhereInput | OrderScalarWhereInput[]
+  }
+
+  export type PaymentUncheckedUpdateManyWithoutTableSessionNestedInput = {
+    create?: XOR<PaymentCreateWithoutTableSessionInput, PaymentUncheckedCreateWithoutTableSessionInput> | PaymentCreateWithoutTableSessionInput[] | PaymentUncheckedCreateWithoutTableSessionInput[]
+    connectOrCreate?: PaymentCreateOrConnectWithoutTableSessionInput | PaymentCreateOrConnectWithoutTableSessionInput[]
+    upsert?: PaymentUpsertWithWhereUniqueWithoutTableSessionInput | PaymentUpsertWithWhereUniqueWithoutTableSessionInput[]
+    createMany?: PaymentCreateManyTableSessionInputEnvelope
+    set?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    disconnect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    delete?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    connect?: PaymentWhereUniqueInput | PaymentWhereUniqueInput[]
+    update?: PaymentUpdateWithWhereUniqueWithoutTableSessionInput | PaymentUpdateWithWhereUniqueWithoutTableSessionInput[]
+    updateMany?: PaymentUpdateManyWithWhereWithoutTableSessionInput | PaymentUpdateManyWithWhereWithoutTableSessionInput[]
+    deleteMany?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
   }
 
   export type StoreCreateNestedOneWithoutReservationsInput = {
@@ -48220,6 +50992,40 @@ export namespace Prisma {
     _max?: NestedEnumOrderStatusFilter<$PrismaModel>
   }
 
+  export type NestedEnumPaymentChannelFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentChannel | EnumPaymentChannelFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentChannel[] | ListEnumPaymentChannelFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentChannel[] | ListEnumPaymentChannelFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentChannelFilter<$PrismaModel> | $Enums.PaymentChannel
+  }
+
+  export type NestedEnumPaymentStatusFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentStatus | EnumPaymentStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentStatusFilter<$PrismaModel> | $Enums.PaymentStatus
+  }
+
+  export type NestedEnumPaymentChannelWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentChannel | EnumPaymentChannelFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentChannel[] | ListEnumPaymentChannelFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentChannel[] | ListEnumPaymentChannelFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentChannelWithAggregatesFilter<$PrismaModel> | $Enums.PaymentChannel
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumPaymentChannelFilter<$PrismaModel>
+    _max?: NestedEnumPaymentChannelFilter<$PrismaModel>
+  }
+
+  export type NestedEnumPaymentStatusWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: $Enums.PaymentStatus | EnumPaymentStatusFieldRefInput<$PrismaModel>
+    in?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    notIn?: $Enums.PaymentStatus[] | ListEnumPaymentStatusFieldRefInput<$PrismaModel>
+    not?: NestedEnumPaymentStatusWithAggregatesFilter<$PrismaModel> | $Enums.PaymentStatus
+    _count?: NestedIntFilter<$PrismaModel>
+    _min?: NestedEnumPaymentStatusFilter<$PrismaModel>
+    _max?: NestedEnumPaymentStatusFilter<$PrismaModel>
+  }
+
   export type NestedEnumWaiterCallTypeFilter<$PrismaModel = never> = {
     equals?: $Enums.WaiterCallType | EnumWaiterCallTypeFieldRefInput<$PrismaModel>
     in?: $Enums.WaiterCallType[] | ListEnumWaiterCallTypeFieldRefInput<$PrismaModel>
@@ -48316,6 +51122,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -48330,6 +51138,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -48347,6 +51156,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -48361,6 +51172,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -48399,6 +51211,8 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutTenantInput = {
@@ -48423,6 +51237,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutTenantInput = {
@@ -48468,6 +51284,7 @@ export namespace Prisma {
     merchantId: string
     apiKey: string
     secretKey?: string | null
+    webhookSecret?: string | null
     isActive?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -48479,6 +51296,7 @@ export namespace Prisma {
     merchantId: string
     apiKey: string
     secretKey?: string | null
+    webhookSecret?: string | null
     isActive?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -48525,6 +51343,8 @@ export namespace Prisma {
     banner?: StringNullableFilter<"Store"> | string | null
     status?: EnumStoreStatusFilter<"Store"> | $Enums.StoreStatus
     googleReviewUrl?: StringNullableFilter<"Store"> | string | null
+    offlineUpiId?: StringNullableFilter<"Store"> | string | null
+    offlineUpiPayeeName?: StringNullableFilter<"Store"> | string | null
     taxRules?: JsonNullableFilter<"Store">
     loyaltyRules?: JsonNullableFilter<"Store">
     createdAt?: DateTimeFilter<"Store"> | Date | string
@@ -48626,6 +51446,7 @@ export namespace Prisma {
     merchantId?: StringFilter<"TenantPaymentGateway"> | string
     apiKey?: StringFilter<"TenantPaymentGateway"> | string
     secretKey?: StringNullableFilter<"TenantPaymentGateway"> | string | null
+    webhookSecret?: StringNullableFilter<"TenantPaymentGateway"> | string | null
     isActive?: BoolFilter<"TenantPaymentGateway"> | boolean
     createdAt?: DateTimeFilter<"TenantPaymentGateway"> | Date | string
     updatedAt?: DateTimeFilter<"TenantPaymentGateway"> | Date | string
@@ -48642,6 +51463,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     users?: UserCreateNestedManyWithoutTenantInput
@@ -48660,6 +51483,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     users?: UserUncheckedCreateNestedManyWithoutTenantInput
@@ -48694,6 +51519,8 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutStoreInput = {
@@ -48718,6 +51545,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutStoreInput = {
@@ -48889,6 +51718,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     table: TableCreateNestedOneWithoutSessionsInput
     orders?: OrderCreateNestedManyWithoutTableSessionInput
+    payments?: PaymentCreateNestedManyWithoutTableSessionInput
   }
 
   export type TableSessionUncheckedCreateWithoutStoreInput = {
@@ -48904,6 +51734,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     orders?: OrderUncheckedCreateNestedManyWithoutTableSessionInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutTableSessionInput
   }
 
   export type TableSessionCreateOrConnectWithoutStoreInput = {
@@ -48965,12 +51796,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -48980,7 +51815,9 @@ export namespace Prisma {
     staff?: UserCreateNestedOneWithoutStaffOrdersInput
     customer?: UserCreateNestedOneWithoutCustomerOrdersInput
     promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
   }
@@ -48998,6 +51835,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -49005,11 +51843,16 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
   }
@@ -49079,6 +51922,58 @@ export namespace Prisma {
 
   export type FeedbackCreateManyStoreInputEnvelope = {
     data: FeedbackCreateManyStoreInput | FeedbackCreateManyStoreInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type PaymentCreateWithoutStoreInput = {
+    id?: string
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    order?: OrderCreateNestedOneWithoutPaymentsInput
+    tableSession?: TableSessionCreateNestedOneWithoutPaymentsInput
+    collectedBy?: UserCreateNestedOneWithoutCollectedPaymentsInput
+  }
+
+  export type PaymentUncheckedCreateWithoutStoreInput = {
+    id?: string
+    orderId?: string | null
+    tableSessionId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    collectedById?: string | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentCreateOrConnectWithoutStoreInput = {
+    where: PaymentWhereUniqueInput
+    create: XOR<PaymentCreateWithoutStoreInput, PaymentUncheckedCreateWithoutStoreInput>
+  }
+
+  export type PaymentCreateManyStoreInputEnvelope = {
+    data: PaymentCreateManyStoreInput | PaymentCreateManyStoreInput[]
     skipDuplicates?: boolean
   }
 
@@ -49246,6 +52141,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     users?: UserUpdateManyWithoutTenantNestedInput
@@ -49264,6 +52161,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     users?: UserUncheckedUpdateManyWithoutTenantNestedInput
@@ -49512,6 +52411,7 @@ export namespace Prisma {
     paymentMethod?: EnumPaymentMethodNullableFilter<"Order"> | $Enums.PaymentMethod | null
     cashAmount?: IntFilter<"Order"> | number
     onlineAmount?: IntFilter<"Order"> | number
+    paidAt?: DateTimeNullableFilter<"Order"> | Date | string | null
     status?: EnumOrderStatusFilter<"Order"> | $Enums.OrderStatus
     subTotal?: IntFilter<"Order"> | number
     taxAmount?: IntFilter<"Order"> | number
@@ -49519,6 +52419,10 @@ export namespace Prisma {
     walletDiscount?: IntFilter<"Order"> | number
     promoCodeId?: StringNullableFilter<"Order"> | string | null
     totalAmount?: IntFilter<"Order"> | number
+    taxRules?: JsonNullableFilter<"Order">
+    cancelReason?: StringNullableFilter<"Order"> | string | null
+    cancelledAt?: DateTimeNullableFilter<"Order"> | Date | string | null
+    cancelledById?: StringNullableFilter<"Order"> | string | null
     paymentLinkId?: StringNullableFilter<"Order"> | string | null
     paymentLinkUrl?: StringNullableFilter<"Order"> | string | null
     createdAt?: DateTimeFilter<"Order"> | Date | string
@@ -49582,6 +52486,47 @@ export namespace Prisma {
     comment?: StringNullableFilter<"Feedback"> | string | null
     isPublic?: BoolFilter<"Feedback"> | boolean
     createdAt?: DateTimeFilter<"Feedback"> | Date | string
+  }
+
+  export type PaymentUpsertWithWhereUniqueWithoutStoreInput = {
+    where: PaymentWhereUniqueInput
+    update: XOR<PaymentUpdateWithoutStoreInput, PaymentUncheckedUpdateWithoutStoreInput>
+    create: XOR<PaymentCreateWithoutStoreInput, PaymentUncheckedCreateWithoutStoreInput>
+  }
+
+  export type PaymentUpdateWithWhereUniqueWithoutStoreInput = {
+    where: PaymentWhereUniqueInput
+    data: XOR<PaymentUpdateWithoutStoreInput, PaymentUncheckedUpdateWithoutStoreInput>
+  }
+
+  export type PaymentUpdateManyWithWhereWithoutStoreInput = {
+    where: PaymentScalarWhereInput
+    data: XOR<PaymentUpdateManyMutationInput, PaymentUncheckedUpdateManyWithoutStoreInput>
+  }
+
+  export type PaymentScalarWhereInput = {
+    AND?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+    OR?: PaymentScalarWhereInput[]
+    NOT?: PaymentScalarWhereInput | PaymentScalarWhereInput[]
+    id?: StringFilter<"Payment"> | string
+    storeId?: StringFilter<"Payment"> | string
+    orderId?: StringNullableFilter<"Payment"> | string | null
+    tableSessionId?: StringNullableFilter<"Payment"> | string | null
+    channel?: EnumPaymentChannelFilter<"Payment"> | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFilter<"Payment"> | $Enums.PaymentStatus
+    amount?: IntFilter<"Payment"> | number
+    providerKind?: StringNullableFilter<"Payment"> | string | null
+    providerRef?: StringNullableFilter<"Payment"> | string | null
+    providerPaymentId?: StringNullableFilter<"Payment"> | string | null
+    qrImageUrl?: StringNullableFilter<"Payment"> | string | null
+    qrPayload?: StringNullableFilter<"Payment"> | string | null
+    cashTendered?: IntNullableFilter<"Payment"> | number | null
+    changeDue?: IntNullableFilter<"Payment"> | number | null
+    collectedById?: StringNullableFilter<"Payment"> | string | null
+    paidAt?: DateTimeNullableFilter<"Payment"> | Date | string | null
+    expiresAt?: DateTimeNullableFilter<"Payment"> | Date | string | null
+    createdAt?: DateTimeFilter<"Payment"> | Date | string
+    updatedAt?: DateTimeFilter<"Payment"> | Date | string
   }
 
   export type PromoCodeUpsertWithWhereUniqueWithoutStoreInput = {
@@ -49724,6 +52669,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     stores?: StoreCreateNestedManyWithoutTenantInput
@@ -49742,6 +52689,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     stores?: StoreUncheckedCreateNestedManyWithoutTenantInput
@@ -49765,6 +52714,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -49779,6 +52730,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -49797,6 +52749,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -49810,6 +52764,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -49860,12 +52815,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -49875,7 +52834,9 @@ export namespace Prisma {
     tableSession?: TableSessionCreateNestedOneWithoutOrdersInput
     customer?: UserCreateNestedOneWithoutCustomerOrdersInput
     promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
   }
@@ -49893,6 +52854,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -49900,11 +52862,16 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
   }
@@ -49928,12 +52895,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -49943,7 +52914,9 @@ export namespace Prisma {
     tableSession?: TableSessionCreateNestedOneWithoutOrdersInput
     staff?: UserCreateNestedOneWithoutStaffOrdersInput
     promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
   }
@@ -49961,6 +52934,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -49968,11 +52942,16 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
   }
@@ -50161,6 +53140,138 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type PaymentCreateWithoutCollectedByInput = {
+    id?: string
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    store: StoreCreateNestedOneWithoutPaymentsInput
+    order?: OrderCreateNestedOneWithoutPaymentsInput
+    tableSession?: TableSessionCreateNestedOneWithoutPaymentsInput
+  }
+
+  export type PaymentUncheckedCreateWithoutCollectedByInput = {
+    id?: string
+    storeId: string
+    orderId?: string | null
+    tableSessionId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentCreateOrConnectWithoutCollectedByInput = {
+    where: PaymentWhereUniqueInput
+    create: XOR<PaymentCreateWithoutCollectedByInput, PaymentUncheckedCreateWithoutCollectedByInput>
+  }
+
+  export type PaymentCreateManyCollectedByInputEnvelope = {
+    data: PaymentCreateManyCollectedByInput | PaymentCreateManyCollectedByInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type OrderCreateWithoutCancelledByInput = {
+    id?: string
+    origin: $Enums.OrderOrigin
+    type: $Enums.OrderType
+    sessionId?: string | null
+    paymentModel: $Enums.PaymentModel
+    paymentMethod?: $Enums.PaymentMethod | null
+    cashAmount?: number
+    onlineAmount?: number
+    paidAt?: Date | string | null
+    status?: $Enums.OrderStatus
+    subTotal?: number
+    taxAmount?: number
+    discountAmount?: number
+    walletDiscount?: number
+    totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    paymentLinkId?: string | null
+    paymentLinkUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    store: StoreCreateNestedOneWithoutOrdersInput
+    table?: TableCreateNestedOneWithoutOrdersInput
+    tableSession?: TableSessionCreateNestedOneWithoutOrdersInput
+    staff?: UserCreateNestedOneWithoutStaffOrdersInput
+    customer?: UserCreateNestedOneWithoutCustomerOrdersInput
+    promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
+    feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
+    walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
+  }
+
+  export type OrderUncheckedCreateWithoutCancelledByInput = {
+    id?: string
+    storeId: string
+    origin: $Enums.OrderOrigin
+    type: $Enums.OrderType
+    tableId?: string | null
+    tableSessionId?: string | null
+    staffId?: string | null
+    customerId?: string | null
+    sessionId?: string | null
+    paymentModel: $Enums.PaymentModel
+    paymentMethod?: $Enums.PaymentMethod | null
+    cashAmount?: number
+    onlineAmount?: number
+    paidAt?: Date | string | null
+    status?: $Enums.OrderStatus
+    subTotal?: number
+    taxAmount?: number
+    discountAmount?: number
+    walletDiscount?: number
+    promoCodeId?: string | null
+    totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    paymentLinkId?: string | null
+    paymentLinkUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
+    feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
+    walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
+  }
+
+  export type OrderCreateOrConnectWithoutCancelledByInput = {
+    where: OrderWhereUniqueInput
+    create: XOR<OrderCreateWithoutCancelledByInput, OrderUncheckedCreateWithoutCancelledByInput>
+  }
+
+  export type OrderCreateManyCancelledByInputEnvelope = {
+    data: OrderCreateManyCancelledByInput | OrderCreateManyCancelledByInput[]
+    skipDuplicates?: boolean
+  }
+
   export type TenantUpsertWithoutUsersInput = {
     update: XOR<TenantUpdateWithoutUsersInput, TenantUncheckedUpdateWithoutUsersInput>
     create: XOR<TenantCreateWithoutUsersInput, TenantUncheckedCreateWithoutUsersInput>
@@ -50183,6 +53294,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     stores?: StoreUpdateManyWithoutTenantNestedInput
@@ -50201,6 +53314,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     stores?: StoreUncheckedUpdateManyWithoutTenantNestedInput
@@ -50230,6 +53345,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50244,6 +53361,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -50262,6 +53380,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50275,6 +53395,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -50423,6 +53544,38 @@ export namespace Prisma {
     data: XOR<NotificationUpdateManyMutationInput, NotificationUncheckedUpdateManyWithoutUserInput>
   }
 
+  export type PaymentUpsertWithWhereUniqueWithoutCollectedByInput = {
+    where: PaymentWhereUniqueInput
+    update: XOR<PaymentUpdateWithoutCollectedByInput, PaymentUncheckedUpdateWithoutCollectedByInput>
+    create: XOR<PaymentCreateWithoutCollectedByInput, PaymentUncheckedCreateWithoutCollectedByInput>
+  }
+
+  export type PaymentUpdateWithWhereUniqueWithoutCollectedByInput = {
+    where: PaymentWhereUniqueInput
+    data: XOR<PaymentUpdateWithoutCollectedByInput, PaymentUncheckedUpdateWithoutCollectedByInput>
+  }
+
+  export type PaymentUpdateManyWithWhereWithoutCollectedByInput = {
+    where: PaymentScalarWhereInput
+    data: XOR<PaymentUpdateManyMutationInput, PaymentUncheckedUpdateManyWithoutCollectedByInput>
+  }
+
+  export type OrderUpsertWithWhereUniqueWithoutCancelledByInput = {
+    where: OrderWhereUniqueInput
+    update: XOR<OrderUpdateWithoutCancelledByInput, OrderUncheckedUpdateWithoutCancelledByInput>
+    create: XOR<OrderCreateWithoutCancelledByInput, OrderUncheckedCreateWithoutCancelledByInput>
+  }
+
+  export type OrderUpdateWithWhereUniqueWithoutCancelledByInput = {
+    where: OrderWhereUniqueInput
+    data: XOR<OrderUpdateWithoutCancelledByInput, OrderUncheckedUpdateWithoutCancelledByInput>
+  }
+
+  export type OrderUpdateManyWithWhereWithoutCancelledByInput = {
+    where: OrderScalarWhereInput
+    data: XOR<OrderUpdateManyMutationInput, OrderUncheckedUpdateManyWithoutCancelledByInput>
+  }
+
   export type UserCreateWithoutPasskeysInput = {
     id?: string
     email: string
@@ -50445,6 +53598,8 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutPasskeysInput = {
@@ -50469,6 +53624,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutPasskeysInput = {
@@ -50509,6 +53666,8 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutPasskeysInput = {
@@ -50533,6 +53692,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type TenantSubscriptionCreateWithoutPlanInput = {
@@ -50609,6 +53770,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     stores?: StoreCreateNestedManyWithoutTenantInput
@@ -50627,6 +53790,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     stores?: StoreUncheckedCreateNestedManyWithoutTenantInput
@@ -50686,6 +53851,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     stores?: StoreUpdateManyWithoutTenantNestedInput
@@ -50704,6 +53871,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     stores?: StoreUncheckedUpdateManyWithoutTenantNestedInput
@@ -50753,6 +53922,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     stores?: StoreCreateNestedManyWithoutTenantInput
@@ -50771,6 +53942,8 @@ export namespace Prisma {
     gstin?: string | null
     companyLegalName?: string | null
     registeredAddress?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     stores?: StoreUncheckedCreateNestedManyWithoutTenantInput
@@ -50805,6 +53978,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     stores?: StoreUpdateManyWithoutTenantNestedInput
@@ -50823,6 +53998,8 @@ export namespace Prisma {
     gstin?: NullableStringFieldUpdateOperationsInput | string | null
     companyLegalName?: NullableStringFieldUpdateOperationsInput | string | null
     registeredAddress?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     stores?: StoreUncheckedUpdateManyWithoutTenantNestedInput
@@ -50841,6 +54018,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -50855,6 +54034,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -50873,6 +54053,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -50886,6 +54068,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -50965,6 +54148,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -50979,6 +54164,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -50997,6 +54183,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51010,6 +54198,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -51043,6 +54232,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -51057,6 +54248,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -51075,6 +54267,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -51088,6 +54282,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -51226,6 +54421,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51240,6 +54437,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -51258,6 +54456,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51271,6 +54471,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -51682,6 +54883,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -51696,6 +54899,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -51714,6 +54918,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -51727,6 +54933,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -51810,6 +55017,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51824,6 +55033,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -51842,6 +55052,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -51855,6 +55067,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -52180,6 +55393,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -52194,6 +55409,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -52212,6 +55428,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -52225,6 +55443,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -52245,12 +55464,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -52260,7 +55483,9 @@ export namespace Prisma {
     staff?: UserCreateNestedOneWithoutStaffOrdersInput
     customer?: UserCreateNestedOneWithoutCustomerOrdersInput
     promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
   }
@@ -52278,6 +55503,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -52285,11 +55511,16 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
   }
@@ -52317,6 +55548,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     store: StoreCreateNestedOneWithoutTableSessionsInput
     orders?: OrderCreateNestedManyWithoutTableSessionInput
+    payments?: PaymentCreateNestedManyWithoutTableSessionInput
   }
 
   export type TableSessionUncheckedCreateWithoutTableInput = {
@@ -52332,6 +55564,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     orders?: OrderUncheckedCreateNestedManyWithoutTableSessionInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutTableSessionInput
   }
 
   export type TableSessionCreateOrConnectWithoutTableInput = {
@@ -52436,6 +55669,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52450,6 +55685,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -52468,6 +55704,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52481,6 +55719,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -52562,6 +55801,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -52577,6 +55818,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
     notifications?: NotificationCreateNestedManyWithoutStoreInput
@@ -52594,6 +55836,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -52608,6 +55852,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutStoreInput
@@ -52627,12 +55872,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -52642,7 +55891,9 @@ export namespace Prisma {
     tableSession?: TableSessionCreateNestedOneWithoutOrdersInput
     staff?: UserCreateNestedOneWithoutStaffOrdersInput
     customer?: UserCreateNestedOneWithoutCustomerOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
   }
@@ -52661,17 +55912,23 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
   }
@@ -52708,6 +55965,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52723,6 +55982,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
     notifications?: NotificationUpdateManyWithoutStoreNestedInput
@@ -52740,6 +56000,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -52754,6 +56016,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutStoreNestedInput
@@ -52786,6 +56049,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -52800,6 +56065,7 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -52818,6 +56084,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -52831,6 +56099,7 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -52886,6 +56155,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     store: StoreCreateNestedOneWithoutTableSessionsInput
     table: TableCreateNestedOneWithoutSessionsInput
+    payments?: PaymentCreateNestedManyWithoutTableSessionInput
   }
 
   export type TableSessionUncheckedCreateWithoutOrdersInput = {
@@ -52901,6 +56171,7 @@ export namespace Prisma {
     lastOrderAt?: Date | string
     createdAt?: Date | string
     updatedAt?: Date | string
+    payments?: PaymentUncheckedCreateNestedManyWithoutTableSessionInput
   }
 
   export type TableSessionCreateOrConnectWithoutOrdersInput = {
@@ -52930,6 +56201,8 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutStaffOrdersInput = {
@@ -52954,6 +56227,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutStaffOrdersInput = {
@@ -52983,6 +56258,8 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutCustomerOrdersInput = {
@@ -53007,6 +56284,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutCustomerOrdersInput = {
@@ -53047,6 +56326,63 @@ export namespace Prisma {
     create: XOR<PromoCodeCreateWithoutOrdersInput, PromoCodeUncheckedCreateWithoutOrdersInput>
   }
 
+  export type UserCreateWithoutCancelledOrdersInput = {
+    id?: string
+    email: string
+    name?: string | null
+    phone?: string | null
+    profilePhoto?: string | null
+    passwordHash?: string | null
+    currentChallenge?: string | null
+    role: $Enums.UserRole
+    status?: $Enums.UserStatus
+    lastLoginAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    tenant?: TenantCreateNestedOneWithoutUsersInput
+    store?: StoreCreateNestedOneWithoutUsersInput
+    passkeys?: PasskeyCreateNestedManyWithoutUserInput
+    staffOrders?: OrderCreateNestedManyWithoutStaffInput
+    customerOrders?: OrderCreateNestedManyWithoutCustomerInput
+    customerWallets?: CustomerStoreWalletCreateNestedManyWithoutCustomerInput
+    resolvedCalls?: WaiterCallCreateNestedManyWithoutResolvedByInput
+    reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
+    pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+  }
+
+  export type UserUncheckedCreateWithoutCancelledOrdersInput = {
+    id?: string
+    tenantId?: string | null
+    storeId?: string | null
+    email: string
+    name?: string | null
+    phone?: string | null
+    profilePhoto?: string | null
+    passwordHash?: string | null
+    currentChallenge?: string | null
+    role: $Enums.UserRole
+    status?: $Enums.UserStatus
+    lastLoginAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    passkeys?: PasskeyUncheckedCreateNestedManyWithoutUserInput
+    staffOrders?: OrderUncheckedCreateNestedManyWithoutStaffInput
+    customerOrders?: OrderUncheckedCreateNestedManyWithoutCustomerInput
+    customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutCustomerInput
+    resolvedCalls?: WaiterCallUncheckedCreateNestedManyWithoutResolvedByInput
+    reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
+    pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+  }
+
+  export type UserCreateOrConnectWithoutCancelledOrdersInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutCancelledOrdersInput, UserUncheckedCreateWithoutCancelledOrdersInput>
+  }
+
   export type OrderItemCreateWithoutOrderInput = {
     id?: string
     quantity?: number
@@ -53072,6 +56408,58 @@ export namespace Prisma {
 
   export type OrderItemCreateManyOrderInputEnvelope = {
     data: OrderItemCreateManyOrderInput | OrderItemCreateManyOrderInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type PaymentCreateWithoutOrderInput = {
+    id?: string
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    store: StoreCreateNestedOneWithoutPaymentsInput
+    tableSession?: TableSessionCreateNestedOneWithoutPaymentsInput
+    collectedBy?: UserCreateNestedOneWithoutCollectedPaymentsInput
+  }
+
+  export type PaymentUncheckedCreateWithoutOrderInput = {
+    id?: string
+    storeId: string
+    tableSessionId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    collectedById?: string | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentCreateOrConnectWithoutOrderInput = {
+    where: PaymentWhereUniqueInput
+    create: XOR<PaymentCreateWithoutOrderInput, PaymentUncheckedCreateWithoutOrderInput>
+  }
+
+  export type PaymentCreateManyOrderInputEnvelope = {
+    data: PaymentCreateManyOrderInput | PaymentCreateManyOrderInput[]
     skipDuplicates?: boolean
   }
 
@@ -53155,6 +56543,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53169,6 +56559,7 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -53187,6 +56578,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53200,6 +56593,7 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -53267,6 +56661,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     store?: StoreUpdateOneRequiredWithoutTableSessionsNestedInput
     table?: TableUpdateOneRequiredWithoutSessionsNestedInput
+    payments?: PaymentUpdateManyWithoutTableSessionNestedInput
   }
 
   export type TableSessionUncheckedUpdateWithoutOrdersInput = {
@@ -53282,6 +56677,7 @@ export namespace Prisma {
     lastOrderAt?: DateTimeFieldUpdateOperationsInput | Date | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    payments?: PaymentUncheckedUpdateManyWithoutTableSessionNestedInput
   }
 
   export type UserUpsertWithoutStaffOrdersInput = {
@@ -53317,6 +56713,8 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutStaffOrdersInput = {
@@ -53341,6 +56739,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUpsertWithoutCustomerOrdersInput = {
@@ -53376,6 +56776,8 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutCustomerOrdersInput = {
@@ -53400,6 +56802,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type PromoCodeUpsertWithoutOrdersInput = {
@@ -53441,6 +56845,69 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
+  export type UserUpsertWithoutCancelledOrdersInput = {
+    update: XOR<UserUpdateWithoutCancelledOrdersInput, UserUncheckedUpdateWithoutCancelledOrdersInput>
+    create: XOR<UserCreateWithoutCancelledOrdersInput, UserUncheckedCreateWithoutCancelledOrdersInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutCancelledOrdersInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutCancelledOrdersInput, UserUncheckedUpdateWithoutCancelledOrdersInput>
+  }
+
+  export type UserUpdateWithoutCancelledOrdersInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePhoto?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
+    currentChallenge?: NullableStringFieldUpdateOperationsInput | string | null
+    role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+    status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    tenant?: TenantUpdateOneWithoutUsersNestedInput
+    store?: StoreUpdateOneWithoutUsersNestedInput
+    passkeys?: PasskeyUpdateManyWithoutUserNestedInput
+    staffOrders?: OrderUpdateManyWithoutStaffNestedInput
+    customerOrders?: OrderUpdateManyWithoutCustomerNestedInput
+    customerWallets?: CustomerStoreWalletUpdateManyWithoutCustomerNestedInput
+    resolvedCalls?: WaiterCallUpdateManyWithoutResolvedByNestedInput
+    reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
+    pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutCancelledOrdersInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    storeId?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePhoto?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
+    currentChallenge?: NullableStringFieldUpdateOperationsInput | string | null
+    role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+    status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    passkeys?: PasskeyUncheckedUpdateManyWithoutUserNestedInput
+    staffOrders?: OrderUncheckedUpdateManyWithoutStaffNestedInput
+    customerOrders?: OrderUncheckedUpdateManyWithoutCustomerNestedInput
+    customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutCustomerNestedInput
+    resolvedCalls?: WaiterCallUncheckedUpdateManyWithoutResolvedByNestedInput
+    reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
+    pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+  }
+
   export type OrderItemUpsertWithWhereUniqueWithoutOrderInput = {
     where: OrderItemWhereUniqueInput
     update: XOR<OrderItemUpdateWithoutOrderInput, OrderItemUncheckedUpdateWithoutOrderInput>
@@ -53455,6 +56922,22 @@ export namespace Prisma {
   export type OrderItemUpdateManyWithWhereWithoutOrderInput = {
     where: OrderItemScalarWhereInput
     data: XOR<OrderItemUpdateManyMutationInput, OrderItemUncheckedUpdateManyWithoutOrderInput>
+  }
+
+  export type PaymentUpsertWithWhereUniqueWithoutOrderInput = {
+    where: PaymentWhereUniqueInput
+    update: XOR<PaymentUpdateWithoutOrderInput, PaymentUncheckedUpdateWithoutOrderInput>
+    create: XOR<PaymentCreateWithoutOrderInput, PaymentUncheckedCreateWithoutOrderInput>
+  }
+
+  export type PaymentUpdateWithWhereUniqueWithoutOrderInput = {
+    where: PaymentWhereUniqueInput
+    data: XOR<PaymentUpdateWithoutOrderInput, PaymentUncheckedUpdateWithoutOrderInput>
+  }
+
+  export type PaymentUpdateManyWithWhereWithoutOrderInput = {
+    where: PaymentScalarWhereInput
+    data: XOR<PaymentUpdateManyMutationInput, PaymentUncheckedUpdateManyWithoutOrderInput>
   }
 
   export type FeedbackUpsertWithWhereUniqueWithoutOrderInput = {
@@ -53503,7 +56986,80 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"CustomerWalletTransaction"> | Date | string
   }
 
-  export type OrderCreateWithoutItemsInput = {
+  export type StoreCreateWithoutPaymentsInput = {
+    id?: string
+    name: string
+    slug: string
+    address?: string | null
+    contactPhone?: string | null
+    contactEmail?: string | null
+    operatingHours?: NullableJsonNullValueInput | InputJsonValue
+    banner?: string | null
+    status?: $Enums.StoreStatus
+    googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    tenant: TenantCreateNestedOneWithoutStoresInput
+    users?: UserCreateNestedManyWithoutStoreInput
+    categories?: MenuCategoryCreateNestedManyWithoutStoreInput
+    menuItems?: MenuItemCreateNestedManyWithoutStoreInput
+    rawMaterials?: RawMaterialCreateNestedManyWithoutStoreInput
+    tables?: TableCreateNestedManyWithoutStoreInput
+    tableSessions?: TableSessionCreateNestedManyWithoutStoreInput
+    reservations?: TableReservationCreateNestedManyWithoutStoreInput
+    orders?: OrderCreateNestedManyWithoutStoreInput
+    waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
+    feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
+    customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
+    pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
+    notifications?: NotificationCreateNestedManyWithoutStoreInput
+  }
+
+  export type StoreUncheckedCreateWithoutPaymentsInput = {
+    id?: string
+    tenantId: string
+    name: string
+    slug: string
+    address?: string | null
+    contactPhone?: string | null
+    contactEmail?: string | null
+    operatingHours?: NullableJsonNullValueInput | InputJsonValue
+    banner?: string | null
+    status?: $Enums.StoreStatus
+    googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    users?: UserUncheckedCreateNestedManyWithoutStoreInput
+    categories?: MenuCategoryUncheckedCreateNestedManyWithoutStoreInput
+    menuItems?: MenuItemUncheckedCreateNestedManyWithoutStoreInput
+    rawMaterials?: RawMaterialUncheckedCreateNestedManyWithoutStoreInput
+    tables?: TableUncheckedCreateNestedManyWithoutStoreInput
+    tableSessions?: TableSessionUncheckedCreateNestedManyWithoutStoreInput
+    reservations?: TableReservationUncheckedCreateNestedManyWithoutStoreInput
+    orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
+    waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
+    feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
+    customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
+    pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutStoreInput
+  }
+
+  export type StoreCreateOrConnectWithoutPaymentsInput = {
+    where: StoreWhereUniqueInput
+    create: XOR<StoreCreateWithoutPaymentsInput, StoreUncheckedCreateWithoutPaymentsInput>
+  }
+
+  export type OrderCreateWithoutPaymentsInput = {
     id?: string
     origin: $Enums.OrderOrigin
     type: $Enums.OrderType
@@ -53512,12 +57068,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -53528,6 +57088,443 @@ export namespace Prisma {
     staff?: UserCreateNestedOneWithoutStaffOrdersInput
     customer?: UserCreateNestedOneWithoutCustomerOrdersInput
     promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
+    items?: OrderItemCreateNestedManyWithoutOrderInput
+    feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
+    walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
+  }
+
+  export type OrderUncheckedCreateWithoutPaymentsInput = {
+    id?: string
+    storeId: string
+    origin: $Enums.OrderOrigin
+    type: $Enums.OrderType
+    tableId?: string | null
+    tableSessionId?: string | null
+    staffId?: string | null
+    customerId?: string | null
+    sessionId?: string | null
+    paymentModel: $Enums.PaymentModel
+    paymentMethod?: $Enums.PaymentMethod | null
+    cashAmount?: number
+    onlineAmount?: number
+    paidAt?: Date | string | null
+    status?: $Enums.OrderStatus
+    subTotal?: number
+    taxAmount?: number
+    discountAmount?: number
+    walletDiscount?: number
+    promoCodeId?: string | null
+    totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
+    paymentLinkId?: string | null
+    paymentLinkUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
+    walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
+  }
+
+  export type OrderCreateOrConnectWithoutPaymentsInput = {
+    where: OrderWhereUniqueInput
+    create: XOR<OrderCreateWithoutPaymentsInput, OrderUncheckedCreateWithoutPaymentsInput>
+  }
+
+  export type TableSessionCreateWithoutPaymentsInput = {
+    id?: string
+    pin: string
+    sessionToken?: string | null
+    status?: $Enums.TableSessionStatus
+    paymentMethod?: $Enums.PaymentMethod | null
+    cashAmount?: number | null
+    onlineAmount?: number | null
+    lastOrderAt?: Date | string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    store: StoreCreateNestedOneWithoutTableSessionsInput
+    table: TableCreateNestedOneWithoutSessionsInput
+    orders?: OrderCreateNestedManyWithoutTableSessionInput
+  }
+
+  export type TableSessionUncheckedCreateWithoutPaymentsInput = {
+    id?: string
+    storeId: string
+    tableId: string
+    pin: string
+    sessionToken?: string | null
+    status?: $Enums.TableSessionStatus
+    paymentMethod?: $Enums.PaymentMethod | null
+    cashAmount?: number | null
+    onlineAmount?: number | null
+    lastOrderAt?: Date | string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    orders?: OrderUncheckedCreateNestedManyWithoutTableSessionInput
+  }
+
+  export type TableSessionCreateOrConnectWithoutPaymentsInput = {
+    where: TableSessionWhereUniqueInput
+    create: XOR<TableSessionCreateWithoutPaymentsInput, TableSessionUncheckedCreateWithoutPaymentsInput>
+  }
+
+  export type UserCreateWithoutCollectedPaymentsInput = {
+    id?: string
+    email: string
+    name?: string | null
+    phone?: string | null
+    profilePhoto?: string | null
+    passwordHash?: string | null
+    currentChallenge?: string | null
+    role: $Enums.UserRole
+    status?: $Enums.UserStatus
+    lastLoginAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    tenant?: TenantCreateNestedOneWithoutUsersInput
+    store?: StoreCreateNestedOneWithoutUsersInput
+    passkeys?: PasskeyCreateNestedManyWithoutUserInput
+    staffOrders?: OrderCreateNestedManyWithoutStaffInput
+    customerOrders?: OrderCreateNestedManyWithoutCustomerInput
+    customerWallets?: CustomerStoreWalletCreateNestedManyWithoutCustomerInput
+    resolvedCalls?: WaiterCallCreateNestedManyWithoutResolvedByInput
+    reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
+    pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
+    notifications?: NotificationCreateNestedManyWithoutUserInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
+  }
+
+  export type UserUncheckedCreateWithoutCollectedPaymentsInput = {
+    id?: string
+    tenantId?: string | null
+    storeId?: string | null
+    email: string
+    name?: string | null
+    phone?: string | null
+    profilePhoto?: string | null
+    passwordHash?: string | null
+    currentChallenge?: string | null
+    role: $Enums.UserRole
+    status?: $Enums.UserStatus
+    lastLoginAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    passkeys?: PasskeyUncheckedCreateNestedManyWithoutUserInput
+    staffOrders?: OrderUncheckedCreateNestedManyWithoutStaffInput
+    customerOrders?: OrderUncheckedCreateNestedManyWithoutCustomerInput
+    customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutCustomerInput
+    resolvedCalls?: WaiterCallUncheckedCreateNestedManyWithoutResolvedByInput
+    reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
+    pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+    notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
+  }
+
+  export type UserCreateOrConnectWithoutCollectedPaymentsInput = {
+    where: UserWhereUniqueInput
+    create: XOR<UserCreateWithoutCollectedPaymentsInput, UserUncheckedCreateWithoutCollectedPaymentsInput>
+  }
+
+  export type StoreUpsertWithoutPaymentsInput = {
+    update: XOR<StoreUpdateWithoutPaymentsInput, StoreUncheckedUpdateWithoutPaymentsInput>
+    create: XOR<StoreCreateWithoutPaymentsInput, StoreUncheckedCreateWithoutPaymentsInput>
+    where?: StoreWhereInput
+  }
+
+  export type StoreUpdateToOneWithWhereWithoutPaymentsInput = {
+    where?: StoreWhereInput
+    data: XOR<StoreUpdateWithoutPaymentsInput, StoreUncheckedUpdateWithoutPaymentsInput>
+  }
+
+  export type StoreUpdateWithoutPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    address?: NullableStringFieldUpdateOperationsInput | string | null
+    contactPhone?: NullableStringFieldUpdateOperationsInput | string | null
+    contactEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    operatingHours?: NullableJsonNullValueInput | InputJsonValue
+    banner?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
+    googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    tenant?: TenantUpdateOneRequiredWithoutStoresNestedInput
+    users?: UserUpdateManyWithoutStoreNestedInput
+    categories?: MenuCategoryUpdateManyWithoutStoreNestedInput
+    menuItems?: MenuItemUpdateManyWithoutStoreNestedInput
+    rawMaterials?: RawMaterialUpdateManyWithoutStoreNestedInput
+    tables?: TableUpdateManyWithoutStoreNestedInput
+    tableSessions?: TableSessionUpdateManyWithoutStoreNestedInput
+    reservations?: TableReservationUpdateManyWithoutStoreNestedInput
+    orders?: OrderUpdateManyWithoutStoreNestedInput
+    waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
+    feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
+    customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
+    pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
+    notifications?: NotificationUpdateManyWithoutStoreNestedInput
+  }
+
+  export type StoreUncheckedUpdateWithoutPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tenantId?: StringFieldUpdateOperationsInput | string
+    name?: StringFieldUpdateOperationsInput | string
+    slug?: StringFieldUpdateOperationsInput | string
+    address?: NullableStringFieldUpdateOperationsInput | string | null
+    contactPhone?: NullableStringFieldUpdateOperationsInput | string | null
+    contactEmail?: NullableStringFieldUpdateOperationsInput | string | null
+    operatingHours?: NullableJsonNullValueInput | InputJsonValue
+    banner?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
+    googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    users?: UserUncheckedUpdateManyWithoutStoreNestedInput
+    categories?: MenuCategoryUncheckedUpdateManyWithoutStoreNestedInput
+    menuItems?: MenuItemUncheckedUpdateManyWithoutStoreNestedInput
+    rawMaterials?: RawMaterialUncheckedUpdateManyWithoutStoreNestedInput
+    tables?: TableUncheckedUpdateManyWithoutStoreNestedInput
+    tableSessions?: TableSessionUncheckedUpdateManyWithoutStoreNestedInput
+    reservations?: TableReservationUncheckedUpdateManyWithoutStoreNestedInput
+    orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
+    waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
+    feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
+    customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
+    pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutStoreNestedInput
+  }
+
+  export type OrderUpsertWithoutPaymentsInput = {
+    update: XOR<OrderUpdateWithoutPaymentsInput, OrderUncheckedUpdateWithoutPaymentsInput>
+    create: XOR<OrderCreateWithoutPaymentsInput, OrderUncheckedCreateWithoutPaymentsInput>
+    where?: OrderWhereInput
+  }
+
+  export type OrderUpdateToOneWithWhereWithoutPaymentsInput = {
+    where?: OrderWhereInput
+    data: XOR<OrderUpdateWithoutPaymentsInput, OrderUncheckedUpdateWithoutPaymentsInput>
+  }
+
+  export type OrderUpdateWithoutPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    origin?: EnumOrderOriginFieldUpdateOperationsInput | $Enums.OrderOrigin
+    type?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
+    sessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentModel?: EnumPaymentModelFieldUpdateOperationsInput | $Enums.PaymentModel
+    paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
+    cashAmount?: IntFieldUpdateOperationsInput | number
+    onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    subTotal?: IntFieldUpdateOperationsInput | number
+    taxAmount?: IntFieldUpdateOperationsInput | number
+    discountAmount?: IntFieldUpdateOperationsInput | number
+    walletDiscount?: IntFieldUpdateOperationsInput | number
+    totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    store?: StoreUpdateOneRequiredWithoutOrdersNestedInput
+    table?: TableUpdateOneWithoutOrdersNestedInput
+    tableSession?: TableSessionUpdateOneWithoutOrdersNestedInput
+    staff?: UserUpdateOneWithoutStaffOrdersNestedInput
+    customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
+    promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
+    items?: OrderItemUpdateManyWithoutOrderNestedInput
+    feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
+    walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
+  }
+
+  export type OrderUncheckedUpdateWithoutPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    origin?: EnumOrderOriginFieldUpdateOperationsInput | $Enums.OrderOrigin
+    type?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
+    tableId?: NullableStringFieldUpdateOperationsInput | string | null
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    staffId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    sessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentModel?: EnumPaymentModelFieldUpdateOperationsInput | $Enums.PaymentModel
+    paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
+    cashAmount?: IntFieldUpdateOperationsInput | number
+    onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    subTotal?: IntFieldUpdateOperationsInput | number
+    taxAmount?: IntFieldUpdateOperationsInput | number
+    discountAmount?: IntFieldUpdateOperationsInput | number
+    walletDiscount?: IntFieldUpdateOperationsInput | number
+    promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
+    totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
+    walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
+  }
+
+  export type TableSessionUpsertWithoutPaymentsInput = {
+    update: XOR<TableSessionUpdateWithoutPaymentsInput, TableSessionUncheckedUpdateWithoutPaymentsInput>
+    create: XOR<TableSessionCreateWithoutPaymentsInput, TableSessionUncheckedCreateWithoutPaymentsInput>
+    where?: TableSessionWhereInput
+  }
+
+  export type TableSessionUpdateToOneWithWhereWithoutPaymentsInput = {
+    where?: TableSessionWhereInput
+    data: XOR<TableSessionUpdateWithoutPaymentsInput, TableSessionUncheckedUpdateWithoutPaymentsInput>
+  }
+
+  export type TableSessionUpdateWithoutPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    pin?: StringFieldUpdateOperationsInput | string
+    sessionToken?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumTableSessionStatusFieldUpdateOperationsInput | $Enums.TableSessionStatus
+    paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
+    cashAmount?: NullableIntFieldUpdateOperationsInput | number | null
+    onlineAmount?: NullableIntFieldUpdateOperationsInput | number | null
+    lastOrderAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    store?: StoreUpdateOneRequiredWithoutTableSessionsNestedInput
+    table?: TableUpdateOneRequiredWithoutSessionsNestedInput
+    orders?: OrderUpdateManyWithoutTableSessionNestedInput
+  }
+
+  export type TableSessionUncheckedUpdateWithoutPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    tableId?: StringFieldUpdateOperationsInput | string
+    pin?: StringFieldUpdateOperationsInput | string
+    sessionToken?: NullableStringFieldUpdateOperationsInput | string | null
+    status?: EnumTableSessionStatusFieldUpdateOperationsInput | $Enums.TableSessionStatus
+    paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
+    cashAmount?: NullableIntFieldUpdateOperationsInput | number | null
+    onlineAmount?: NullableIntFieldUpdateOperationsInput | number | null
+    lastOrderAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    orders?: OrderUncheckedUpdateManyWithoutTableSessionNestedInput
+  }
+
+  export type UserUpsertWithoutCollectedPaymentsInput = {
+    update: XOR<UserUpdateWithoutCollectedPaymentsInput, UserUncheckedUpdateWithoutCollectedPaymentsInput>
+    create: XOR<UserCreateWithoutCollectedPaymentsInput, UserUncheckedCreateWithoutCollectedPaymentsInput>
+    where?: UserWhereInput
+  }
+
+  export type UserUpdateToOneWithWhereWithoutCollectedPaymentsInput = {
+    where?: UserWhereInput
+    data: XOR<UserUpdateWithoutCollectedPaymentsInput, UserUncheckedUpdateWithoutCollectedPaymentsInput>
+  }
+
+  export type UserUpdateWithoutCollectedPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    email?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePhoto?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
+    currentChallenge?: NullableStringFieldUpdateOperationsInput | string | null
+    role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+    status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    tenant?: TenantUpdateOneWithoutUsersNestedInput
+    store?: StoreUpdateOneWithoutUsersNestedInput
+    passkeys?: PasskeyUpdateManyWithoutUserNestedInput
+    staffOrders?: OrderUpdateManyWithoutStaffNestedInput
+    customerOrders?: OrderUpdateManyWithoutCustomerNestedInput
+    customerWallets?: CustomerStoreWalletUpdateManyWithoutCustomerNestedInput
+    resolvedCalls?: WaiterCallUpdateManyWithoutResolvedByNestedInput
+    reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
+    pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
+    notifications?: NotificationUpdateManyWithoutUserNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
+  }
+
+  export type UserUncheckedUpdateWithoutCollectedPaymentsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    tenantId?: NullableStringFieldUpdateOperationsInput | string | null
+    storeId?: NullableStringFieldUpdateOperationsInput | string | null
+    email?: StringFieldUpdateOperationsInput | string
+    name?: NullableStringFieldUpdateOperationsInput | string | null
+    phone?: NullableStringFieldUpdateOperationsInput | string | null
+    profilePhoto?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
+    currentChallenge?: NullableStringFieldUpdateOperationsInput | string | null
+    role?: EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+    status?: EnumUserStatusFieldUpdateOperationsInput | $Enums.UserStatus
+    lastLoginAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    passkeys?: PasskeyUncheckedUpdateManyWithoutUserNestedInput
+    staffOrders?: OrderUncheckedUpdateManyWithoutStaffNestedInput
+    customerOrders?: OrderUncheckedUpdateManyWithoutCustomerNestedInput
+    customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutCustomerNestedInput
+    resolvedCalls?: WaiterCallUncheckedUpdateManyWithoutResolvedByNestedInput
+    reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
+    pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+    notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
+  }
+
+  export type OrderCreateWithoutItemsInput = {
+    id?: string
+    origin: $Enums.OrderOrigin
+    type: $Enums.OrderType
+    sessionId?: string | null
+    paymentModel: $Enums.PaymentModel
+    paymentMethod?: $Enums.PaymentMethod | null
+    cashAmount?: number
+    onlineAmount?: number
+    paidAt?: Date | string | null
+    status?: $Enums.OrderStatus
+    subTotal?: number
+    taxAmount?: number
+    discountAmount?: number
+    walletDiscount?: number
+    totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    paymentLinkId?: string | null
+    paymentLinkUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    store: StoreCreateNestedOneWithoutOrdersInput
+    table?: TableCreateNestedOneWithoutOrdersInput
+    tableSession?: TableSessionCreateNestedOneWithoutOrdersInput
+    staff?: UserCreateNestedOneWithoutStaffOrdersInput
+    customer?: UserCreateNestedOneWithoutCustomerOrdersInput
+    promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
   }
@@ -53546,6 +57543,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -53553,10 +57551,15 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
   }
@@ -53649,12 +57652,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -53665,6 +57672,8 @@ export namespace Prisma {
     staff?: UserUpdateOneWithoutStaffOrdersNestedInput
     customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
     promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
   }
@@ -53683,6 +57692,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -53690,10 +57700,15 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
   }
@@ -53872,6 +57887,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -53886,6 +57903,7 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutStoreInput
     orders?: OrderCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -53904,6 +57922,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -53917,6 +57937,7 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutStoreInput
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -53981,6 +58002,8 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutResolvedCallsInput = {
@@ -54005,6 +58028,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutResolvedCallsInput = {
@@ -54034,6 +58059,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54048,6 +58075,7 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutStoreNestedInput
     orders?: OrderUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -54066,6 +58094,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54079,6 +58109,7 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutStoreNestedInput
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -54155,6 +58186,8 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutResolvedCallsInput = {
@@ -54179,6 +58212,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type StoreCreateWithoutFeedbacksInput = {
@@ -54192,6 +58227,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -54206,6 +58243,7 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutStoreInput
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -54224,6 +58262,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -54237,6 +58277,7 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutStoreInput
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -54257,12 +58298,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -54273,7 +58318,9 @@ export namespace Prisma {
     staff?: UserCreateNestedOneWithoutStaffOrdersInput
     customer?: UserCreateNestedOneWithoutCustomerOrdersInput
     promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
   }
 
@@ -54291,6 +58338,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -54298,11 +58346,16 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
   }
 
@@ -54333,6 +58386,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54347,6 +58402,7 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutStoreNestedInput
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -54365,6 +58421,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54378,6 +58436,7 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutStoreNestedInput
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -54404,12 +58463,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54420,7 +58483,9 @@ export namespace Prisma {
     staff?: UserUpdateOneWithoutStaffOrdersNestedInput
     customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
     promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
   }
 
@@ -54438,6 +58503,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -54445,11 +58511,16 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
   }
 
@@ -54464,6 +58535,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -54478,6 +58551,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -54496,6 +58570,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -54509,6 +58585,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -54560,12 +58637,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -54575,7 +58656,9 @@ export namespace Prisma {
     staff?: UserCreateNestedOneWithoutStaffOrdersInput
     customer?: UserCreateNestedOneWithoutCustomerOrdersInput
     promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionCreateNestedManyWithoutOrderInput
   }
@@ -54593,6 +58676,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -54600,11 +58684,16 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
     walletTransactions?: CustomerWalletTransactionUncheckedCreateNestedManyWithoutOrderInput
   }
@@ -54616,6 +58705,58 @@ export namespace Prisma {
 
   export type OrderCreateManyTableSessionInputEnvelope = {
     data: OrderCreateManyTableSessionInput | OrderCreateManyTableSessionInput[]
+    skipDuplicates?: boolean
+  }
+
+  export type PaymentCreateWithoutTableSessionInput = {
+    id?: string
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    store: StoreCreateNestedOneWithoutPaymentsInput
+    order?: OrderCreateNestedOneWithoutPaymentsInput
+    collectedBy?: UserCreateNestedOneWithoutCollectedPaymentsInput
+  }
+
+  export type PaymentUncheckedCreateWithoutTableSessionInput = {
+    id?: string
+    storeId: string
+    orderId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    collectedById?: string | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentCreateOrConnectWithoutTableSessionInput = {
+    where: PaymentWhereUniqueInput
+    create: XOR<PaymentCreateWithoutTableSessionInput, PaymentUncheckedCreateWithoutTableSessionInput>
+  }
+
+  export type PaymentCreateManyTableSessionInputEnvelope = {
+    data: PaymentCreateManyTableSessionInput | PaymentCreateManyTableSessionInput[]
     skipDuplicates?: boolean
   }
 
@@ -54641,6 +58782,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54655,6 +58798,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -54673,6 +58817,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54686,6 +58832,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -54745,6 +58892,22 @@ export namespace Prisma {
     data: XOR<OrderUpdateManyMutationInput, OrderUncheckedUpdateManyWithoutTableSessionInput>
   }
 
+  export type PaymentUpsertWithWhereUniqueWithoutTableSessionInput = {
+    where: PaymentWhereUniqueInput
+    update: XOR<PaymentUpdateWithoutTableSessionInput, PaymentUncheckedUpdateWithoutTableSessionInput>
+    create: XOR<PaymentCreateWithoutTableSessionInput, PaymentUncheckedCreateWithoutTableSessionInput>
+  }
+
+  export type PaymentUpdateWithWhereUniqueWithoutTableSessionInput = {
+    where: PaymentWhereUniqueInput
+    data: XOR<PaymentUpdateWithoutTableSessionInput, PaymentUncheckedUpdateWithoutTableSessionInput>
+  }
+
+  export type PaymentUpdateManyWithWhereWithoutTableSessionInput = {
+    where: PaymentScalarWhereInput
+    data: XOR<PaymentUpdateManyMutationInput, PaymentUncheckedUpdateManyWithoutTableSessionInput>
+  }
+
   export type StoreCreateWithoutReservationsInput = {
     id?: string
     name: string
@@ -54756,6 +58919,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -54770,6 +58935,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -54788,6 +58954,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -54801,6 +58969,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -54865,6 +59034,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallCreateNestedManyWithoutResolvedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutReservationsInput = {
@@ -54889,6 +59060,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallUncheckedCreateNestedManyWithoutResolvedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutReservationsInput = {
@@ -54918,6 +59091,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54932,6 +59107,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -54950,6 +59126,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -54963,6 +59141,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -55039,6 +59218,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallUpdateManyWithoutResolvedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutReservationsInput = {
@@ -55063,6 +59244,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallUncheckedUpdateManyWithoutResolvedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserCreateWithoutCustomerWalletsInput = {
@@ -55087,6 +59270,8 @@ export namespace Prisma {
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutCustomerWalletsInput = {
@@ -55111,6 +59296,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutCustomerWalletsInput = {
@@ -55129,6 +59316,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -55144,6 +59333,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
     notifications?: NotificationCreateNestedManyWithoutStoreInput
@@ -55161,6 +59351,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -55175,6 +59367,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutStoreInput
@@ -55248,6 +59441,8 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutCustomerWalletsInput = {
@@ -55272,6 +59467,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type StoreUpsertWithoutCustomerWalletsInput = {
@@ -55296,6 +59493,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -55311,6 +59510,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
     notifications?: NotificationUpdateManyWithoutStoreNestedInput
@@ -55328,6 +59528,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -55342,6 +59544,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutStoreNestedInput
@@ -55399,12 +59602,16 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -55415,7 +59622,9 @@ export namespace Prisma {
     staff?: UserCreateNestedOneWithoutStaffOrdersInput
     customer?: UserCreateNestedOneWithoutCustomerOrdersInput
     promoCode?: PromoCodeCreateNestedOneWithoutOrdersInput
+    cancelledBy?: UserCreateNestedOneWithoutCancelledOrdersInput
     items?: OrderItemCreateNestedManyWithoutOrderInput
+    payments?: PaymentCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackCreateNestedManyWithoutOrderInput
   }
 
@@ -55433,6 +59642,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -55440,11 +59650,16 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
     updatedAt?: Date | string
     items?: OrderItemUncheckedCreateNestedManyWithoutOrderInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutOrderInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutOrderInput
   }
 
@@ -55506,12 +59721,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -55522,7 +59741,9 @@ export namespace Prisma {
     staff?: UserUpdateOneWithoutStaffOrdersNestedInput
     customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
     promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
   }
 
@@ -55540,6 +59761,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -55547,11 +59769,16 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
   }
 
@@ -55566,6 +59793,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -55581,6 +59810,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     notifications?: NotificationCreateNestedManyWithoutStoreInput
@@ -55598,6 +59828,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -55612,6 +59844,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutStoreInput
@@ -55644,6 +59877,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallCreateNestedManyWithoutResolvedByInput
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     notifications?: NotificationCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutPushSubscriptionsInput = {
@@ -55668,6 +59903,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallUncheckedCreateNestedManyWithoutResolvedByInput
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     notifications?: NotificationUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutPushSubscriptionsInput = {
@@ -55697,6 +59934,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -55712,6 +59951,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     notifications?: NotificationUpdateManyWithoutStoreNestedInput
@@ -55729,6 +59969,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -55743,6 +59985,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutStoreNestedInput
@@ -55781,6 +60024,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallUpdateManyWithoutResolvedByNestedInput
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutPushSubscriptionsInput = {
@@ -55805,6 +60050,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallUncheckedUpdateManyWithoutResolvedByNestedInput
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type StoreCreateWithoutNotificationsInput = {
@@ -55818,6 +60065,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -55833,6 +60082,7 @@ export namespace Prisma {
     orders?: OrderCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackCreateNestedManyWithoutStoreInput
+    payments?: PaymentCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutStoreInput
@@ -55850,6 +60100,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -55864,6 +60116,7 @@ export namespace Prisma {
     orders?: OrderUncheckedCreateNestedManyWithoutStoreInput
     waiterCalls?: WaiterCallUncheckedCreateNestedManyWithoutStoreInput
     feedbacks?: FeedbackUncheckedCreateNestedManyWithoutStoreInput
+    payments?: PaymentUncheckedCreateNestedManyWithoutStoreInput
     promoCodes?: PromoCodeUncheckedCreateNestedManyWithoutStoreInput
     customerWallets?: CustomerStoreWalletUncheckedCreateNestedManyWithoutStoreInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutStoreInput
@@ -55896,6 +60149,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallCreateNestedManyWithoutResolvedByInput
     reservations?: TableReservationCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserUncheckedCreateWithoutNotificationsInput = {
@@ -55920,6 +60175,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallUncheckedCreateNestedManyWithoutResolvedByInput
     reservations?: TableReservationUncheckedCreateNestedManyWithoutCreatedByInput
     pushSubscriptions?: PushSubscriptionUncheckedCreateNestedManyWithoutUserInput
+    collectedPayments?: PaymentUncheckedCreateNestedManyWithoutCollectedByInput
+    cancelledOrders?: OrderUncheckedCreateNestedManyWithoutCancelledByInput
   }
 
   export type UserCreateOrConnectWithoutNotificationsInput = {
@@ -55949,6 +60206,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -55964,6 +60223,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -55981,6 +60241,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -55995,6 +60257,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -56033,6 +60296,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallUpdateManyWithoutResolvedByNestedInput
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutNotificationsInput = {
@@ -56057,6 +60322,8 @@ export namespace Prisma {
     resolvedCalls?: WaiterCallUncheckedUpdateManyWithoutResolvedByNestedInput
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type StoreCreateManyTenantInput = {
@@ -56070,6 +60337,8 @@ export namespace Prisma {
     banner?: string | null
     status?: $Enums.StoreStatus
     googleReviewUrl?: string | null
+    offlineUpiId?: string | null
+    offlineUpiPayeeName?: string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: Date | string
@@ -56098,6 +60367,7 @@ export namespace Prisma {
     merchantId: string
     apiKey: string
     secretKey?: string | null
+    webhookSecret?: string | null
     isActive?: boolean
     createdAt?: Date | string
     updatedAt?: Date | string
@@ -56114,6 +60384,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -56128,6 +60400,7 @@ export namespace Prisma {
     orders?: OrderUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutStoreNestedInput
@@ -56145,6 +60418,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -56159,6 +60434,7 @@ export namespace Prisma {
     orders?: OrderUncheckedUpdateManyWithoutStoreNestedInput
     waiterCalls?: WaiterCallUncheckedUpdateManyWithoutStoreNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutStoreNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutStoreNestedInput
     promoCodes?: PromoCodeUncheckedUpdateManyWithoutStoreNestedInput
     customerWallets?: CustomerStoreWalletUncheckedUpdateManyWithoutStoreNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutStoreNestedInput
@@ -56176,6 +60452,8 @@ export namespace Prisma {
     banner?: NullableStringFieldUpdateOperationsInput | string | null
     status?: EnumStoreStatusFieldUpdateOperationsInput | $Enums.StoreStatus
     googleReviewUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiId?: NullableStringFieldUpdateOperationsInput | string | null
+    offlineUpiPayeeName?: NullableStringFieldUpdateOperationsInput | string | null
     taxRules?: NullableJsonNullValueInput | InputJsonValue
     loyaltyRules?: NullableJsonNullValueInput | InputJsonValue
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -56204,6 +60482,8 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutTenantInput = {
@@ -56228,6 +60508,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateManyWithoutTenantInput = {
@@ -56252,6 +60534,7 @@ export namespace Prisma {
     merchantId?: StringFieldUpdateOperationsInput | string
     apiKey?: StringFieldUpdateOperationsInput | string
     secretKey?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -56263,6 +60546,7 @@ export namespace Prisma {
     merchantId?: StringFieldUpdateOperationsInput | string
     apiKey?: StringFieldUpdateOperationsInput | string
     secretKey?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -56274,6 +60558,7 @@ export namespace Prisma {
     merchantId?: StringFieldUpdateOperationsInput | string
     apiKey?: StringFieldUpdateOperationsInput | string
     secretKey?: NullableStringFieldUpdateOperationsInput | string | null
+    webhookSecret?: NullableStringFieldUpdateOperationsInput | string | null
     isActive?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -56380,6 +60665,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -56387,6 +60673,10 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -56410,6 +60700,27 @@ export namespace Prisma {
     comment?: string | null
     isPublic?: boolean
     createdAt?: Date | string
+  }
+
+  export type PaymentCreateManyStoreInput = {
+    id?: string
+    orderId?: string | null
+    tableSessionId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    collectedById?: string | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
   export type PromoCodeCreateManyStoreInput = {
@@ -56483,6 +60794,8 @@ export namespace Prisma {
     reservations?: TableReservationUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUpdateManyWithoutUserNestedInput
     notifications?: NotificationUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateWithoutStoreInput = {
@@ -56507,6 +60820,8 @@ export namespace Prisma {
     reservations?: TableReservationUncheckedUpdateManyWithoutCreatedByNestedInput
     pushSubscriptions?: PushSubscriptionUncheckedUpdateManyWithoutUserNestedInput
     notifications?: NotificationUncheckedUpdateManyWithoutUserNestedInput
+    collectedPayments?: PaymentUncheckedUpdateManyWithoutCollectedByNestedInput
+    cancelledOrders?: OrderUncheckedUpdateManyWithoutCancelledByNestedInput
   }
 
   export type UserUncheckedUpdateManyWithoutStoreInput = {
@@ -56687,6 +61002,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     table?: TableUpdateOneRequiredWithoutSessionsNestedInput
     orders?: OrderUpdateManyWithoutTableSessionNestedInput
+    payments?: PaymentUpdateManyWithoutTableSessionNestedInput
   }
 
   export type TableSessionUncheckedUpdateWithoutStoreInput = {
@@ -56702,6 +61018,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     orders?: OrderUncheckedUpdateManyWithoutTableSessionNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutTableSessionNestedInput
   }
 
   export type TableSessionUncheckedUpdateManyWithoutStoreInput = {
@@ -56772,12 +61089,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -56787,7 +61108,9 @@ export namespace Prisma {
     staff?: UserUpdateOneWithoutStaffOrdersNestedInput
     customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
     promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
   }
@@ -56805,6 +61128,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -56812,11 +61136,16 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
   }
@@ -56834,6 +61163,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -56841,6 +61171,10 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -56902,6 +61236,69 @@ export namespace Prisma {
     comment?: NullableStringFieldUpdateOperationsInput | string | null
     isPublic?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUpdateWithoutStoreInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    order?: OrderUpdateOneWithoutPaymentsNestedInput
+    tableSession?: TableSessionUpdateOneWithoutPaymentsNestedInput
+    collectedBy?: UserUpdateOneWithoutCollectedPaymentsNestedInput
+  }
+
+  export type PaymentUncheckedUpdateWithoutStoreInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    collectedById?: NullableStringFieldUpdateOperationsInput | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUncheckedUpdateManyWithoutStoreInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    collectedById?: NullableStringFieldUpdateOperationsInput | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type PromoCodeUpdateWithoutStoreInput = {
@@ -57078,6 +61475,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -57085,6 +61483,10 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -57104,6 +61506,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -57111,6 +61514,10 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -57178,6 +61585,58 @@ export namespace Prisma {
     createdAt?: Date | string
   }
 
+  export type PaymentCreateManyCollectedByInput = {
+    id?: string
+    storeId: string
+    orderId?: string | null
+    tableSessionId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type OrderCreateManyCancelledByInput = {
+    id?: string
+    storeId: string
+    origin: $Enums.OrderOrigin
+    type: $Enums.OrderType
+    tableId?: string | null
+    tableSessionId?: string | null
+    staffId?: string | null
+    customerId?: string | null
+    sessionId?: string | null
+    paymentModel: $Enums.PaymentModel
+    paymentMethod?: $Enums.PaymentMethod | null
+    cashAmount?: number
+    onlineAmount?: number
+    paidAt?: Date | string | null
+    status?: $Enums.OrderStatus
+    subTotal?: number
+    taxAmount?: number
+    discountAmount?: number
+    walletDiscount?: number
+    promoCodeId?: string | null
+    totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    paymentLinkId?: string | null
+    paymentLinkUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
   export type PasskeyUpdateWithoutUserInput = {
     id?: StringFieldUpdateOperationsInput | string
     credentialId?: StringFieldUpdateOperationsInput | string
@@ -57217,12 +61676,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -57232,7 +61695,9 @@ export namespace Prisma {
     tableSession?: TableSessionUpdateOneWithoutOrdersNestedInput
     customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
     promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
   }
@@ -57250,6 +61715,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -57257,11 +61723,16 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
   }
@@ -57279,6 +61750,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -57286,6 +61758,10 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -57301,12 +61777,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -57316,7 +61796,9 @@ export namespace Prisma {
     tableSession?: TableSessionUpdateOneWithoutOrdersNestedInput
     staff?: UserUpdateOneWithoutStaffOrdersNestedInput
     promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
   }
@@ -57334,6 +61816,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -57341,11 +61824,16 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
   }
@@ -57363,6 +61851,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -57370,6 +61859,10 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -57559,6 +62052,170 @@ export namespace Prisma {
     data?: NullableJsonNullValueInput | InputJsonValue
     isRead?: BoolFieldUpdateOperationsInput | boolean
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUpdateWithoutCollectedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    store?: StoreUpdateOneRequiredWithoutPaymentsNestedInput
+    order?: OrderUpdateOneWithoutPaymentsNestedInput
+    tableSession?: TableSessionUpdateOneWithoutPaymentsNestedInput
+  }
+
+  export type PaymentUncheckedUpdateWithoutCollectedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUncheckedUpdateManyWithoutCollectedByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type OrderUpdateWithoutCancelledByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    origin?: EnumOrderOriginFieldUpdateOperationsInput | $Enums.OrderOrigin
+    type?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
+    sessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentModel?: EnumPaymentModelFieldUpdateOperationsInput | $Enums.PaymentModel
+    paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
+    cashAmount?: IntFieldUpdateOperationsInput | number
+    onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    subTotal?: IntFieldUpdateOperationsInput | number
+    taxAmount?: IntFieldUpdateOperationsInput | number
+    discountAmount?: IntFieldUpdateOperationsInput | number
+    walletDiscount?: IntFieldUpdateOperationsInput | number
+    totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    store?: StoreUpdateOneRequiredWithoutOrdersNestedInput
+    table?: TableUpdateOneWithoutOrdersNestedInput
+    tableSession?: TableSessionUpdateOneWithoutOrdersNestedInput
+    staff?: UserUpdateOneWithoutStaffOrdersNestedInput
+    customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
+    promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
+    feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
+    walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
+  }
+
+  export type OrderUncheckedUpdateWithoutCancelledByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    origin?: EnumOrderOriginFieldUpdateOperationsInput | $Enums.OrderOrigin
+    type?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
+    tableId?: NullableStringFieldUpdateOperationsInput | string | null
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    staffId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    sessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentModel?: EnumPaymentModelFieldUpdateOperationsInput | $Enums.PaymentModel
+    paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
+    cashAmount?: IntFieldUpdateOperationsInput | number
+    onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    subTotal?: IntFieldUpdateOperationsInput | number
+    taxAmount?: IntFieldUpdateOperationsInput | number
+    discountAmount?: IntFieldUpdateOperationsInput | number
+    walletDiscount?: IntFieldUpdateOperationsInput | number
+    promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
+    totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
+    feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
+    walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
+  }
+
+  export type OrderUncheckedUpdateManyWithoutCancelledByInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    origin?: EnumOrderOriginFieldUpdateOperationsInput | $Enums.OrderOrigin
+    type?: EnumOrderTypeFieldUpdateOperationsInput | $Enums.OrderType
+    tableId?: NullableStringFieldUpdateOperationsInput | string | null
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    staffId?: NullableStringFieldUpdateOperationsInput | string | null
+    customerId?: NullableStringFieldUpdateOperationsInput | string | null
+    sessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentModel?: EnumPaymentModelFieldUpdateOperationsInput | $Enums.PaymentModel
+    paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
+    cashAmount?: IntFieldUpdateOperationsInput | number
+    onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
+    subTotal?: IntFieldUpdateOperationsInput | number
+    taxAmount?: IntFieldUpdateOperationsInput | number
+    discountAmount?: IntFieldUpdateOperationsInput | number
+    walletDiscount?: IntFieldUpdateOperationsInput | number
+    promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
+    totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
+    paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type TenantSubscriptionCreateManyPlanInput = {
@@ -57920,6 +62577,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -57927,6 +62585,10 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -57981,12 +62643,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -57996,7 +62662,9 @@ export namespace Prisma {
     staff?: UserUpdateOneWithoutStaffOrdersNestedInput
     customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
     promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
   }
@@ -58014,6 +62682,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -58021,11 +62690,16 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
   }
@@ -58043,6 +62717,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -58050,6 +62725,10 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -58069,6 +62748,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     store?: StoreUpdateOneRequiredWithoutTableSessionsNestedInput
     orders?: OrderUpdateManyWithoutTableSessionNestedInput
+    payments?: PaymentUpdateManyWithoutTableSessionNestedInput
   }
 
   export type TableSessionUncheckedUpdateWithoutTableInput = {
@@ -58084,6 +62764,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     orders?: OrderUncheckedUpdateManyWithoutTableSessionNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutTableSessionNestedInput
   }
 
   export type TableSessionUncheckedUpdateManyWithoutTableInput = {
@@ -58189,12 +62870,17 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
     discountAmount?: number
     walletDiscount?: number
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
     createdAt?: Date | string
@@ -58210,12 +62896,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -58225,7 +62915,9 @@ export namespace Prisma {
     tableSession?: TableSessionUpdateOneWithoutOrdersNestedInput
     staff?: UserUpdateOneWithoutStaffOrdersNestedInput
     customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
   }
@@ -58244,17 +62936,23 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
   }
@@ -58273,12 +62971,17 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -58291,6 +62994,27 @@ export namespace Prisma {
     quantity?: number
     kitchenNotes?: string | null
     priceAtOrder: number
+  }
+
+  export type PaymentCreateManyOrderInput = {
+    id?: string
+    storeId: string
+    tableSessionId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    collectedById?: string | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
   }
 
   export type FeedbackCreateManyOrderInput = {
@@ -58336,6 +63060,69 @@ export namespace Prisma {
     quantity?: IntFieldUpdateOperationsInput | number
     kitchenNotes?: NullableStringFieldUpdateOperationsInput | string | null
     priceAtOrder?: IntFieldUpdateOperationsInput | number
+  }
+
+  export type PaymentUpdateWithoutOrderInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    store?: StoreUpdateOneRequiredWithoutPaymentsNestedInput
+    tableSession?: TableSessionUpdateOneWithoutPaymentsNestedInput
+    collectedBy?: UserUpdateOneWithoutCollectedPaymentsNestedInput
+  }
+
+  export type PaymentUncheckedUpdateWithoutOrderInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    collectedById?: NullableStringFieldUpdateOperationsInput | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUncheckedUpdateManyWithoutOrderInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    tableSessionId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    collectedById?: NullableStringFieldUpdateOperationsInput | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type FeedbackUpdateWithoutOrderInput = {
@@ -58432,6 +63219,7 @@ export namespace Prisma {
     paymentMethod?: $Enums.PaymentMethod | null
     cashAmount?: number
     onlineAmount?: number
+    paidAt?: Date | string | null
     status?: $Enums.OrderStatus
     subTotal?: number
     taxAmount?: number
@@ -58439,8 +63227,33 @@ export namespace Prisma {
     walletDiscount?: number
     promoCodeId?: string | null
     totalAmount?: number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: string | null
+    cancelledAt?: Date | string | null
+    cancelledById?: string | null
     paymentLinkId?: string | null
     paymentLinkUrl?: string | null
+    createdAt?: Date | string
+    updatedAt?: Date | string
+  }
+
+  export type PaymentCreateManyTableSessionInput = {
+    id?: string
+    storeId: string
+    orderId?: string | null
+    channel: $Enums.PaymentChannel
+    status?: $Enums.PaymentStatus
+    amount: number
+    providerKind?: string | null
+    providerRef?: string | null
+    providerPaymentId?: string | null
+    qrImageUrl?: string | null
+    qrPayload?: string | null
+    cashTendered?: number | null
+    changeDue?: number | null
+    collectedById?: string | null
+    paidAt?: Date | string | null
+    expiresAt?: Date | string | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -58454,12 +63267,16 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
     discountAmount?: IntFieldUpdateOperationsInput | number
     walletDiscount?: IntFieldUpdateOperationsInput | number
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
@@ -58469,7 +63286,9 @@ export namespace Prisma {
     staff?: UserUpdateOneWithoutStaffOrdersNestedInput
     customer?: UserUpdateOneWithoutCustomerOrdersNestedInput
     promoCode?: PromoCodeUpdateOneWithoutOrdersNestedInput
+    cancelledBy?: UserUpdateOneWithoutCancelledOrdersNestedInput
     items?: OrderItemUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUpdateManyWithoutOrderNestedInput
   }
@@ -58487,6 +63306,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -58494,11 +63314,16 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     items?: OrderItemUncheckedUpdateManyWithoutOrderNestedInput
+    payments?: PaymentUncheckedUpdateManyWithoutOrderNestedInput
     feedbacks?: FeedbackUncheckedUpdateManyWithoutOrderNestedInput
     walletTransactions?: CustomerWalletTransactionUncheckedUpdateManyWithoutOrderNestedInput
   }
@@ -58516,6 +63341,7 @@ export namespace Prisma {
     paymentMethod?: NullableEnumPaymentMethodFieldUpdateOperationsInput | $Enums.PaymentMethod | null
     cashAmount?: IntFieldUpdateOperationsInput | number
     onlineAmount?: IntFieldUpdateOperationsInput | number
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     status?: EnumOrderStatusFieldUpdateOperationsInput | $Enums.OrderStatus
     subTotal?: IntFieldUpdateOperationsInput | number
     taxAmount?: IntFieldUpdateOperationsInput | number
@@ -58523,8 +63349,75 @@ export namespace Prisma {
     walletDiscount?: IntFieldUpdateOperationsInput | number
     promoCodeId?: NullableStringFieldUpdateOperationsInput | string | null
     totalAmount?: IntFieldUpdateOperationsInput | number
+    taxRules?: NullableJsonNullValueInput | InputJsonValue
+    cancelReason?: NullableStringFieldUpdateOperationsInput | string | null
+    cancelledAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    cancelledById?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkId?: NullableStringFieldUpdateOperationsInput | string | null
     paymentLinkUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUpdateWithoutTableSessionInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    store?: StoreUpdateOneRequiredWithoutPaymentsNestedInput
+    order?: OrderUpdateOneWithoutPaymentsNestedInput
+    collectedBy?: UserUpdateOneWithoutCollectedPaymentsNestedInput
+  }
+
+  export type PaymentUncheckedUpdateWithoutTableSessionInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    collectedById?: NullableStringFieldUpdateOperationsInput | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type PaymentUncheckedUpdateManyWithoutTableSessionInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    storeId?: StringFieldUpdateOperationsInput | string
+    orderId?: NullableStringFieldUpdateOperationsInput | string | null
+    channel?: EnumPaymentChannelFieldUpdateOperationsInput | $Enums.PaymentChannel
+    status?: EnumPaymentStatusFieldUpdateOperationsInput | $Enums.PaymentStatus
+    amount?: IntFieldUpdateOperationsInput | number
+    providerKind?: NullableStringFieldUpdateOperationsInput | string | null
+    providerRef?: NullableStringFieldUpdateOperationsInput | string | null
+    providerPaymentId?: NullableStringFieldUpdateOperationsInput | string | null
+    qrImageUrl?: NullableStringFieldUpdateOperationsInput | string | null
+    qrPayload?: NullableStringFieldUpdateOperationsInput | string | null
+    cashTendered?: NullableIntFieldUpdateOperationsInput | number | null
+    changeDue?: NullableIntFieldUpdateOperationsInput | number | null
+    collectedById?: NullableStringFieldUpdateOperationsInput | string | null
+    paidAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    expiresAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

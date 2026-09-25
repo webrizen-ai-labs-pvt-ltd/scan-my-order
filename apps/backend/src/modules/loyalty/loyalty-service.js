@@ -322,6 +322,35 @@ async function applyWalletCreditsOnOrder(tx, customerId, storeId, orderId, credi
 }
 
 /**
+ * Returns redeemed store credits to the customer's wallet (order cancelled or edited down).
+ */
+async function refundWalletCredits(prisma, { customerId, storeId, orderId, amount, description }) {
+  if (!customerId || !(amount > 0)) return 0;
+  await prisma.$transaction(async (tx) => {
+    const wallet = await tx.customerStoreWallet.update({
+      where: { customerId_storeId: { customerId, storeId } },
+      data: {
+        balance: { increment: amount },
+        totalSpent: { decrement: amount }
+      }
+    });
+    await tx.customerWalletTransaction.create({
+      data: {
+        walletId: wallet.id,
+        orderId,
+        type: 'ORDER_REFUND',
+        amount,
+        balanceAfter: wallet.balance,
+        description
+      }
+    });
+  });
+  const { broadcastToCustomer } = require("../orders/sse-service");
+  broadcastToCustomer(customerId, 'CUSTOMER_WALLET_UPDATED', { storeId, balanceRefunded: amount });
+  return amount;
+}
+
+/**
  * Award cashback credits when an order reaches SETTLED
  */
 async function creditOrderCashback(orderId) {
@@ -539,6 +568,7 @@ async function getStoreCustomersWithWallets(storeId, search = "") {
 }
 
 module.exports = {
+  refundWalletCredits,
   DEFAULT_LOYALTY_SETTINGS,
   parseLoyaltySettings,
   getStoreLoyaltySettings,

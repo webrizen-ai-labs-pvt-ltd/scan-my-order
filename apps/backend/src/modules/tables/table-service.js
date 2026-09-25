@@ -1,6 +1,7 @@
 const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
+const { broadcastToStore } = require("../orders/sse-service");
 const { tablesStatusCache, invalidateTablesCache } = require("../../lib/cache");
 
 async function getTables(actor, storeId) {
@@ -42,6 +43,23 @@ async function getTables(actor, storeId) {
     },
     orderBy: { tableNumber: 'asc' }
   });
+
+  // Unpaid running bill per table (drives the POS table board)
+  const unpaidByTable = new Map();
+  const unpaidGroups = await prisma.order.groupBy({
+    by: ['tableId'],
+    where: {
+      storeId,
+      tableId: { not: null },
+      status: { in: ['PENDING_VERIFICATION', 'PENDING_PAYMENT', 'PROCESSING', 'READY', 'SERVED'] },
+      paidAt: null
+    },
+    _sum: { totalAmount: true },
+    _count: { _all: true }
+  });
+  for (const g of unpaidGroups) {
+    unpaidByTable.set(g.tableId, { amount: g._sum.totalAmount || 0, count: g._count._all });
+  }
 
   // 2. Safely look up reservations for today if model exists in Prisma client
   const reservationsByTable = new Map();
@@ -105,6 +123,8 @@ async function getTables(actor, storeId) {
         status: activeOrder.status,
         totalAmount: activeOrder.totalAmount
       } : null,
+      unpaidTotal: unpaidByTable.get(tbl.id)?.amount || 0,
+      unpaidOrderCount: unpaidByTable.get(tbl.id)?.count || 0,
       activePin: activeSession?.pin || null,
       activeSessionId: activeSession?.id || null,
       activeSessionCreatedAt: activeSession?.createdAt || null,
@@ -224,10 +244,27 @@ async function terminateTableSession(actor, storeId, tableId) {
     throw createHttpError(404, "No active dining session found for this table");
   }
 
-  const { settleTableSession } = require("../orders/order-service");
-  const result = await settleTableSession(actor, storeId, activeSession.id, false, { paymentMethod: 'CASH' });
+  // Releasing a table must never record money that wasn't collected
+  const unpaid = await prisma.order.findMany({
+    where: {
+      tableSessionId: activeSession.id,
+      status: { notIn: ['SETTLED', 'CANCELLED'] },
+      paidAt: null
+    },
+    select: { id: true, totalAmount: true }
+  });
+  if (unpaid.length > 0) {
+    const due = unpaid.reduce((sum, o) => sum + o.totalAmount, 0);
+    throw createHttpError(409, `Table has ${unpaid.length} unpaid order(s) worth ₹${due}. Collect payment or cancel them before releasing the table.`);
+  }
+
+  const session = await prisma.tableSession.update({
+    where: { id: activeSession.id },
+    data: { status: 'SETTLED' }
+  });
+  broadcastToStore(storeId, 'TABLE_UPDATED', { tableId, tableSessionId: session.id });
   invalidateTablesCache(storeId);
-  return { success: true, message: "Table session terminated and table released successfully", session: result };
+  return { success: true, message: "Table session terminated and table released successfully", session };
 }
 
 module.exports = {

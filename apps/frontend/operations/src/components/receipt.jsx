@@ -30,7 +30,7 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           {order.table && <span className="font-bold text-lg">Table: {order.table.tableNumber}</span>}
         </div>
         <div className="flex justify-between">
-          <span>Payment: {order.paymentModel === 'PREPAID' ? 'Prepaid (Paid)' : 'Postpaid'}</span>
+          <span>Status: {order.paidAt || order.status === 'SETTLED' ? 'Paid' : 'Unpaid'}</span>
         </div>
       </div>
 
@@ -41,9 +41,8 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           <span className="w-16 text-right">Amt</span>
         </div>
         {order.items.map((item, idx) => {
-           const modTotal = (item.modifiers || []).reduce((sum, m) => sum + (m.priceAtOrder || 0), 0);
-           const ingTotal = (item.customIngredients || []).reduce((sum, ing) => sum + (Number(ing.price) || 0), 0);
-           const itemTotal = item.priceAtOrder + modTotal + ingTotal;
+           // priceAtOrder already includes modifiers and priced ingredients
+           const itemTotal = item.priceAtOrder;
            return (
             <div key={idx} className="mb-1">
               <div className="flex justify-between">
@@ -81,6 +80,12 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           <span>Subtotal</span>
           <span>₹{order.subTotal.toFixed(2)}</span>
         </div>
+        {order.walletDiscount > 0 && (
+          <div className="flex justify-between">
+            <span>Store credits</span>
+            <span>-₹{order.walletDiscount.toFixed(2)}</span>
+          </div>
+        )}
         {order.discountAmount > 0 && (
           <div className="flex justify-between">
             <span>Discount</span>
@@ -100,7 +105,25 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
         <span>₹{order.totalAmount.toFixed(2)}</span>
       </div>
 
-      {order.paymentMethod === 'SPLIT' ? (
+      {order.payments?.length > 0 ? (
+        <div className="border-b border-dashed border-black pb-2 mb-2 text-xs">
+          <div className="font-bold mb-1 uppercase tracking-wider">Paid by</div>
+          {order.payments.map((p) => (
+            <div key={p.id}>
+              <div className="flex justify-between">
+                <span>{p.channel === 'CASH' ? 'Cash' : p.channel === 'UPI_OFFLINE' ? 'UPI' : 'Online (UPI/Card)'}</span>
+                <span>₹{p.amount.toFixed(2)}</span>
+              </div>
+              {p.channel === 'CASH' && p.cashTendered > p.amount && (
+                <div className="flex justify-between pl-2 text-zinc-600">
+                  <span>Tendered ₹{p.cashTendered.toFixed(2)}</span>
+                  <span>Change ₹{(p.changeDue || 0).toFixed(2)}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : order.paymentMethod === 'SPLIT' ? (
         <div className="border-t border-dashed border-black pt-2 pb-2 mb-2 text-xs">
           <div className="font-bold mb-1 uppercase tracking-wider">Payment Breakdown:</div>
           <div className="flex justify-between">

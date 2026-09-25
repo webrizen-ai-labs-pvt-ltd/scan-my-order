@@ -5,7 +5,13 @@ import { OperationsLayout } from './layouts/operations-layout';
 import { Login } from './pages/login';
 import { Home } from './pages/home';
 import { Dashboard } from './pages/dashboard';
-import { POS } from './pages/pos';
+import { PosLayout } from './pages/pos/pos-layout';
+import { PosTerminalPage } from './pages/pos/pos-terminal-page';
+import { PosOrderEditPage } from './pages/pos/pos-order-edit-page';
+import { PosActiveOrdersPage } from './pages/pos/pos-active-orders-page';
+import { PosCheckoutPage } from './pages/pos/pos-checkout-page';
+import { PosCustomDishPage } from './pages/pos/pos-custom-dish-page';
+import { PosDeliveryPage } from './pages/pos/pos-delivery-page';
 import { KDS } from './pages/kds';
 import { Waiter } from './pages/waiter';
 import { WaiterTasks } from './pages/waiter-tasks';
@@ -41,7 +47,14 @@ function App() {
 
           {/* POS & Orders (Cashier + Manager/Admin) */}
           <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'CASHIER']} />}>
-            <Route path="/dashboard/pos" element={<POS />} />
+            <Route path="/dashboard/pos" element={<PosLayout />}>
+              <Route index element={<PosTerminalPage />} />
+              <Route path="orders" element={<PosActiveOrdersPage />} />
+              <Route path="orders/:orderId/edit" element={<PosOrderEditPage />} />
+              <Route path="custom-dish" element={<PosCustomDishPage />} />
+              <Route path="delivery" element={<PosDeliveryPage />} />
+              <Route path="checkout/:kind/:id" element={<PosCheckoutPage />} />
+            </Route>
             <Route path="/dashboard/orders" element={<Orders />} />
           </Route>
 

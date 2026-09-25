@@ -1,5 +1,6 @@
 const express = require('express');
-const { createApiResponse, createHttpError } = require('@smo/shared');
+const { createApiResponse } = require('@smo/shared');
+const { createHttpError } = require('../../middleware/error-handler');
 const { asyncHandler } = require('../../middleware/async-handler');
 const { authenticate } = require('../../middleware/auth');
 const {
