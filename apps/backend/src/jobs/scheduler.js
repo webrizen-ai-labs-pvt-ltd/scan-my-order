@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const { getPrismaClient } = require('../lib/prisma');
 const { JOB_REGISTRY } = require('./registry');
+const { env } = require('../config/env');
 const {
   getStoreConfig,
   getStoreAllConfigs,
@@ -104,6 +105,7 @@ async function executeJob(jobKey, { storeId, tenantId, params, triggeredBy = 'CR
 
 function scheduleSingleTask(storeId, tenantId, jobKey, schedule, params) {
   const taskKey = `${storeId}:${jobKey}`;
+  if (!env.jobs.enabled) return false; // RUN_SCHEDULED_JOBS=false: this machine never runs cron tasks
 
   // Stop previous instance if exists
   if (activeCronTasks.has(taskKey)) {
@@ -177,6 +179,10 @@ async function updateAndRescheduleJob(storeId, jobKey, newConfig) {
 }
 
 async function startDynamicScheduler() {
+  if (!env.jobs.enabled) {
+    console.log('[Scheduler] RUN_SCHEDULED_JOBS=false — scheduled jobs are off on this machine (manual runs still work).');
+    return;
+  }
   console.log('[Scheduler] Initializing dynamic multi-tenant cron scheduler...');
   const prisma = getPrismaClient();
 

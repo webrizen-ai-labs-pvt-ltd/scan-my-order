@@ -77,6 +77,7 @@ npm install
    | `ENCRYPTION_KEY`   | ✅       | 32-byte hex string for AES-256-GCM encryption |
    | `PORT`             |          | Server port (default `8000`)               |
    | `NODE_ENV`         |          | `development` or `production`              |
+   | `RUN_SCHEDULED_JOBS` |        | Default `true`. Set `false` on dev machines that share a DB with another backend, so cron jobs run once |
 
    Supabase, PhonePe, and frontend app URL variables are optional until those integrations are wired. Note: The `ENCRYPTION_KEY` is crucial for securely storing tenant BYOAK Razorpay keys.
 

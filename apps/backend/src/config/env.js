@@ -78,6 +78,11 @@ const env = {
     saltIndex: process.env.PHONEPE_SALT_INDEX,
     redirectUrl: process.env.PHONEPE_REDIRECT_URL
   },
+  jobs: {
+    // Set RUN_SCHEDULED_JOBS=false on every machine except one (e.g. local dev laptops)
+    // so jobs don't run twice against a shared database. Manual runs still work.
+    enabled: String(process.env.RUN_SCHEDULED_JOBS ?? 'true').toLowerCase() !== 'false'
+  },
   apps: {
     apiUrl: process.env.API_URL || "http://localhost:8000",
     adminUrl: process.env.ADMIN_APP_URL,
