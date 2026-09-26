@@ -13,6 +13,9 @@ import { PosCheckoutPage } from './pages/pos/pos-checkout-page';
 import { PosCustomDishPage } from './pages/pos/pos-custom-dish-page';
 import { PosDeliveryPage } from './pages/pos/pos-delivery-page';
 import { PosCorporateDetailsPage, PosInvoicePage } from './pages/pos/pos-invoice-pages';
+import { PosDuesPage } from './pages/pos/pos-dues-page';
+import { Dues } from './pages/dues/dues-page';
+import { DuesPaymentPage, DuesAccountPage } from './pages/dues/dues-child-pages';
 import { KDS } from './pages/kds';
 import { Waiter } from './pages/waiter';
 import { WaiterTasks } from './pages/waiter-tasks';
@@ -63,6 +66,7 @@ function App() {
               <Route path="checkout/:kind/:id" element={<PosCheckoutPage />} />
               <Route path="checkout/:kind/:id/corporate" element={<PosCorporateDetailsPage />} />
               <Route path="checkout/:kind/:id/invoice" element={<PosInvoicePage />} />
+              <Route path="checkout/:kind/:id/dues" element={<PosDuesPage />} />
             </Route>
             <Route path="/dashboard/orders" element={<Orders />} />
             <Route path="/dashboard/orders/:orderId" element={<OrderDetailPage />} />
@@ -70,6 +74,10 @@ function App() {
             <Route path="/dashboard/orders/:orderId/refund" element={<OrderRefundPage />} />
             <Route path="/dashboard/orders/:orderId/cancel" element={<OrderCancelPage />} />
             <Route path="/dashboard/invoices" element={<Invoices />} />
+            <Route path="/dashboard/dues" element={<Dues />} />
+            <Route path="/dashboard/dues/record-payment" element={<DuesPaymentPage />} />
+            <Route path="/dashboard/dues/accounts/new" element={<DuesAccountPage />} />
+            <Route path="/dashboard/dues/accounts/:accountId" element={<DuesAccountPage />} />
           </Route>
 
           {/* KDS (Kitchen + Manager/Admin) */}

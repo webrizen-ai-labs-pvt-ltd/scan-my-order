@@ -1627,6 +1627,7 @@ async function getKdsOrders(actor, storeId) {
   const prisma = getPrismaClient();
   
   const orders = await prisma.order.findMany({
+    relationLoadStrategy: "join",
     where: {
       storeId,
       status: { in: ['PROCESSING'] }
@@ -1675,6 +1676,7 @@ async function getActiveOrders(actor, storeId, statuses = []) {
   }
   
   const orders = await prisma.order.findMany({
+    relationLoadStrategy: "join",
     where,
     include: {
       table: true,
@@ -1729,6 +1731,7 @@ async function getOrderHistory(actor, storeId, filters = {}) {
   const [total, orders] = await Promise.all([
     prisma.order.count({ where }),
     prisma.order.findMany({
+      relationLoadStrategy: "join",
       where,
       include: {
         table: true,
@@ -1763,6 +1766,7 @@ async function getOrderHistory(actor, storeId, filters = {}) {
 async function getOrderById(storeId, orderId) {
   const prisma = getPrismaClient();
   const order = await prisma.order.findUnique({
+    relationLoadStrategy: "join",
     where: { id: orderId },
     include: {
       table: true,
@@ -1775,7 +1779,11 @@ async function getOrderById(storeId, orderId) {
       payments: {
         where: { status: 'PAID' },
         orderBy: { paidAt: 'asc' },
-        select: { id: true, channel: true, amount: true, cashTendered: true, changeDue: true, paidAt: true }
+        select: {
+          id: true, channel: true, amount: true, cashTendered: true, changeDue: true, paidAt: true,
+          duesSettled: true, duesReduced: true, duesGuest: true, duesNote: true,
+          duesAccount: { select: { id: true, name: true } }
+        }
       },
       items: {
         include: {
@@ -1804,6 +1812,7 @@ async function getOrderById(storeId, orderId) {
 async function getTableSessionBill(storeId, tableSessionId, { includePin = false } = {}) {
   const prisma = getPrismaClient();
   const session = await prisma.tableSession.findUnique({
+    relationLoadStrategy: "join",
     where: { id: tableSessionId },
     include: {
       table: true,

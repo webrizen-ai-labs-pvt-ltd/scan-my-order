@@ -2,17 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import waiterImg from '@smo/shared/assets/images/waiter-sm.png';
 import './waiter-fab.css';
 
-const NUDGES_KEY = 'smo_waiter_nudges';
-const TAPPED_KEY = 'smo_waiter_tapped';
-const MAX_NUDGES = 4; // per visit, so he never gets annoying
-const NUDGE_EVERY_MS = 25000;
+const MAX_NUDGES = 3; // after the greeting, per page load, so he never gets annoying
+const NUDGE_EVERY_MS = 30000;
 const TYPING_MS = 700;
-const SHOW_MS = 4500;
-
-const session = {
-  get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } },
-  set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* private mode */ } },
-};
+const SHOW_MS = 5000;
+const SETTLE_MS = 600; // pops back up this long after scrolling stops
 
 const greeting = () => {
   const h = new Date().getHours();
@@ -45,7 +39,10 @@ const statusLine = (call, tableNumber) => {
 export const WaiterFab = ({ hidden, activeCall, onClick, tableNumber, accentColor = '#059669' }) => {
   const [bubble, setBubble] = useState(null); // { text, typing, id }
   const [waving, setWaving] = useState(0);
+  const [ducking, setDucking] = useState(false);
   const timers = useRef([]);
+  const spoken = useRef(0); // greeting + nudges said on this page load
+  const tapped = useRef(false);
 
   const clearTimers = () => {
     timers.current.forEach(clearTimeout);
@@ -73,25 +70,37 @@ export const WaiterFab = ({ hidden, activeCall, onClick, tableNumber, accentColo
     else setBubble(null);
   }, [statusText, hidden, say]);
 
-  // Idle: a greeting, then an occasional nudge, until the guest has tapped him once
+  // Idle: a greeting on every page load, then a few spaced-out nudges until the guest taps him
   useEffect(() => {
     if (hidden || activeCall) return undefined;
     const nudge = () => {
-      const count = parseInt(session.get(NUDGES_KEY) || '0', 10);
-      if (session.get(TAPPED_KEY) === '1' || count >= MAX_NUDGES) return false;
-      session.set(NUDGES_KEY, String(count + 1));
-      say(count === 0 ? greeting() : NUDGES[(count - 1) % NUDGES.length]);
+      const n = spoken.current;
+      if (n > MAX_NUDGES || (n > 0 && tapped.current)) return false;
+      spoken.current = n + 1;
+      say(n === 0 ? greeting() : NUDGES[(n - 1) % NUDGES.length]);
       return true;
     };
-    const first = setTimeout(nudge, 1500);
+    const first = spoken.current === 0 ? setTimeout(nudge, 1500) : null;
     const interval = setInterval(() => { if (!nudge()) clearInterval(interval); }, NUDGE_EVERY_MS);
     return () => { clearTimeout(first); clearInterval(interval); };
   }, [hidden, activeCall, say]);
 
+  // Ducks down while the menu scrolls (so he doesn't sit on dishes), pops back up when it stops
+  useEffect(() => {
+    let timer;
+    const onScroll = () => {
+      setDucking(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setDucking(false), SETTLE_MS);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => { window.removeEventListener('scroll', onScroll); clearTimeout(timer); };
+  }, []);
+
   useEffect(() => { if (hidden) { clearTimers(); setBubble(null); } }, [hidden]);
 
   const open = () => {
-    session.set(TAPPED_KEY, '1');
+    tapped.current = true;
     onClick();
   };
 
@@ -106,17 +115,21 @@ export const WaiterFab = ({ hidden, activeCall, onClick, tableNumber, accentColo
       className={`pointer-events-none fixed inset-x-0 bottom-0 z-30 mx-auto max-w-md transition-transform duration-300 ease-out motion-reduce:transition-none ${hidden ? 'translate-y-[120%]' : 'translate-y-0'}`}
       aria-hidden={hidden}
     >
-      <div className="relative ml-auto w-[112px]">
+      {/* Soft fade so the dock reads as one strip over the scrolling menu */}
+      <div aria-hidden="true" className="absolute inset-x-0 bottom-0 h-[104px] bg-gradient-to-t from-white via-white/85 to-transparent dark:from-zinc-950 dark:via-zinc-950/85" />
+
+      <div className={`relative ml-auto mr-1 w-[112px] transition-transform duration-300 ease-out motion-reduce:transition-none ${ducking ? 'translate-y-[58%]' : 'translate-y-0'}`}>
         {bubble && (
           <button
             key={bubble.id}
             type="button"
             onClick={open}
             tabIndex={-1}
-            className="waiter-bubble pointer-events-auto absolute bottom-[50px] right-[96px] w-max max-w-[190px] rounded-2xl rounded-br-md border border-zinc-200 bg-white px-3 py-2 text-left text-xs font-semibold leading-snug text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+            aria-hidden={ducking}
+            className={`waiter-bubble pointer-events-auto absolute bottom-[92px] right-2 w-max max-w-[210px] rounded-2xl rounded-br-sm border border-zinc-200 bg-white px-3 py-2 text-left text-xs font-semibold leading-snug text-zinc-800 transition-opacity duration-200 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 ${ducking ? 'opacity-0' : 'opacity-100'}`}
           >
-            {/* tail pointing at his face */}
-            <span aria-hidden="true" className="absolute -right-[5px] bottom-2 size-2.5 rotate-45 border-r border-t border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900" />
+            {/* tail pointing down at his head */}
+            <span aria-hidden="true" className="absolute -bottom-[5px] right-5 size-2.5 rotate-45 border-b border-r border-zinc-200 bg-white dark:border-zinc-700 dark:bg-zinc-900" />
             {bubble.typing ? (
               <span className="flex items-center gap-1 py-1" aria-label="typing">
                 {[0, 1, 2].map(i => <span key={i} className="waiter-dot size-1.5 rounded-full bg-zinc-400" />)}

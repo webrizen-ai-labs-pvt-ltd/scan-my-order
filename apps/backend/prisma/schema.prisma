@@ -1,6 +1,8 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/prisma_v2"
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma_v2"
+  // Lets hot queries load their relations in one SQL query (relationLoadStrategy: "join")
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -105,6 +107,7 @@ enum PaymentMethod {
   CASH
   ONLINE
   SPLIT
+  DUES // closed on credit; the money is owed by a dues account (e.g. the owner)
 }
 
 // How a single tender line was collected
@@ -112,6 +115,17 @@ enum PaymentChannel {
   RAZORPAY     // Razorpay QR code, payment link or checkout; verified with the gateway
   UPI_OFFLINE  // Store's own UPI ID, confirmed manually by staff
   CASH
+  DUES         // Bill put on dues: owed by a dues account, paid back later
+}
+
+// How money owed on dues came in
+enum DuesRepaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD
+  CHEQUE
+  OTHER
 }
 
 enum PaymentStatus {
@@ -177,6 +191,8 @@ model Tenant {
   subscription     TenantSubscription?
   paymentGateways  TenantPaymentGateway[]
   corporateClients CorporateClient[]
+  duesAccounts     DuesAccount[]
+  duesRepayments   DuesRepayment[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 }
@@ -212,6 +228,7 @@ model Store {
   jobConfigs          StoreJobConfig[]
   orderEvents         OrderEvent[]
   invoices            Invoice[]
+  duesRepayments      DuesRepayment[]
   invoiceSequences    InvoiceSequence[]
 
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
@@ -258,6 +275,7 @@ model User {
   notifications     Notification[]
   collectedPayments Payment[] @relation("CollectedPayments")
   cancelledOrders   Order[]   @relation("CancelledOrders")
+  recordedDuesRepayments DuesRepayment[] @relation("RecordedDuesRepayments")
   rejectedOrderItems OrderItem[] @relation("RejectedOrderItems")
   processedRefunds  Refund[]    @relation("ProcessedRefunds")
   orderEvents       OrderEvent[] @relation("OrderEventActor")
@@ -505,6 +523,7 @@ model Order {
   paymentMethod   PaymentMethod?
   cashAmount      Int            @default(0)
   onlineAmount    Int            @default(0)
+  duesAmount      Int            @default(0) // part of the bill put on dues
   // Set once payments cover the bill; a paid order auto-settles when served
   paidAt          DateTime?
   status          OrderStatus    @default(DRAFT)
@@ -534,6 +553,7 @@ model Order {
   cancelledAt     DateTime?
   cancelledById   String?
   cancelledBy     User?          @relation("CancelledOrders", fields: [cancelledById], references: [id], onDelete: SetNull)
+
   
   paymentLinkId   String?
   paymentLinkUrl  String?
@@ -579,6 +599,15 @@ model Payment {
   qrPayload         String?        // String to encode as QR (upi:// intent or link URL)
 
   refunds           Refund[]
+
+  // Dues (channel DUES): who owes it, who ate, why, and how much has been paid back or reduced
+  duesAccountId     String?
+  duesAccount       DuesAccount?   @relation(fields: [duesAccountId], references: [id], onDelete: Restrict)
+  duesGuest         Json?          // { name, phone, whatsapp, email }
+  duesNote          String?
+  duesSettled       Int            @default(0) // paid back through dues repayments
+  duesReduced       Int            @default(0) // taken off because items weren't served
+  duesAllocations   DuesAllocation[]
 
   // Cash drawer details
   cashTendered      Int?
@@ -715,6 +744,7 @@ model TableSession {
   paymentMethod   PaymentMethod?
   cashAmount      Int?               @default(0)
   onlineAmount    Int?               @default(0)
+  duesAmount      Int                @default(0)
   // Corporate details chosen before payment; the invoice is issued with them on settlement
   invoiceRequest  Json?
   orders          Order[]
@@ -983,4 +1013,60 @@ model CorporateClient {
 
   @@unique([tenantId, gstin])
   @@index([tenantId, name])
+}
+
+// Someone who can owe the brand money for bills put on dues (the owner, a partner, a company…)
+model DuesAccount {
+  id          String          @id @default(cuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  phone       String?
+  email       String?
+  note        String?
+  isOwner     Boolean         @default(false) // the brand owner's own account, created automatically
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  bills       Payment[]
+  repayments  DuesRepayment[]
+
+  @@index([tenantId, isActive])
+}
+
+// Money received against an account's dues; split across its bills oldest first
+model DuesRepayment {
+  id           String              @id @default(cuid())
+  tenantId     String
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accountId    String
+  account      DuesAccount         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  storeId      String?             // bills of this store only; null = any store
+  store        Store?              @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  amount       Int
+  method       DuesRepaymentMethod
+  reference    String?             // UTR, cheque no., etc.
+  note         String?
+  receivedAt   DateTime            @default(now())
+  recordedById String?
+  recordedBy   User?               @relation("RecordedDuesRepayments", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime            @default(now())
+  allocations  DuesAllocation[]
+
+  @@index([tenantId, receivedAt])
+  @@index([accountId])
+}
+
+// How much of a repayment went to which dues bill
+model DuesAllocation {
+  id          String        @id @default(cuid())
+  repaymentId String
+  repayment   DuesRepayment @relation(fields: [repaymentId], references: [id], onDelete: Cascade)
+  paymentId   String
+  payment     Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amount      Int
+  createdAt   DateTime      @default(now())
+
+  @@index([paymentId])
 }

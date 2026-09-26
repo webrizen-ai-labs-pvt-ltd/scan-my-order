@@ -30,7 +30,8 @@ async function logRefund(actor, order, refund, type = "REFUND_ISSUED") {
 const REFUND_ROLES = ["CASHIER", "STORE_MANAGER", "TENANT_ADMIN", "SUPER_ADMIN"];
 // Sending money back through the gateway is limited to managers
 const GATEWAY_REFUND_ROLES = ["STORE_MANAGER", "TENANT_ADMIN", "SUPER_ADMIN"];
-const METHODS = ["RAZORPAY", "CASH", "UPI_OFFLINE"];
+// DUES: nothing is handed back; the amount comes off what the dues account owes
+const METHODS = ["RAZORPAY", "CASH", "UPI_OFFLINE", "DUES"];
 
 const RAZORPAY_STATUS = { processed: "PROCESSED", pending: "PENDING", failed: "FAILED" };
 
@@ -102,8 +103,10 @@ async function getRefundOptions(actor, storeId, orderId) {
   await verifyStoreAccess(actor, storeId);
   const prisma = getPrismaClient();
   const order = await loadOrder(prisma, storeId, orderId);
-  const [gatewayPayments, refunds] = await Promise.all([
+  const { openDuesForOrder } = require("../dues/dues-service");
+  const [gatewayPayments, duesBills, refunds] = await Promise.all([
     refundableGatewayPayments(prisma, order),
+    openDuesForOrder(prisma, order),
     prisma.refund.findMany({
       where: { orderId },
       orderBy: { createdAt: "desc" },
@@ -116,6 +119,7 @@ async function getRefundOptions(actor, storeId, orderId) {
     refundDue: order.refundDue,
     canRefundViaGateway: GATEWAY_REFUND_ROLES.includes(actor.role),
     gatewayPayments,
+    duesBills,
     refunds: refunds.map(serializeRefund)
   };
 }
@@ -152,12 +156,31 @@ async function createRefund(actor, storeId, orderId, input = {}) {
     throw createHttpError(400, `Only ₹${order.refundDue} is owed on this order`);
   }
 
-  if (method !== "RAZORPAY") {
+  // Reduce dues: lower what is owed on the order's dues bill (or its table bill's) instead of paying out
+  let duesPaymentId = null;
+  if (method === "DUES") {
+    const { openDuesForOrder, reduceDuesBill } = require("../dues/dues-service");
+    const bills = await openDuesForOrder(prisma, order);
+    const bill = bills.find(b => b.id === input.paymentId) || (input.paymentId ? null : bills[0]);
+    if (!bill) throw createHttpError(400, "This order has no dues left to reduce");
+    if (amount > bill.outstanding) throw createHttpError(400, `Only ₹${bill.outstanding} is still owed on those dues`);
     await reserveRefundDue(prisma, orderId, amount);
+    try {
+      await reduceDuesBill(prisma, bill.id, amount);
+    } catch (error) {
+      await prisma.order.update({ where: { id: orderId }, data: { refundDue: { increment: amount } } });
+      throw error;
+    }
+    duesPaymentId = bill.id;
+  }
+
+  if (method !== "RAZORPAY") {
+    if (method !== "DUES") await reserveRefundDue(prisma, orderId, amount);
     const refund = await prisma.refund.create({
       data: {
         storeId,
         orderId,
+        paymentId: duesPaymentId,
         method,
         status: "PROCESSED",
         amount,

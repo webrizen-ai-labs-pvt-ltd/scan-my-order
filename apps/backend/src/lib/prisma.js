@@ -16,8 +16,13 @@ let prisma;
 function getPrismaClient() {
   if (!prisma) {
     let url = env.database.url;
-    if (url && url.includes("pgbouncer=true") && !url.includes("connection_limit")) {
-      url += (url.includes("?") ? "&" : "?") + "connection_limit=1";
+    // A pool of connections so requests from different screens run side by side instead of queuing
+    // behind one connection (connection_limit=1 is only meant for serverless functions).
+    if (url && !url.includes("connection_limit")) {
+      url += (url.includes("?") ? "&" : "?") + `connection_limit=${env.database.connectionLimit}`;
+    }
+    if (url && url.includes("pgbouncer=true")) {
+      console.warn("[DB] DATABASE_URL uses the transaction pooler (pgbouncer=true): every query costs extra round trips. Use the session pooler (port 5432) for a long-running server.");
     }
 
     prisma = new PrismaClient({

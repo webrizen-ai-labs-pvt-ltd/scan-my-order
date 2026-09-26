@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@smo/ui';
-import { ArrowLeft01Icon, PrinterIcon, Loading03Icon, Cancel01Icon, CheckmarkCircle02Icon, Building02Icon, Invoice03Icon } from 'hugeicons-react';
+import { ArrowLeft01Icon, PrinterIcon, Loading03Icon, Cancel01Icon, CheckmarkCircle02Icon, Building02Icon, Invoice03Icon, NoteEditIcon } from 'hugeicons-react';
 import api from '../../lib/api';
 import { usePos } from './pos-layout';
 import { PaymentCollector } from '../../components/payments/payment-collector';
@@ -10,6 +10,7 @@ import { printReceipt } from '../../lib/print-receipt';
 import { apiErrorMessage } from '../../components/pos/pos-toasts';
 import { sessionBillToReceipt } from '../../lib/session-receipt';
 import { CancelOrderDialog } from '../../components/pos/cancel-order-dialog';
+import { useAuthStore } from '../../store/authStore';
 
 const BillLines = ({ items }) => (
   <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -91,6 +92,8 @@ export const PosCheckoutPage = () => {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [requestBusy, setRequestBusy] = useState(false);
   const [requestError, setRequestError] = useState('');
+  const [paySummary, setPaySummary] = useState(null);
+  const canPutOnDues = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(useAuthStore(state => state.user?.role));
   // Bills that were already paid when opened (e.g. back from the invoice page) shouldn't toast again
   const paidOnOpen = useRef(null);
   const receiptRef = useRef(null);
@@ -245,7 +248,27 @@ export const PosCheckoutPage = () => {
                 tableSessionId={isTable ? id : undefined}
                 subscribe={subscribe}
                 onSettled={handleSettled}
+                onChange={setPaySummary}
               />
+              {/* On credit: the rest of the bill is owed by a dues account (e.g. the owner) */}
+              {!receipt && billOpen && canPutOnDues && paySummary && !paySummary.isSettled && paySummary.dueAmount > 0 && (
+                <div className="rounded-2xl border border-dashed border-zinc-300 dark:border-zinc-700 px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Guest not paying now?</div>
+                    <div className="text-xs text-zinc-500">
+                      Put {paySummary.paidAmount > 0 ? 'the rest' : 'the bill'} ({'₹'}{paySummary.dueAmount.toLocaleString('en-IN')}) on dues. It counts as a sale and is collected later.
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(childPath('dues'))}
+                    className="shrink-0"
+                  >
+                    <NoteEditIcon size={15} className="mr-1.5" /> Put on dues
+                  </Button>
+                </div>
+              )}
             </section>
           </div>
         )}

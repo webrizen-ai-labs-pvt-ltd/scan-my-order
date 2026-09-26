@@ -1598,6 +1598,7 @@ export const StoreMenuPage = () => {
         <LiveOrders
           storeId={store.id}
           tableNumber={tableNumber}
+          placement={getTotalItems() > 0 ? 'aboveCart' : tableNumber ? 'besideWaiter' : 'bottom'}
           activeSessionId={tableSessionInfo?.tableSessionId || localStorage.getItem(`smo_table_session_${store.id}_${tableNumber}`)}
         />
 

@@ -1,12 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Button } from '@smo/ui';
-import { Cancel01Icon, Loading03Icon, Money01Icon, QrCodeIcon, SmartPhone01Icon, CheckmarkCircle02Icon } from 'hugeicons-react';
+import { Cancel01Icon, Loading03Icon, Money01Icon, QrCodeIcon, SmartPhone01Icon, CheckmarkCircle02Icon, NoteEditIcon } from 'hugeicons-react';
 import api from '../../lib/api';
 
 const rupees = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 const errorText = (err, fallback) => err?.response?.data?.error?.message || err?.message || fallback;
 
-const METHOD_LABEL = { RAZORPAY: 'Razorpay', CASH: 'Cash', UPI_OFFLINE: 'UPI' };
+const METHOD_LABEL = { RAZORPAY: 'Razorpay', CASH: 'Cash', UPI_OFFLINE: 'UPI', DUES: 'Taken off dues' };
 const STATUS_TEXT = {
   PENDING: 'On its way (Razorpay, usually 5–7 working days)',
   PROCESSED: 'Refunded',
@@ -38,7 +38,9 @@ export const RefundDialog = ({ storeId, orderId, label, onClose, onChanged, asPa
       const data = res.data.data;
       setOptions(data);
       const gateway = data.canRefundViaGateway && data.gatewayPayments.length > 0;
-      setMethod(prev => prev || (gateway ? 'RAZORPAY' : 'CASH'));
+      // A bill on dues was never paid by the guest: take it off the dues rather than handing money back
+      const dues = data.duesBills?.length > 0;
+      setMethod(prev => prev || (dues ? 'DUES' : gateway ? 'RAZORPAY' : 'CASH'));
       setPaymentId(prev => prev || data.gatewayPayments[0]?.id || null);
       setAmount(data.refundDue > 0 ? String(data.refundDue) : '');
       setError('');
@@ -59,22 +61,25 @@ export const RefundDialog = ({ storeId, orderId, label, onClose, onChanged, asPa
   if (!orderId) return null;
 
   const source = options?.gatewayPayments.find(p => p.id === paymentId);
-  const max = method === 'RAZORPAY' && source ? Math.min(options.refundDue, source.refundable) : options?.refundDue || 0;
+  const duesBill = options?.duesBills?.[0];
+  const max = method === 'RAZORPAY' && source
+    ? Math.min(options.refundDue, source.refundable)
+    : method === 'DUES' && duesBill ? Math.min(options.refundDue, duesBill.outstanding) : options?.refundDue || 0;
   const amountNum = parseInt(amount, 10) || 0;
   const valid = amountNum > 0 && amountNum <= max && (method !== 'RAZORPAY' || source);
 
   const submit = async (e) => {
     e.preventDefault();
     if (!valid || busy) return;
-    const how = method === 'RAZORPAY' ? 'back to the guest’s UPI/card via Razorpay' : method === 'CASH' ? 'handed back in cash' : 'sent back by UPI';
-    if (!window.confirm(`Refund ${rupees(amountNum)} ${how}?`)) return;
+    const how = method === 'RAZORPAY' ? 'back to the guest’s UPI/card via Razorpay' : method === 'CASH' ? 'handed back in cash' : method === 'DUES' ? `off what ${duesBill?.accountName} owes` : 'sent back by UPI';
+    if (!window.confirm(`${method === 'DUES' ? 'Take' : 'Refund'} ${rupees(amountNum)} ${how}?`)) return;
     setBusy(true);
     setError('');
     try {
       const res = await api.post(`/stores/${storeId}/orders/${orderId}/refunds`, {
         method,
         amount: amountNum,
-        paymentId: method === 'RAZORPAY' ? paymentId : undefined,
+        paymentId: method === 'RAZORPAY' ? paymentId : method === 'DUES' ? duesBill?.id : undefined,
         note: note.trim() || undefined,
       });
       setOptions(res.data.data);
@@ -100,6 +105,7 @@ export const RefundDialog = ({ storeId, orderId, label, onClose, onChanged, asPa
     },
     { id: 'CASH', label: 'Cash', hint: 'Handed back at the counter', icon: Money01Icon },
     { id: 'UPI_OFFLINE', label: 'UPI', hint: 'Sent from your UPI app', icon: SmartPhone01Icon },
+    ...(options?.duesBills?.length ? [{ id: 'DUES', label: 'Dues', hint: `Take it off what ${duesBill.accountName} owes (nothing handed back)`, icon: NoteEditIcon }] : []),
   ];
 
   return (
@@ -133,7 +139,7 @@ export const RefundDialog = ({ storeId, orderId, label, onClose, onChanged, asPa
 
           {options && options.refundDue > 0 && (
             <form id="refund-form" onSubmit={submit} className="flex flex-col gap-3">
-              <div className="grid grid-cols-3 gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-800/60 rounded-2xl" role="radiogroup" aria-label="Refund method">
+              <div className={`grid ${methods.length > 3 ? 'grid-cols-4' : 'grid-cols-3'} gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-800/60 rounded-2xl`} role="radiogroup" aria-label="Refund method">
                 {methods.map(m => {
                   const Icon = m.icon;
                   return (

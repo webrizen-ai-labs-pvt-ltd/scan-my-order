@@ -31,6 +31,7 @@ async function authenticate(req, _res, next) {
 
     if (!user) {
       user = await getPrismaClient().user.findUnique({
+        relationLoadStrategy: "join",
         where: {
           id: payload.sub
         },

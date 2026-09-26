@@ -49,7 +49,10 @@ const env = {
   },
   database: {
     url: readEnv("DATABASE_URL"),
-    directUrl: readEnv("DIRECT_URL")
+    directUrl: readEnv("DIRECT_URL"),
+    // Database connections per backend process (Prisma pool). Supabase caps session-mode clients,
+    // so keep (instances × this) under the project's pool size.
+    connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || "5", 10) || 5
   },
   supabase: {
     url: process.env.SUPABASE_URL,

@@ -123,13 +123,14 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
         <span>₹{order.totalAmount.toFixed(2)}</span>
       </div>
 
+
       {order.payments?.length > 0 ? (
         <div className="border-b border-dashed border-black pb-2 mb-2 text-xs">
           <div className="font-bold mb-1 uppercase tracking-wider">Paid by</div>
           {order.payments.map((p) => (
             <div key={p.id}>
               <div className="flex justify-between">
-                <span>{p.channel === 'CASH' ? 'Cash' : p.channel === 'UPI_OFFLINE' ? 'UPI' : 'Online (UPI/Card)'}</span>
+                <span>{p.channel === 'CASH' ? 'Cash' : p.channel === 'UPI_OFFLINE' ? 'UPI' : p.channel === 'DUES' ? `Dues (${p.duesAccount?.name || 'account'})` : 'Online (UPI/Card)'}</span>
                 <span>₹{p.amount.toFixed(2)}</span>
               </div>
               {p.channel === 'CASH' && p.cashTendered > p.amount && (
@@ -174,7 +175,7 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           <div className="font-bold mb-1 uppercase tracking-wider">Refunded</div>
           {order.refunds.map((r) => (
             <div key={r.id} className="flex justify-between">
-              <span>{r.method === 'CASH' ? 'Cash' : r.method === 'UPI_OFFLINE' ? 'UPI' : 'Online (UPI/Card)'}{r.status === 'PENDING' ? ' (in progress)' : ''}</span>
+              <span>{r.method === 'CASH' ? 'Cash' : r.method === 'UPI_OFFLINE' ? 'UPI' : r.method === 'DUES' ? 'Taken off dues' : 'Online (UPI/Card)'}{r.status === 'PENDING' ? ' (in progress)' : ''}</span>
               <span>-₹{r.amount.toFixed(2)}</span>
             </div>
           ))}

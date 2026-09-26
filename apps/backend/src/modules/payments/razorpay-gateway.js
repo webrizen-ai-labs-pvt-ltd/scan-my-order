@@ -7,12 +7,23 @@ const { createHttpError } = require("../../middleware/error-handler");
 // Razorpay rejects close_by values less than ~2 minutes out; keep QRs alive long enough to scan and pay.
 const QR_LIFETIME_MS = 15 * 60 * 1000;
 
+// Checkout screens ask for the gateway on every refresh; saving settings clears the cache
+const GATEWAY_TTL_MS = 60 * 1000;
+const gatewayCache = new Map(); // tenantId -> { gateway, at }
+
 async function loadGateway(tenantId) {
-  const gateway = await getPrismaClient().tenantPaymentGateway.findUnique({
+  const hit = gatewayCache.get(tenantId);
+  if (hit && Date.now() - hit.at < GATEWAY_TTL_MS) return hit.gateway;
+  const row = await getPrismaClient().tenantPaymentGateway.findUnique({
     where: { tenantId_provider: { tenantId, provider: "RAZORPAY" } }
   });
-  if (!gateway || !gateway.isActive) return null;
+  const gateway = row && row.isActive ? row : null;
+  gatewayCache.set(tenantId, { gateway, at: Date.now() });
   return gateway;
+}
+
+function invalidateGatewayCache(tenantId) {
+  gatewayCache.delete(tenantId);
 }
 
 /**
@@ -171,6 +182,7 @@ function isCheckoutSignatureValid(keySecret, { orderId, paymentId, signature }) 
 }
 
 module.exports = {
+  invalidateGatewayCache,
   getQrCodesStatus,
   getTenantRazorpay,
   requireTenantRazorpay,

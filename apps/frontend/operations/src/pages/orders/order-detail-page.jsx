@@ -13,7 +13,7 @@ import { useOrderPage } from './use-order-page';
 import { ORDER_STATUSES, statusTone } from './order-status';
 
 const money = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
-const PAY_LABEL = { CASH: 'Cash', UPI_OFFLINE: 'UPI', RAZORPAY: 'Online (UPI/Card)' };
+const PAY_LABEL = { CASH: 'Cash', UPI_OFFLINE: 'UPI', RAZORPAY: 'Online (UPI/Card)', DUES: 'Dues' };
 
 const Section = ({ title, children, className = '' }) => (
   <section className={`rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 ${className}`}>
@@ -156,7 +156,19 @@ export const OrderDetailPage = () => {
                 <div className="flex flex-col gap-1.5 text-sm">
                   {order.payments?.map(p => (
                     <div key={p.id} className="flex justify-between">
-                      <span>{PAY_LABEL[p.channel] || p.channel}<span className="text-xs text-zinc-400"> · {p.paidAt ? new Date(p.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span></span>
+                      <span>
+                        {PAY_LABEL[p.channel] || p.channel}
+                        {p.channel === 'DUES' && p.duesAccount && <> · owed by {p.duesAccount.name}</>}
+                        <span className="text-xs text-zinc-400"> · {p.paidAt ? new Date(p.paidAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</span>
+                        {p.channel === 'DUES' && (
+                          <span className="block text-xs text-zinc-500">
+                            {p.duesGuest?.name ? `Guest ${p.duesGuest.name} · ` : ''}
+                            {p.amount - (p.duesSettled || 0) - (p.duesReduced || 0) > 0
+                              ? `${money(p.amount - (p.duesSettled || 0) - (p.duesReduced || 0))} still owed`
+                              : 'Paid back'}
+                          </span>
+                        )}
+                      </span>
                       <span className="tabular-nums">{money(p.amount)}</span>
                     </div>
                   ))}

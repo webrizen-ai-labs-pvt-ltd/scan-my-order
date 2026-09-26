@@ -7,7 +7,8 @@ const {
   createPayment,
   getPayment,
   confirmOfflinePayment,
-  cancelPayment
+  cancelPayment,
+  putBillOnDues
 } = require("./payment-service");
 
 const router = express.Router({ mergeParams: true });
@@ -44,6 +45,15 @@ router.post("/:paymentId/confirm", asyncHandler(async (req, res) => {
 // POST /api/stores/:storeId/payments/:paymentId/cancel
 router.post("/:paymentId/cancel", asyncHandler(async (req, res) => {
   const result = await cancelPayment(req.user, req.params.storeId, req.params.paymentId);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/payments/dues  { orderId | tableSessionId, accountId?, note, guest: { name, phone?, whatsapp?, email? } }
+// Closes what is left of the bill on dues (owed by a dues account, collected later)
+router.post("/dues", asyncHandler(async (req, res) => {
+  const { orderId, tableSessionId, accountId, note, guest } = req.body || {};
+  const ref = orderId ? { orderId } : { tableSessionId };
+  const result = await putBillOnDues(req.user, req.params.storeId, ref, { accountId, note, guest });
   res.json(createApiResponse(result));
 }));
 

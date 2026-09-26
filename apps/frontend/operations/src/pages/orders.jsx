@@ -220,7 +220,10 @@ export const Orders = () => {
                         <Badge className={`border-none ${statusTone(order.status)}`}>{order.status.replace('_', ' ')}</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-bold">₹{order.totalAmount}</TableCell>
+                    <TableCell className="text-right font-bold">
+                      {(order.paymentMethod === 'DUES' || order.duesAmount > 0) && <span className="mr-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400" title={`₹${order.duesAmount} on dues`}>Dues</span>}
+                      ₹{order.totalAmount}
+                    </TableCell>
                   </TableRow>
                 ))
               )}

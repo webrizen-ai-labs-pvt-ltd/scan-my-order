@@ -118,14 +118,15 @@ export const Dashboard = () => {
     // Initial fetch
     fetchFloorStatus(selectedStoreId);
 
-    // Background 5s polling fallback
+    // Safety net only: the event stream below delivers changes instantly
     const intervalId = setInterval(() => {
       fetchFloorStatus(selectedStoreId, true);
-    }, 5000);
+    }, 30000);
 
     // Live Server-Sent Events (SSE) stream for zero-latency instant updates
     const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
     let eventSource;
+    let refreshTimer;
 
     try {
       eventSource = new EventSource(`${baseUrl}/stores/${selectedStoreId}/orders/stream?token=${token}`);
@@ -142,6 +143,14 @@ export const Dashboard = () => {
         try {
           const data = JSON.parse(event.data);
           const relevantEvents = [
+            'ORDER_PENDING_PAYMENT',
+            'ORDER_UPDATED',
+            'ORDER_ITEMS_REJECTED',
+            'TABLE_SESSION_SETTLED',
+            'TABLE_UPDATED',
+            'RESERVATION_CREATED',
+            'RESERVATION_UPDATED',
+            'RESERVATION_DELETED',
             'ORDER_PENDING_VERIFICATION',
             'ORDER_PROCESSING',
             'ORDER_READY',
@@ -158,8 +167,9 @@ export const Dashboard = () => {
           ];
 
           if (relevantEvents.includes(data.type)) {
-            // Immediate real-time refresh when tables or orders change
-            fetchFloorStatus(selectedStoreId, true);
+            // One refresh per burst of events (e.g. a bill settling several orders at once)
+            clearTimeout(refreshTimer);
+            refreshTimer = setTimeout(() => fetchFloorStatus(selectedStoreId, true), 400);
           }
         } catch (err) {
           console.error('Error parsing SSE event:', err);
@@ -172,6 +182,7 @@ export const Dashboard = () => {
 
     return () => {
       clearInterval(intervalId);
+      clearTimeout(refreshTimer);
       if (eventSource) {
         eventSource.close();
       }

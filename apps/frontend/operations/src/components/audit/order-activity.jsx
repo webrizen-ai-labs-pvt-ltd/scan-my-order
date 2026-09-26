@@ -17,6 +17,8 @@ const TONE = {
   PAYMENT_RECEIVED: 'bg-emerald-500',
   PAYMENT_CONFIRMED: 'bg-emerald-500',
   BILL_SETTLED: 'bg-emerald-500',
+  BILL_ON_DUES: 'bg-amber-500',
+  DUES_REPAID: 'bg-emerald-500',
 };
 
 const STATUS_WORDS = {
@@ -44,6 +46,10 @@ function describe(e) {
     case 'PAYMENT_CONFIRMED':
     case 'PAYMENT_WITHDRAWN':
       return `${d.label || d.channel} ${money(e.amountAfter)}${d.changeDue ? ` · change ${money(d.changeDue)}` : ''}`;
+    case 'BILL_ON_DUES':
+      return `${money(e.amountAfter)} owed by ${d.account}${d.guest ? ` · guest ${d.guest}` : ''}`;
+    case 'DUES_REPAID':
+      return `${money(e.amountAfter)} from ${d.account} · ${d.method}${d.reference ? ` (${d.reference})` : ''}${d.cleared ? ' · cleared' : ''}`;
     case 'BILL_SETTLED':
       return `${money(e.amountAfter)} · ${d.paymentMethod?.toLowerCase()}`;
     case 'REFUND_ISSUED':

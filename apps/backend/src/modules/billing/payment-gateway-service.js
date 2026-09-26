@@ -37,6 +37,7 @@ async function saveGatewayKeys(tenantId, input) {
   const gateway = existing
     ? await prisma.tenantPaymentGateway.update({ where: { id: existing.id }, data })
     : await prisma.tenantPaymentGateway.create({ data: { tenantId, provider, ...data } });
+  require("../payments/razorpay-gateway").invalidateGatewayCache(tenantId);
 
   return {
     ...serializeGateway(gateway),

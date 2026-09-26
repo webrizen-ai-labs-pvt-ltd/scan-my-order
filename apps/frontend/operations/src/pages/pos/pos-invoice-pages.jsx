@@ -8,7 +8,7 @@ import { apiErrorMessage } from '../../components/pos/pos-toasts';
 import { CorporateForm, InvoiceDialog } from '../../components/invoices/invoice-dialog';
 
 /** Loads the order or table bill behind /dashboard/pos/checkout/:kind/:id/... */
-function useCheckoutBill() {
+export function useCheckoutBill() {
   const { kind, id } = useParams();
   const { storeId } = usePos();
   const location = useLocation();
