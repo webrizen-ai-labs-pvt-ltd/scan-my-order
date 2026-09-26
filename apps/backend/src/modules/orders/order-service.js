@@ -561,7 +561,7 @@ async function createOrder(storeId, actor, origin, input) {
 // 3. LIFECYCLE MANAGEMENT
 async function deductInventory(prisma, order) {
   const items = await prisma.orderItem.findMany({
-    where: { orderId: order.id },
+    where: { orderId: order.id, status: 'ACTIVE' },
     include: {
       menuItem: { include: { recipe: true } },
       modifiers: {
@@ -652,12 +652,13 @@ async function deductInventory(prisma, order) {
   }
 }
 
-// Helper: Revert inventory deductions when items are updated
-async function revertInventoryDeduction(prisma, orderId) {
+// Helper: Revert inventory deductions when items are updated, rejected or cancelled.
+// Rejected items were already restocked when they were rejected, so they're skipped.
+async function revertInventoryDeduction(prisma, orderId, { itemIds = null } = {}) {
   const [order, items] = await Promise.all([
     prisma.order.findUnique({ where: { id: orderId }, select: { storeId: true } }),
     prisma.orderItem.findMany({
-      where: { orderId },
+      where: { orderId, status: 'ACTIVE', ...(itemIds ? { id: { in: itemIds } } : {}) },
       include: {
         menuItem: { include: { recipe: true } },
         modifiers: {
@@ -744,6 +745,21 @@ async function revertInventoryDeduction(prisma, orderId) {
   }
 }
 
+/**
+ * Re-prices a placed order for a new subtotal (after an edit or a kitchen rejection):
+ * - tax at the rates in force when the order was placed (older orders fall back to the store's rules)
+ * - a promo that no longer meets its minimum is dropped
+ * - store credits that no longer fit the smaller bill are returned (walletRefund)
+ * @param {object} order Order incl. promoCode
+ */
+function recalculateOrderTotals(order, store, subTotal) {
+  const taxRules = Array.isArray(order.taxRules) ? order.taxRules : (Array.isArray(store.taxRules) ? store.taxRules : []);
+  const promo = order.promoCode && subTotal >= (order.promoCode.minOrderValue || 0) ? order.promoCode : null;
+  const totals = computeOrderTotals({ subTotal, promo, walletDiscount: order.walletDiscount, taxRules });
+  const walletRefund = Math.max(0, (order.walletDiscount || 0) - totals.walletDiscount);
+  return { totals, promo, taxRules, walletRefund };
+}
+
 // 4. MANAGER UPDATE ORDER ITEMS (POST-PLACEMENT EDITING)
 async function updateOrderItems(actor, storeId, orderId, input) {
   const allowedRoles = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'];
@@ -787,7 +803,7 @@ async function updateOrderItems(actor, storeId, orderId, input) {
 
   // Lines already on the order keep the price they were sold at; only new lines use today's menu
   const existingItems = await prisma.orderItem.findMany({
-    where: { orderId: order.id },
+    where: { orderId: order.id, status: 'ACTIVE' },
     include: { modifiers: true }
   });
   const { items: builtItems } = await buildCartItems(prisma, storeId, itemsInput, {
@@ -819,22 +835,9 @@ async function updateOrderItems(actor, storeId, orderId, input) {
   });
   const newSubTotal = newItemsData.reduce((sum, itm) => sum + itm.priceAtOrder * itm.quantity, 0);
 
-  // Tax at the rates in force when the order was placed (older orders fall back to the store's current rules)
   const store = await prisma.store.findUnique({ where: { id: storeId } });
-  const taxRules = Array.isArray(order.taxRules) ? order.taxRules : (Array.isArray(store.taxRules) ? store.taxRules : []);
-
-  // A promo that no longer meets its minimum after the edit is removed from the order
-  const promo = order.promoCode && newSubTotal >= (order.promoCode.minOrderValue || 0) ? order.promoCode : null;
-
-  const totals = computeOrderTotals({
-    subTotal: newSubTotal,
-    promo,
-    walletDiscount: order.walletDiscount,
-    taxRules
-  });
+  const { totals, promo, taxRules, walletRefund } = recalculateOrderTotals(order, store, newSubTotal);
   const { discountAmount, taxAmount, totalAmount: newTotalAmount } = totals;
-  // Credits that no longer fit the smaller bill go back to the customer
-  const walletRefund = Math.max(0, (order.walletDiscount || 0) - totals.walletDiscount);
 
   // Inventory reconciliation:
   const wasDeducted = ['PROCESSING', 'READY', 'SERVED'].includes(order.status);
@@ -844,9 +847,9 @@ async function updateOrderItems(actor, storeId, orderId, input) {
 
   // Replace order items atomically in transaction
   await prisma.$transaction(async (tx) => {
-    // Delete existing items (modifiers cascade delete)
+    // Replace active items (modifiers cascade delete); kitchen-rejected lines stay as history
     await tx.orderItem.deleteMany({
-      where: { orderId: order.id }
+      where: { orderId: order.id, status: 'ACTIVE' }
     });
 
     // Create new items
@@ -1001,6 +1004,8 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
   }
 
   const updateData = { status: newStatus };
+  if (newStatus === 'READY') updateData.readyAt = new Date();
+  if (newStatus === 'PROCESSING' && order.status === 'READY') updateData.readyAt = null; // recall
 
   if (newStatus === 'CANCELLED') {
     updateData.cancelReason = cancelReason || 'Cancelled by system';
@@ -1057,8 +1062,8 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
     broadcastToCustomer(updatedOrder.sessionId, 'ORDER_UPDATED', updatedOrder);
   }
 
-  // Centralized Quantum Notification dispatch on status changes
-  try {
+  // Centralized Quantum Notification dispatch on status changes (skipped for quiet corrections like a recall)
+  if (!options.silent) try {
     const tableNum = updatedOrder.table?.tableNumber || 'N/A';
     const shortId = updatedOrder.id.slice(-6).toUpperCase();
     
@@ -1160,6 +1165,331 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
   return updatedOrder;
 }
 
+// 3b. KITCHEN REJECTIONS
+const KITCHEN_REJECT_ROLES = ['KITCHEN_STAFF', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
+
+/**
+ * Kitchen can't make some (or all) items of an order.
+ * - Rejected lines are kept for the record, restocked, and dropped from the bill.
+ * - Unpaid orders are re-priced (and any open QR withdrawn); paid orders get `refundDue` instead.
+ * - If nothing is left, the order is cancelled.
+ * - Staff and the guest are notified with the reason.
+ *
+ * @param {object} input
+ * @param {string[]} [input.itemIds] Lines to reject (ignored when `all` is true)
+ * @param {boolean} [input.all] Reject the whole order
+ * @param {string} input.reason Why the kitchen can't make it
+ * @param {boolean} [input.markSoldOut] Also hide these dishes from the menu until re-enabled
+ */
+async function rejectOrderItems(actor, storeId, orderId, input = {}) {
+  if (!KITCHEN_REJECT_ROLES.includes(actor.role)) {
+    throw createHttpError(403, "Only kitchen staff and managers can reject items");
+  }
+  await verifyStoreAccess(actor, storeId);
+
+  const reason = typeof input.reason === 'string' ? input.reason.trim().slice(0, 200) : '';
+  if (reason.length < 3) {
+    throw createHttpError(400, "Please give the reason the kitchen can't make this");
+  }
+
+  const prisma = getPrismaClient();
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: {
+      table: true,
+      promoCode: true,
+      items: { include: { menuItem: true, modifiers: true } }
+    }
+  });
+  if (!order || order.storeId !== storeId) throw createHttpError(404, "Order not found");
+  if (!['PROCESSING', 'READY'].includes(order.status)) {
+    throw createHttpError(409, "Only orders that are in the kitchen can be rejected");
+  }
+
+  const active = order.items.filter(i => i.status === 'ACTIVE');
+  const wanted = new Set(Array.isArray(input.itemIds) ? input.itemIds : []);
+  const targets = input.all ? active : active.filter(i => wanted.has(i.id));
+  if (targets.length === 0) throw createHttpError(400, "Choose at least one item to reject");
+
+  const targetIds = targets.map(i => i.id);
+  const remaining = active.filter(i => !wanted.has(i.id) && !input.all);
+  const wholeOrder = remaining.length === 0;
+  const paidPayments = await prisma.payment.findMany({ where: { orderId, status: 'PAID' }, select: { amount: true } });
+  const paidAmount = paidPayments.reduce((s, p) => s + p.amount, 0);
+  const isPaid = Boolean(order.paidAt) || paidAmount > 0;
+  const rejectedAt = new Date();
+  const itemLabels = targets.map(i => `${i.quantity}× ${serializeOrderItem(i).displayName}`);
+
+  let refundDue = order.refundDue || 0;
+
+  if (wholeOrder) {
+    // Normal cancel path: restocks everything, returns store credits, withdraws open QRs
+    await updateOrderStatus(actor, storeId, orderId, 'CANCELLED', true, { reason: `Rejected by kitchen: ${reason}` });
+    // Everything the guest paid comes back (order-level payments, or its share of a paid table bill)
+    refundDue = isPaid ? Math.max(paidAmount, order.paidAt ? order.totalAmount + (order.refundDue || 0) : 0) : 0;
+    await prisma.$transaction([
+      prisma.orderItem.updateMany({
+        where: { id: { in: targetIds } },
+        data: { status: 'REJECTED', rejectReason: reason, rejectedAt, rejectedById: actor.id }
+      }),
+      prisma.order.update({ where: { id: orderId }, data: { cancelledById: actor.id, refundDue } })
+    ]);
+  } else {
+    await revertInventoryDeduction(prisma, orderId, { itemIds: targetIds });
+
+    const store = await prisma.store.findUnique({ where: { id: storeId } });
+    const newSubTotal = remaining.reduce((s, i) => s + i.priceAtOrder * i.quantity, 0);
+    const { totals, promo, taxRules, walletRefund } = recalculateOrderTotals(order, store, newSubTotal);
+    if (isPaid) refundDue += Math.max(0, order.totalAmount - totals.totalAmount);
+
+    await prisma.$transaction([
+      prisma.orderItem.updateMany({
+        where: { id: { in: targetIds } },
+        data: { status: 'REJECTED', rejectReason: reason, rejectedAt, rejectedById: actor.id }
+      }),
+      prisma.order.update({
+        where: { id: orderId },
+        data: {
+          subTotal: totals.subTotal,
+          discountAmount: totals.discountAmount,
+          walletDiscount: totals.walletDiscount,
+          taxAmount: totals.taxAmount,
+          totalAmount: totals.totalAmount,
+          promoCodeId: promo ? promo.id : null,
+          taxRules,
+          refundDue
+        }
+      })
+    ]);
+
+    if (walletRefund > 0 && order.customerId) {
+      const { refundWalletCredits } = require("../loyalty/loyalty-service");
+      await refundWalletCredits(prisma, {
+        customerId: order.customerId,
+        storeId,
+        orderId,
+        amount: walletRefund,
+        description: `Credits returned: kitchen couldn't make items on Order #${orderId.slice(-6).toUpperCase()}`
+      }).catch(err => console.error("[Loyalty Refund Error on Reject]", err.message));
+    }
+
+    // A QR generated for the old amount would overcharge the guest
+    if (!isPaid) {
+      const { cancelPendingPaymentsFor } = require("../payments/payment-service");
+      await cancelPendingPaymentsFor(storeId, { orderId }).catch(() => {});
+      if (order.tableSessionId) await cancelPendingPaymentsFor(storeId, { tableSessionId: order.tableSessionId }).catch(() => {});
+    }
+  }
+
+  // Stop the same dish being ordered again until a manager turns it back on
+  const soldOutIds = input.markSoldOut
+    ? [...new Set(targets.filter(i => !serializeOrderItem(i).customName).map(i => i.menuItemId))]
+    : [];
+  if (soldOutIds.length > 0) {
+    await prisma.menuItem.updateMany({ where: { id: { in: soldOutIds }, storeId }, data: { isManuallyDisabled: true } });
+    invalidateMenuCache(storeId);
+  }
+
+  invalidateTablesCache(storeId);
+  const updatedOrder = await getOrderById(storeId, orderId);
+  const tableNumber = order.table?.tableNumber;
+  const where = tableNumber ? `Table ${tableNumber}` : `Order #${orderId.slice(-6).toUpperCase()}`;
+  const itemsText = itemLabels.join(', ');
+  const event = {
+    orderId,
+    tableNumber: tableNumber ?? null,
+    items: itemLabels,
+    reason,
+    wholeOrder,
+    refundDue,
+    soldOut: soldOutIds.length > 0,
+    order: updatedOrder
+  };
+
+  broadcastToStore(storeId, 'ORDER_ITEMS_REJECTED', event);
+  broadcastToStore(storeId, 'ORDER_UPDATED', updatedOrder);
+  sendNotification({
+    storeId,
+    type: 'KITCHEN_REJECTED',
+    title: wholeOrder ? `${where}: order rejected by kitchen` : `${where}: item rejected by kitchen`,
+    body: `${itemsText} — ${reason}. ${isPaid ? `Refund due ₹${refundDue}.` : wholeOrder ? 'Order cancelled.' : 'Bill updated.'} Please inform the guest.`,
+    data: { orderId, tableNumber, sound: 'notification.mp3', url: '/dashboard/pos/orders' },
+    target: { roles: ['WAITER', 'CASHIER', 'STORE_MANAGER'], storeId }
+  }).catch(() => {});
+
+  if (order.customerId || order.sessionId) {
+    const guestMessage = `Sorry, the kitchen can't prepare ${itemsText} (${reason}). `
+      + (isPaid
+        ? `You'll get ₹${refundDue} back.`
+        : wholeOrder ? 'Your order has been cancelled and you won’t be charged.' : 'Your bill has been updated.')
+      + ' A staff member will help you choose something else.';
+    if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_ITEMS_REJECTED', { ...event, message: guestMessage });
+    if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_ITEMS_REJECTED', { ...event, message: guestMessage });
+    sendNotification({
+      storeId,
+      type: 'KITCHEN_REJECTED',
+      title: 'Update on your order',
+      body: guestMessage,
+      data: { orderId, sound: 'notification.mp3' },
+      target: { customerId: order.customerId, sessionId: order.sessionId }
+    }).catch(() => {});
+  }
+
+  return updatedOrder;
+}
+
+/**
+ * Orders where the kitchen rejected paid items and the guest is owed money.
+ */
+async function getRefundsDue(actor, storeId) {
+  if (!['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(actor.role)) {
+    throw createHttpError(403, "Only cashiers and managers can view refunds due");
+  }
+  await verifyStoreAccess(actor, storeId);
+  const orders = await getPrismaClient().order.findMany({
+    where: { storeId, refundDue: { gt: 0 } },
+    orderBy: { updatedAt: 'desc' },
+    take: 50,
+    include: {
+      table: true,
+      items: { where: { status: 'REJECTED' }, include: { menuItem: true } }
+    }
+  });
+  return orders.map(serializeOrder);
+}
+
+// 3c. KITCHEN TIMING: per-item ready, recall, delay notices
+const RECALL_WINDOW_MS = 5 * 60 * 1000;
+const DELAY_OPTIONS = [5, 10, 15, 20, 30];
+
+function assertKitchenActor(actor) {
+  if (!KITCHEN_REJECT_ROLES.includes(actor.role)) {
+    throw createHttpError(403, "Only kitchen staff and managers can do this");
+  }
+}
+
+async function loadKitchenOrder(prisma, storeId, orderId) {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    include: { table: true, items: { include: { menuItem: true } } }
+  });
+  if (!order || order.storeId !== storeId) throw createHttpError(404, "Order not found");
+  return order;
+}
+
+const orderPlace = (order) => (order.table ? `Table ${order.table.tableNumber}` : `Order #${order.id.slice(-6).toUpperCase()}`);
+
+/**
+ * Kitchen marks one line ready (e.g. starters before mains). When every remaining line
+ * is ready the whole order moves to READY.
+ */
+async function setOrderItemReady(actor, storeId, orderId, itemId, ready = true) {
+  assertKitchenActor(actor);
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+  const order = await loadKitchenOrder(prisma, storeId, orderId);
+  if (order.status !== 'PROCESSING') throw createHttpError(409, "Only orders being cooked can have items marked ready");
+
+  const item = order.items.find(i => i.id === itemId);
+  if (!item || item.status !== 'ACTIVE') throw createHttpError(404, "Item not found on this order");
+
+  await prisma.orderItem.update({ where: { id: itemId }, data: { readyAt: ready ? new Date() : null } });
+
+  const label = `${item.quantity}× ${serializeOrderItem(item).displayName}`;
+  broadcastToStore(storeId, 'ORDER_ITEM_READY', { orderId, itemId, ready, label, tableNumber: order.table?.tableNumber ?? null });
+  if (ready) {
+    sendNotification({
+      storeId,
+      type: 'ITEM_READY',
+      title: `${orderPlace(order)}: ready to serve`,
+      body: `${label} is ready at the pass.`,
+      data: { orderId, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/waiter' },
+      target: { roles: ['WAITER', 'STORE_MANAGER'], storeId }
+    }).catch(() => {});
+  }
+
+  const stillCooking = order.items.filter(i => i.status === 'ACTIVE' && i.id !== itemId && !i.readyAt);
+  if (ready && stillCooking.length === 0) {
+    return updateOrderStatus(actor, storeId, orderId, 'READY');
+  }
+
+  const updated = await getOrderById(storeId, orderId);
+  broadcastToStore(storeId, 'ORDER_UPDATED', updated);
+  return updated;
+}
+
+/**
+ * Undo an accidental "Mark ready" within a few minutes; the ticket goes back on the KDS.
+ */
+async function recallOrder(actor, storeId, orderId) {
+  assertKitchenActor(actor);
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+  const order = await loadKitchenOrder(prisma, storeId, orderId);
+  if (order.status !== 'READY') throw createHttpError(409, "Only orders marked ready can be recalled");
+  if (!order.readyAt || Date.now() - order.readyAt.getTime() > RECALL_WINDOW_MS) {
+    throw createHttpError(409, "Too late to recall — it was marked ready more than 5 minutes ago");
+  }
+
+  await prisma.orderItem.updateMany({ where: { orderId, status: 'ACTIVE' }, data: { readyAt: null } });
+  const updated = await updateOrderStatus(actor, storeId, orderId, 'PROCESSING', true, { silent: true });
+
+  broadcastToStore(storeId, 'ORDER_RECALLED', { orderId, tableNumber: order.table?.tableNumber ?? null });
+  sendNotification({
+    storeId,
+    type: 'ORDER_RECALLED',
+    title: `${orderPlace(order)}: back in the kitchen`,
+    body: `The kitchen recalled Order #${orderId.slice(-6).toUpperCase()} — don't serve it yet.`,
+    data: { orderId, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/waiter' },
+    target: { roles: ['WAITER', 'STORE_MANAGER'], storeId }
+  }).catch(() => {});
+  return updated;
+}
+
+/**
+ * Kitchen tells the waiter and guest the order is running late.
+ */
+async function announceOrderDelay(actor, storeId, orderId, minutes) {
+  assertKitchenActor(actor);
+  await verifyStoreAccess(actor, storeId);
+  const mins = Number(minutes);
+  if (!DELAY_OPTIONS.includes(mins)) throw createHttpError(400, `Delay must be one of ${DELAY_OPTIONS.join(', ')} minutes`);
+
+  const prisma = getPrismaClient();
+  const order = await loadKitchenOrder(prisma, storeId, orderId);
+  if (order.status !== 'PROCESSING') throw createHttpError(409, "Only orders being cooked can be delayed");
+
+  await prisma.order.update({ where: { id: orderId }, data: { delayMinutes: { increment: mins } } });
+  const updated = await getOrderById(storeId, orderId);
+  const event = { orderId, tableNumber: order.table?.tableNumber ?? null, minutes: mins, totalDelay: updated.delayMinutes };
+
+  broadcastToStore(storeId, 'ORDER_DELAYED', event);
+  broadcastToStore(storeId, 'ORDER_UPDATED', updated);
+  sendNotification({
+    storeId,
+    type: 'ORDER_DELAYED',
+    title: `${orderPlace(order)}: running ${mins} min late`,
+    body: `Kitchen needs about ${mins} more minutes for Order #${orderId.slice(-6).toUpperCase()}.`,
+    data: { orderId, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/waiter' },
+    target: { roles: ['WAITER', 'STORE_MANAGER'], storeId }
+  }).catch(() => {});
+
+  if (order.customerId || order.sessionId) {
+    const message = `Your order needs about ${mins} more minutes. Sorry for the wait — it's being freshly prepared!`;
+    if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_DELAYED', { ...event, message, order: updated });
+    if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_DELAYED', { ...event, message, order: updated });
+    sendNotification({
+      storeId,
+      type: 'ORDER_DELAYED',
+      title: 'Your order is running a little late',
+      body: message,
+      data: { orderId, sound: 'notification.mp3' },
+      target: { customerId: order.customerId, sessionId: order.sessionId }
+    }).catch(() => {});
+  }
+  return updated;
+}
+
 // 4. KDS FETCH
 async function getKdsOrders(actor, storeId) {
   await verifyStoreAccess(actor, storeId);
@@ -1176,8 +1506,15 @@ async function getKdsOrders(actor, storeId) {
       table: {
         select: { tableNumber: true }
       },
+      paidAt: true,
+      readyAt: true,
+      delayMinutes: true,
       items: {
         select: {
+          id: true,
+          status: true,
+          rejectReason: true,
+          readyAt: true,
           quantity: true,
           kitchenNotes: true,
           menuItem: { select: { name: true } },
@@ -1299,6 +1636,11 @@ async function getOrderById(storeId, orderId) {
     include: {
       table: true,
       cancelledBy: { select: { name: true } },
+      refunds: {
+        where: { status: { in: ['PENDING', 'PROCESSED'] } },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, method: true, status: true, amount: true, createdAt: true }
+      },
       payments: {
         where: { status: 'PAID' },
         orderBy: { paidAt: 'asc' },
@@ -1373,6 +1715,7 @@ async function getTableSessionBill(storeId, tableSessionId, { includePin = false
     grandTotal += order.totalAmount;
 
     for (const rawItem of order.items) {
+      if (rawItem.status === 'REJECTED') continue;
       const item = serializeOrderItem(rawItem);
       const modifierNames = item.modifiers.map(m => m.modifierOption?.name).filter(Boolean);
       const key = `${item.menuItemId}_${item.priceAtOrder}_${item.displayName}_${modifierNames.join(',')}`;
@@ -1583,5 +1926,10 @@ module.exports = {
   getTableSessionStatus,
   joinTableSession,
   getActiveTableSession,
+  rejectOrderItems,
+  getRefundsDue,
+  setOrderItemReady,
+  recallOrder,
+  announceOrderDelay,
   serializeOrder
 };

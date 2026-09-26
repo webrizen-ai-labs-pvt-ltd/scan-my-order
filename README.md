@@ -172,6 +172,13 @@ The backend will be available at `http://localhost:8000` (or whatever `PORT` is 
 | `GET`    | `/api/stores/:storeId/payments/:id` | Bearer | Payment status (re-checks Razorpay while pending) |
 | `POST`   | `/api/stores/:storeId/payments/:id/confirm` | Bearer | Staff confirms own-UPI money received |
 | `POST`   | `/api/stores/:storeId/payments/:id/cancel` | Bearer | Withdraw a pending QR |
+| `POST`   | `/api/stores/:storeId/orders/:id/reject` | Bearer | Kitchen can't make items (`itemIds` or `all`, `reason`, `markSoldOut`); re-prices unpaid orders, sets `refundDue` on paid ones, notifies staff and guest |
+| `GET`    | `/api/stores/:storeId/orders/refunds-due` | Bearer | Orders where the guest is owed money |
+| `POST`   | `/api/stores/:storeId/orders/:id/items/:itemId/ready` | Bearer | Kitchen marks one line ready (`{ ready }`); order becomes READY when all lines are |
+| `POST`   | `/api/stores/:storeId/orders/:id/recall` | Bearer | Undo "Mark ready" within 5 minutes |
+| `POST`   | `/api/stores/:storeId/orders/:id/delay` | Bearer | Announce a delay to waiter and guest (`minutes`: 5, 10, 15, 20 or 30) |
+| `GET`    | `/api/stores/:storeId/orders/:id/refunds` | Bearer | Amount owed, refundable Razorpay payments, refund history |
+| `POST`   | `/api/stores/:storeId/orders/:id/refunds` | Bearer | Refund via `RAZORPAY` (managers; through the tenant's Razorpay) or record `CASH` / `UPI_OFFLINE` |
 | `POST`   | `/api/public/stores/:storeId/orders`  | —        | Create QR Menu Cart / Order      |
 | `GET`    | `/api/stores/:storeId/orders/stream`  | Bearer   | SSE Real-time order events       |
 | `GET`    | `/api/stores/:storeId/kds/orders`     | Bearer   | Kitchen processing queue         |

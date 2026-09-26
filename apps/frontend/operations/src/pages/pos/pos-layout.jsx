@@ -17,6 +17,7 @@ import { usePosCartStore } from '../../store/pos-cart-store';
 import { usePosStoreData } from '../../hooks/use-pos-store-data';
 import { useStoreStream } from '../../hooks/use-store-stream';
 import { PosToasts, usePosToasts } from '../../components/pos/pos-toasts';
+import { playNotificationChime } from '@smo/shared/audio';
 
 const Spinner = ({ size = 14, className = '' }) => (
   <Loading03Icon size={size} className={`animate-spin ${className}`} />
@@ -109,6 +110,24 @@ export const PosLayout = () => {
     const unsubscribe = subscribe((msg) => { if (msg.type?.startsWith('ORDER_')) fetchStats(); });
     return () => { cancelled = true; clearInterval(interval); unsubscribe(); };
   }, [selectedStoreId, subscribe]);
+
+  /* Kitchen couldn't make something: front-of-house must tell the guest */
+  useEffect(() => subscribe((msg) => {
+    if (msg.type !== 'ORDER_ITEMS_REJECTED') return;
+    const e = msg.data || {};
+    const where = e.tableNumber ? `Table ${e.tableNumber}` : `Order #${String(e.orderId || '').slice(-6).toUpperCase()}`;
+    const money = e.refundDue > 0 ? ` Refund due ₹${e.refundDue}.` : e.wholeOrder ? ' Order cancelled.' : ' Bill updated.';
+    playNotificationChime({ haptic: true }).catch(() => {});
+    toast(`Kitchen: ${where} — ${(e.items || []).join(', ')} not available (${e.reason}).${money} Please inform the guest.`, 'error');
+  }), [subscribe, toast]);
+
+  /* Kitchen timing notices */
+  useEffect(() => subscribe((msg) => {
+    const e = msg.data || {};
+    const where = e.tableNumber ? `Table ${e.tableNumber}` : `Order #${String(e.orderId || '').slice(-6).toUpperCase()}`;
+    if (msg.type === 'ORDER_RECALLED') toast(`Kitchen recalled ${where} — don't serve it yet`, 'error');
+    if (msg.type === 'ORDER_DELAYED') toast(`${where}: kitchen running ${e.minutes} min late (guest notified)`, 'info');
+  }), [subscribe, toast]);
 
   /* Keep table occupancy live for every child page */
   const { refreshTables } = data;

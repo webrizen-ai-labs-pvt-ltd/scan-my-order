@@ -12,9 +12,15 @@ const {
   getOrderById,
   getOrderHistory,
   getTableSessionBill,
-  getActiveTableSession
+  getActiveTableSession,
+  rejectOrderItems,
+  getRefundsDue,
+  setOrderItemReady,
+  recallOrder,
+  announceOrderDelay
 } = require("./order-service");
 const { verifyStoreAccess } = require("../menu/menu-service");
+const { getRefundOptions, createRefund } = require("../payments/refund-service");
 const { subscribeToStore } = require("./sse-service");
 
 const router = express.Router({ mergeParams: true });
@@ -56,6 +62,12 @@ router.get("/history", asyncHandler(async (req, res) => {
   res.json(createApiResponse(result));
 }));
 
+// GET /api/stores/:storeId/orders/refunds-due  (kitchen rejected items on paid orders)
+router.get("/refunds-due", asyncHandler(async (req, res) => {
+  const result = await getRefundsDue(req.user, req.params.storeId);
+  res.json(createApiResponse(result));
+}));
+
 // GET /api/stores/:storeId/orders/kds
 router.get("/kds", asyncHandler(async (req, res) => {
   const result = await getKdsOrders(req.user, req.params.storeId);
@@ -80,6 +92,43 @@ router.patch("/:id/status", asyncHandler(async (req, res) => {
     reason: req.body.reason
   });
   res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/:id/reject  { itemIds? | all, reason, markSoldOut? }
+router.post("/:id/reject", asyncHandler(async (req, res) => {
+  const result = await rejectOrderItems(req.user, req.params.storeId, req.params.id, req.body || {});
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/:id/items/:itemId/ready  { ready: boolean }  (kitchen, per line)
+router.post("/:id/items/:itemId/ready", asyncHandler(async (req, res) => {
+  const ready = req.body?.ready !== false;
+  const result = await setOrderItemReady(req.user, req.params.storeId, req.params.id, req.params.itemId, ready);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/:id/recall  (undo "Mark ready" within 5 minutes)
+router.post("/:id/recall", asyncHandler(async (req, res) => {
+  const result = await recallOrder(req.user, req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/:id/delay  { minutes: 5|10|15|20|30 }
+router.post("/:id/delay", asyncHandler(async (req, res) => {
+  const result = await announceOrderDelay(req.user, req.params.storeId, req.params.id, req.body?.minutes);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/orders/:id/refunds  (amount owed, refundable Razorpay payments, history)
+router.get("/:id/refunds", asyncHandler(async (req, res) => {
+  const result = await getRefundOptions(req.user, req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/:id/refunds  { amount, method: RAZORPAY|CASH|UPI_OFFLINE, paymentId?, note? }
+router.post("/:id/refunds", asyncHandler(async (req, res) => {
+  const result = await createRefund(req.user, req.params.storeId, req.params.id, req.body || {});
+  res.status(201).json(createApiResponse(result));
 }));
 
 // PUT /api/stores/:storeId/orders/:id/items (Manager Update Order Items)

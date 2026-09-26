@@ -337,6 +337,9 @@ exports.Prisma.OrderScalarFieldEnum = {
   promoCodeId: 'promoCodeId',
   totalAmount: 'totalAmount',
   taxRules: 'taxRules',
+  refundDue: 'refundDue',
+  readyAt: 'readyAt',
+  delayMinutes: 'delayMinutes',
   cancelReason: 'cancelReason',
   cancelledAt: 'cancelledAt',
   cancelledById: 'cancelledById',
@@ -368,13 +371,35 @@ exports.Prisma.PaymentScalarFieldEnum = {
   updatedAt: 'updatedAt'
 };
 
+exports.Prisma.RefundScalarFieldEnum = {
+  id: 'id',
+  storeId: 'storeId',
+  orderId: 'orderId',
+  paymentId: 'paymentId',
+  method: 'method',
+  status: 'status',
+  amount: 'amount',
+  reason: 'reason',
+  providerRefundId: 'providerRefundId',
+  failureReason: 'failureReason',
+  processedById: 'processedById',
+  processedAt: 'processedAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
 exports.Prisma.OrderItemScalarFieldEnum = {
   id: 'id',
   orderId: 'orderId',
   menuItemId: 'menuItemId',
   quantity: 'quantity',
   kitchenNotes: 'kitchenNotes',
-  priceAtOrder: 'priceAtOrder'
+  priceAtOrder: 'priceAtOrder',
+  status: 'status',
+  readyAt: 'readyAt',
+  rejectReason: 'rejectReason',
+  rejectedAt: 'rejectedAt',
+  rejectedById: 'rejectedById'
 };
 
 exports.Prisma.OrderItemModifierScalarFieldEnum = {
@@ -639,6 +664,17 @@ exports.PaymentStatus = exports.$Enums.PaymentStatus = {
   EXPIRED: 'EXPIRED'
 };
 
+exports.RefundStatus = exports.$Enums.RefundStatus = {
+  PENDING: 'PENDING',
+  PROCESSED: 'PROCESSED',
+  FAILED: 'FAILED'
+};
+
+exports.OrderItemStatus = exports.$Enums.OrderItemStatus = {
+  ACTIVE: 'ACTIVE',
+  REJECTED: 'REJECTED'
+};
+
 exports.WaiterCallType = exports.$Enums.WaiterCallType = {
   WATER: 'WATER',
   BILL: 'BILL',
@@ -693,6 +729,7 @@ exports.Prisma.ModelName = {
   PromoCode: 'PromoCode',
   Order: 'Order',
   Payment: 'Payment',
+  Refund: 'Refund',
   OrderItem: 'OrderItem',
   OrderItemModifier: 'OrderItemModifier',
   WaiterCall: 'WaiterCall',

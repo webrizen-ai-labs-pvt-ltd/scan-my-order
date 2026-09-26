@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { CancelOrderDialog } from '../components/pos/cancel-order-dialog';
+import { RefundDialog } from '../components/pos/refund-dialog';
 import { useAuthStore } from '../store/authStore';
 import { 
   Card, CardContent, CardHeader, CardTitle, 
@@ -20,6 +21,7 @@ export const Orders = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [cancellingOrder, setCancellingOrder] = useState(null);
+  const [refundingOrderId, setRefundingOrderId] = useState(null);
   const isManager = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role);
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState(user?.store?.id || null);
@@ -457,6 +459,15 @@ export const Orders = () => {
                   </Badge>
                 </div>
 
+                {selectedOrder.refundDue > 0 && (
+                  <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30 px-3 py-2 text-xs text-rose-800 dark:text-rose-300 flex items-center justify-between gap-2">
+                    <span><span className="font-bold">Refund due:</span> ₹{selectedOrder.refundDue} (kitchen couldn’t make paid items)</span>
+                    <button type="button" onClick={() => setRefundingOrderId(selectedOrder.id)} className="h-7 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold shrink-0">
+                      Refund
+                    </button>
+                  </div>
+                )}
+
                 {selectedOrder.status === 'CANCELLED' && selectedOrder.cancelReason && (
                   <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
                     <span className="font-bold">Cancelled:</span> {selectedOrder.cancelReason}
@@ -593,6 +604,17 @@ export const Orders = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <RefundDialog
+        storeId={selectedStoreId}
+        orderId={refundingOrderId}
+        onClose={() => setRefundingOrderId(null)}
+        onChanged={(result) => {
+          const id = refundingOrderId;
+          setOrders(prev => prev.map(o => (o.id === id ? { ...o, refundDue: result.refundDue } : o)));
+          if (selectedOrder?.id === id) setSelectedOrder(prev => ({ ...prev, refundDue: result.refundDue }));
+        }}
+      />
 
       <CancelOrderDialog
         storeId={selectedStoreId}

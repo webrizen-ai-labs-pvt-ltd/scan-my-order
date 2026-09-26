@@ -59,7 +59,8 @@ export const PosOrderEditPage = () => {
         setOrder(fetched);
         // Keep an existing draft (e.g. returning from the custom-dish page)
         if (!useOrderEditDraftStore.getState().drafts[orderId]) {
-          setDraft(orderId, (fetched.items || []).map(draftLineFromOrderItem));
+          // Kitchen-rejected lines are history, not editable items
+          setDraft(orderId, (fetched.items || []).filter(i => i.status !== 'REJECTED').map(draftLineFromOrderItem));
         }
       })
       .catch(err => { if (!cancelled) setLoadError(apiErrorMessage(err, 'Could not load this order')); });

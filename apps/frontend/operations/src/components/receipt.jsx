@@ -40,7 +40,7 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           <span className="w-10 text-center">Qty</span>
           <span className="w-16 text-right">Amt</span>
         </div>
-        {order.items.map((item, idx) => {
+        {order.items.filter(item => item.status !== 'REJECTED').map((item, idx) => {
            // priceAtOrder already includes modifiers and priced ingredients
            const itemTotal = item.priceAtOrder;
            return (
@@ -150,6 +150,24 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           <span className="font-semibold">Online / UPI (₹{(order.onlineAmount || order.totalAmount).toFixed(2)})</span>
         </div>
       ) : null}
+
+      {order.refunds?.length > 0 && (
+        <div className="border-b border-dashed border-black pb-2 mb-2 text-xs">
+          <div className="font-bold mb-1 uppercase tracking-wider">Refunded</div>
+          {order.refunds.map((r) => (
+            <div key={r.id} className="flex justify-between">
+              <span>{r.method === 'CASH' ? 'Cash' : r.method === 'UPI_OFFLINE' ? 'UPI' : 'Online (UPI/Card)'}{r.status === 'PENDING' ? ' (in progress)' : ''}</span>
+              <span>-₹{r.amount.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {order.refundDue > 0 && (
+        <div className="flex justify-between text-xs mb-2 pb-2 border-b border-dashed border-black">
+          <span>Refund due (items not served):</span>
+          <span className="font-semibold">₹{order.refundDue.toFixed(2)}</span>
+        </div>
+      )}
 
       <div className="text-center">
         <p>Thank you for visiting!</p>

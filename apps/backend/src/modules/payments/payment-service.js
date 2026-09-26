@@ -668,6 +668,10 @@ async function handleRazorpayWebhook(tenantId, rawBody, signature) {
   }
 
   const payload = JSON.parse(rawBody);
+  if (String(payload.event || '').startsWith('refund.')) {
+    const { handleRefundWebhook } = require("./refund-service");
+    return handleRefundWebhook(tenantId, payload);
+  }
   const { providerRef, providerPaymentId } = extractWebhookRefs(payload);
   if (!providerRef) return { handled: false, event: payload.event };
 
@@ -698,6 +702,8 @@ async function reconcilePendingPayments() {
     take: 50
   });
   for (const p of pending) await refreshPayment(p, { force: true });
+  const { reconcilePendingRefunds } = require("./refund-service");
+  await reconcilePendingRefunds();
   return pending.length;
 }
 

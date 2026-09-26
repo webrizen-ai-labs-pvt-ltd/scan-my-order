@@ -100,14 +100,14 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
   const applyPromo = () => {
     const promo = promos.find(p => p.code === promoCodeInput.toUpperCase() && p.isActive);
     if (!promo) {
-       alert("Invalid or inactive promo code.");
-       setAppliedPromo(null);
-       return;
+      alert("Invalid or inactive promo code.");
+      setAppliedPromo(null);
+      return;
     }
     if (computeCartSubTotal(cart) < promo.minOrderValue) {
-       alert(`Minimum order value for this promo is ₹${promo.minOrderValue}`);
-       setAppliedPromo(null);
-       return;
+      alert(`Minimum order value for this promo is ₹${promo.minOrderValue}`);
+      setAppliedPromo(null);
+      return;
     }
     setAppliedPromo(promo);
   };
@@ -264,18 +264,17 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
 
   return (
     <div className="flex flex-col h-full relative overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-      
+
       {/* 1. Horizontal Categories Bar */}
       <div className="shrink-0 flex overflow-x-auto p-2 gap-2 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 no-scrollbar">
         {menu.map(cat => (
           <button
             key={cat.id}
             onClick={() => setSelectedCategoryId(cat.id)}
-            className={`whitespace-nowrap px-3 py-1.5 rounded-full font-medium text-xs transition-all duration-200 shadow-sm border flex items-center ${
-              selectedCategoryId === cat.id
-                ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100'
-                : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-700'
-            }`}
+            className={`whitespace-nowrap px-3 py-1.5 rounded-full font-medium text-xs transition-all duration-200 shadow-sm border flex items-center ${selectedCategoryId === cat.id
+              ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100'
+              : 'bg-white text-zinc-600 border-zinc-200 hover:bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300 dark:border-zinc-700 dark:hover:bg-zinc-700'
+              }`}
           >
             {cat.icon && <span className="mr-1.5 opacity-70 scale-75">{cat.icon}</span>}
             {cat.name}
@@ -289,7 +288,7 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
         <h3 className="font-semibold text-base mb-3 text-zinc-900 dark:text-zinc-100">
           {menu.find(c => c.id === selectedCategoryId)?.name || 'Items'}
         </h3>
-        
+
         <div className="flex flex-col gap-2">
           {selectedCategoryItems.map(item => {
             const isDisabled = item.isManuallyDisabled || item.isSystemDisabled;
@@ -322,7 +321,7 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
                   {isDisabled && <div className="text-[10px] text-red-500 font-medium mt-0.5">Out of Stock</div>}
                   {!isDisabled && item.modifierGroups?.length > 0 && <div className="text-[10px] text-zinc-500 mt-0.5">Customizable</div>}
                 </div>
-                
+
                 {!isDisabled && (
                   <div className="shrink-0 ml-3">
                     {cartItemCount > 0 ? (
@@ -345,7 +344,7 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
       {/* 3. Sticky Bottom Bar for Cart */}
       {totalCartItems > 0 && !isCartOpen && (
         <div className="absolute bottom-3 left-3 right-3 z-10 animate-in slide-in-from-bottom-5">
-          <Button 
+          <Button
             className="w-full h-12 bg-yellow-600 hover:bg-yellow-700 text-white shadow-xl flex justify-between items-center px-4 text-sm font-bold"
             onClick={() => setIsCartOpen(true)}
           >
@@ -363,7 +362,7 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
         <div className="absolute inset-0 z-40 bg-white dark:bg-zinc-950 flex flex-col animate-in slide-in-from-bottom-full duration-300">
           <div className="shrink-0 p-3 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900">
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={() => setIsCartOpen(false)}
                 className="p-1 -ml-1 rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800 transition-colors"
               >
@@ -394,71 +393,75 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
             </div>
 
             {orderType === 'DINE_IN' && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                  <span className="flex items-center gap-1.5">
-                    <DiningTableIcon size={14} className="text-zinc-400" />
-                    Select Table:
-                  </span>
-                  <div className="flex items-center gap-1.5 text-[9px] font-medium text-zinc-500">
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                      Free
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                      Occupied
-                    </span>
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
-                      Reserved
-                    </span>
-                  </div>
-                </div>
+              <div className="space-y-1.5">
+                <Select value={selectedTableId || undefined} onValueChange={setSelectedTableId}>
+                  <SelectTrigger
+                    aria-label="Table"
+                    className={`h-10 w-full text-sm font-semibold bg-white dark:bg-zinc-900 ${!selectedTableId ? 'border-amber-400' : ''
+                      }`}
+                  >
+                    <DiningTableIcon size={16} className="text-zinc-400 shrink-0" />
+                    <SelectValue placeholder="Select table" />
+                  </SelectTrigger>
 
-                {/* Mobile-Friendly Table Selection Grid */}
-                <div className="grid grid-cols-3 gap-2 max-h-40 overflow-y-auto p-1 bg-zinc-100/60 dark:bg-zinc-900/60 rounded-xl border border-zinc-200 dark:border-zinc-800 scrollbar-thin">
-                  {tables.length === 0 ? (
-                    <div className="col-span-3 text-center py-2 text-xs text-zinc-400">No tables configured</div>
-                  ) : (
-                    tables.map(t => {
-                      const isReserved = t.status === 'RESERVED' || Boolean(t.activeReservation);
-                      const isOccupied = Boolean(t.isOccupied || t.currentOrder);
-                      const isSelected = selectedTableId === t.id;
-                      // Staff can add to occupied tables without the guest PIN
-                      const isDisabled = false;
+                  <SelectContent className="max-h-72">
+                    {tables.length === 0 ? (
+                      <div className="px-3 py-2 text-xs text-zinc-400">No tables configured</div>
+                    ) : (
+                      tables.map((t) => {
+                        const isReserved = t.status === 'RESERVED' || Boolean(t.activeReservation);
+                        const isOccupied = Boolean(t.isOccupied || t.currentOrder);
 
-                      return (
-                        <button
-                          key={t.id}
-                          type="button"
-                          disabled={isDisabled}
-                          onClick={() => setSelectedTableId(t.id)}
-                          className={`p-2 rounded-lg border text-xs flex flex-col items-center justify-center gap-1 transition-all ${
-                            isDisabled
-                              ? 'opacity-40 cursor-not-allowed bg-zinc-200/50 dark:bg-zinc-800/40 border-dashed border-zinc-300 dark:border-zinc-700 text-zinc-400'
-                              : isSelected
-                              ? 'bg-primary/10 border-primary text-primary font-bold shadow-sm ring-2 ring-primary ring-offset-1 dark:ring-offset-zinc-900'
-                              : 'bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 hover:border-zinc-300'
-                          }`}
-                        >
-                          <span className="font-bold text-xs">Table {t.tableNumber}</span>
-                          <span className="text-[9px] text-zinc-400">({t.capacity || 4}p)</span>
-                          {isOccupied ? (
-                            <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                              {t.activePin ? `PIN ${t.activePin}` : 'Occupied'}
-                            </span>
-                          ) : isReserved ? (
-                            <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-pink-500/10 text-pink-600 dark:text-pink-400 border border-pink-500/20">
-                              Reserved
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.2 rounded text-[8px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                              Free
-                            </span>
-                          )}
-                        </button>
-                      );
-                    })
-                  )}
-                </div>
+                        let badge;
+                        if (isOccupied) {
+                          badge = {
+                            label: t.activePin ? `Occupied · PIN ${t.activePin}` : 'Occupied',
+                            tone: 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20',
+                          };
+                        } else if (isReserved) {
+                          badge = {
+                            label: 'Reserved',
+                            tone: 'bg-pink-500/10 text-pink-600 dark:text-pink-400 border-pink-500/20',
+                          };
+                        } else {
+                          badge = {
+                            label: 'Free',
+                            tone: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20',
+                          };
+                        }
+
+                        return (
+                          <SelectItem key={t.id} value={t.id} className="text-sm py-2">
+                            <div className="flex items-center justify-between w-full gap-2 min-w-0">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <span className="font-bold truncate">Table {t.tableNumber}</span>
+                                <span className="text-[10px] text-zinc-400 shrink-0">
+                                  ({t.capacity || 4}p)
+                                </span>
+                              </div>
+                              <span className={`px-1.5 rounded text-[10px] font-bold border shrink-0 ${badge.tone}`}>
+                                {badge.label}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        );
+                      })
+                    )}
+                  </SelectContent>
+                </Select>
+
+                {(() => {
+                  // Staff can add to occupied tables without the guest PIN; say where the items will go
+                  const t = tables.find((x) => x.id === selectedTableId);
+                  if (!t || !(t.isOccupied || t.currentOrder)) return null;
+
+                  return (
+                    <p className="text-[11px] text-blue-700 dark:text-blue-300">
+                      Adding to Table {t.tableNumber}'s open bill
+                      {t.unpaidTotal > 0 ? ` (₹${t.unpaidTotal} so far)` : ''} — no PIN needed.
+                    </p>
+                  );
+                })()}
               </div>
             )}
           </div>
@@ -499,9 +502,9 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
           {/* Promo Input */}
           <div className="px-3 py-2 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
             <div className="flex gap-2">
-              <input 
-                type="text" 
-                placeholder="Promo Code" 
+              <input
+                type="text"
+                placeholder="Promo Code"
                 className="flex-1 px-3 py-2 text-sm border border-zinc-300 rounded-lg dark:bg-zinc-950 dark:border-zinc-700 focus:outline-none"
                 value={promoCodeInput}
                 onChange={e => setPromoCodeInput(e.target.value)}
@@ -601,15 +604,14 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
                       <div>
                         <div className="font-bold text-sm text-zinc-900 dark:text-zinc-100">{group.name}</div>
                         <div className="text-[10px] text-zinc-500">
-                          {group.isRequired ? `Required (Min ${group.minSelections})` : 'Optional'} 
+                          {group.isRequired ? `Required (Min ${group.minSelections})` : 'Optional'}
                           {group.maxSelections > 1 ? ` • Up to ${group.maxSelections}` : ''}
                         </div>
                       </div>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        group.isRequired && selectedCount < group.minSelections 
-                          ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' 
-                          : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${group.isRequired && selectedCount < group.minSelections
+                        ? 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400'
+                        : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                        }`}>
                         {selectedCount}/{group.maxSelections}
                       </span>
                     </div>
@@ -654,34 +656,34 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
       {receiptOrder && (
         <div className="absolute inset-0 z-50 bg-black/60 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
           <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden flex flex-col items-center p-6 text-center">
-             <div className="size-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
-                <Tick02Icon size={24} />
-             </div>
-             <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-1">Order Successful!</h2>
-             <p className="text-sm text-zinc-500 mb-6">
-               Order #{receiptOrder.id.slice(-6).toUpperCase()} {receiptOrder.paidAt || receiptOrder.status === 'SETTLED' ? 'paid and sent to kitchen.' : 'sent to kitchen. Bill can be collected later.'}
-             </p>
-             
-             {/* Hidden Printable Receipt */}
-             <div style={{ display: 'none' }}>
-               <div ref={receiptRef}>
-                 {receiptOrder && storeData && (
-                   <Receipt order={receiptOrder} storeData={storeData} />
-                 )}
-               </div>
-             </div>
+            <div className="size-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-3">
+              <Tick02Icon size={24} />
+            </div>
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-white mb-1">Order Successful!</h2>
+            <p className="text-sm text-zinc-500 mb-6">
+              Order #{receiptOrder.id.slice(-6).toUpperCase()} {receiptOrder.paidAt || receiptOrder.status === 'SETTLED' ? 'paid and sent to kitchen.' : 'sent to kitchen. Bill can be collected later.'}
+            </p>
 
-             <div className="w-full flex flex-col gap-2">
-                <Button onClick={handlePrint} className="w-full h-11 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-bold rounded-lg shadow flex items-center justify-center gap-1.5">
-                  <PrinterIcon size={16} /> Print Receipt
-                </Button>
-                 <Button variant="outline" className="w-full h-11 text-sm font-bold rounded-lg border-zinc-300 dark:border-zinc-700" onClick={() => setReceiptOrder(null)}>
-                   Done
-                 </Button>
+            {/* Hidden Printable Receipt */}
+            <div style={{ display: 'none' }}>
+              <div ref={receiptRef}>
+                {receiptOrder && storeData && (
+                  <Receipt order={receiptOrder} storeData={storeData} />
+                )}
               </div>
-           </div>
-         </div>
-       )}
+            </div>
+
+            <div className="w-full flex flex-col gap-2">
+              <Button onClick={handlePrint} className="w-full h-11 bg-yellow-600 hover:bg-yellow-700 text-white text-sm font-bold rounded-lg shadow flex items-center justify-center gap-1.5">
+                <PrinterIcon size={16} /> Print Receipt
+              </Button>
+              <Button variant="outline" className="w-full h-11 text-sm font-bold rounded-lg border-zinc-300 dark:border-zinc-700" onClick={() => setReceiptOrder(null)}>
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── PAYMENT (online QR / own UPI / cash, split allowed) ─── */}
       <PaymentCollectorSheet

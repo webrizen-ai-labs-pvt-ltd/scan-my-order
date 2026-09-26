@@ -74,6 +74,29 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId }) => {
             id: Date.now()
           });
           setTimeout(() => setToastNotification(null), 5000);
+        } else if (data.type === 'ORDER_DELAYED') {
+          playNotificationChime({ haptic: true });
+          setToastNotification({
+            title: 'Your order is running a little late',
+            body: data.data?.message || 'Your order needs a few more minutes.',
+            id: Date.now()
+          });
+          setTimeout(() => setToastNotification(null), 10000);
+          const updated = data.data?.order;
+          if (updated?.id) setOrders(prev => prev.map(o => (o.id === updated.id ? updated : o)));
+        } else if (data.type === 'ORDER_ITEMS_REJECTED') {
+          // Kitchen couldn't make something: tell the guest why and what happens next
+          playNotificationChime({ haptic: true });
+          setToastNotification({
+            title: 'Update on your order',
+            body: data.data?.message || 'The kitchen could not prepare part of your order. A staff member will help you.',
+            id: Date.now()
+          });
+          setTimeout(() => setToastNotification(null), 12000);
+          const updated = data.data?.order;
+          if (updated?.id) {
+            setOrders(prev => prev.map(o => (o.id === updated.id ? updated : o)));
+          }
         } else if (data.type.startsWith('ORDER_')) {
           playNotificationChime({ haptic: true });
           const status = data.data?.status;

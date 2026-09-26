@@ -109,7 +109,7 @@ enum PaymentMethod {
 
 // How a single tender line was collected
 enum PaymentChannel {
-  RAZORPAY_UPI // Razorpay dynamic QR / payment link, verified with the gateway
+  RAZORPAY // Razorpay QR code, payment link or checkout; verified with the gateway
   UPI_OFFLINE // Store's own UPI ID, confirmed manually by staff
   CASH
 }
@@ -131,6 +131,11 @@ enum OrderStatus {
   SERVED
   SETTLED
   CANCELLED
+}
+
+enum OrderItemStatus {
+  ACTIVE
+  REJECTED // Kitchen couldn't make it; excluded from the bill and inventory
 }
 
 enum WaiterCallType {
@@ -211,31 +216,33 @@ model Store {
 }
 
 model User {
-  id                String                @id @default(cuid())
-  tenantId          String?
-  tenant            Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  storeId           String?
-  store             Store?                @relation(fields: [storeId], references: [id], onDelete: SetNull)
-  email             String
-  name              String?
-  phone             String?
-  profilePhoto      String?
-  passwordHash      String?
-  currentChallenge  String?
-  role              UserRole
-  status            UserStatus            @default(ACTIVE)
-  lastLoginAt       DateTime?
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  passkeys          Passkey[]
-  staffOrders       Order[]               @relation("StaffOrders")
-  customerOrders    Order[]               @relation("CustomerOrders")
-  customerWallets   CustomerStoreWallet[] @relation("CustomerWallets")
-  resolvedCalls     WaiterCall[]
-  reservations      TableReservation[]
-  pushSubscriptions PushSubscription[]
-  notifications     Notification[]
-  collectedPayments Payment[]             @relation("CollectedPayments")
+  id                 String                @id @default(cuid())
+  tenantId           String?
+  tenant             Tenant?               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  storeId            String?
+  store              Store?                @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  email              String
+  name               String?
+  phone              String?
+  profilePhoto       String?
+  passwordHash       String?
+  currentChallenge   String?
+  role               UserRole
+  status             UserStatus            @default(ACTIVE)
+  lastLoginAt        DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+  passkeys           Passkey[]
+  staffOrders        Order[]               @relation("StaffOrders")
+  customerOrders     Order[]               @relation("CustomerOrders")
+  customerWallets    CustomerStoreWallet[] @relation("CustomerWallets")
+  resolvedCalls      WaiterCall[]
+  reservations       TableReservation[]
+  pushSubscriptions  PushSubscription[]
+  notifications      Notification[]
+  collectedPayments  Payment[]             @relation("CollectedPayments")
+  cancelledOrders    Order[]               @relation("CancelledOrders")
+  rejectedOrderItems OrderItem[]           @relation("RejectedOrderItems")
 
   @@unique([tenantId, email])
   @@index([role])
@@ -479,6 +486,8 @@ model Order {
   paymentMethod PaymentMethod?
   cashAmount    Int            @default(0)
   onlineAmount  Int            @default(0)
+  // Set once payments cover the bill; a paid order auto-settles when served
+  paidAt        DateTime?
   status        OrderStatus    @default(DRAFT)
 
   subTotal       Int        @default(0)
@@ -488,6 +497,17 @@ model Order {
   promoCodeId    String?
   promoCode      PromoCode? @relation(fields: [promoCodeId], references: [id])
   totalAmount    Int        @default(0)
+  // Tax rules in force when the order was placed; edits keep using these rates
+  taxRules       Json?
+
+  // Money owed back to the guest after the kitchen rejected paid items (cleared by refunds)
+  refundDue Int @default(0)
+
+  // Set when staff cancel the order (reason is mandatory)
+  cancelReason  String?
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancelledBy   User?     @relation("CancelledOrders", fields: [cancelledById], references: [id], onDelete: SetNull)
 
   paymentLinkId  String?
   paymentLinkUrl String?
@@ -522,9 +542,9 @@ model Payment {
   status  PaymentStatus  @default(PENDING)
   amount  Int
 
-  // Gateway tracking (RAZORPAY_UPI only)
-  providerKind      String? // 'QR_CODE' | 'PAYMENT_LINK'
-  providerRef       String? @unique // Razorpay qr_code / payment_link id
+  // Gateway tracking (RAZORPAY only)
+  providerKind      String? // 'QR_CODE' | 'PAYMENT_LINK' | 'ORDER'
+  providerRef       String? @unique // Razorpay qr_code / payment_link / order id
   providerPaymentId String? @unique // Razorpay pay_xxx once captured
   qrImageUrl        String? // Hosted QR image (Razorpay QR codes)
   qrPayload         String? // String to encode as QR (upi:// intent or link URL)
@@ -557,6 +577,12 @@ model OrderItem {
   quantity     Int     @default(1)
   kitchenNotes String?
   priceAtOrder Int
+
+  status       OrderItemStatus @default(ACTIVE)
+  rejectReason String?
+  rejectedAt   DateTime?
+  rejectedById String?
+  rejectedBy   User?           @relation("RejectedOrderItems", fields: [rejectedById], references: [id], onDelete: SetNull)
 
   modifiers OrderItemModifier[]
 

@@ -13,7 +13,15 @@ import { CancelOrderDialog } from '../../components/pos/cancel-order-dialog';
 
 const BillLines = ({ items }) => (
   <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
-    {items.map((item, idx) => (
+    {items.map((item, idx) => item.status === 'REJECTED' ? (
+      <div key={item.id || idx} className="py-2 flex justify-between gap-3 text-sm text-zinc-400">
+        <div className="min-w-0">
+          <span className="line-through"><span className="font-semibold mr-2">{item.quantity}×</span>{item.displayName || item.customName || item.menuItem?.name}</span>
+          <div className="text-[11px] font-semibold text-rose-600 pl-7">Not made — {item.rejectReason}</div>
+        </div>
+        <span className="line-through tabular-nums shrink-0">₹{item.priceAtOrder * item.quantity}</span>
+      </div>
+    ) : (
       <div key={item.id || idx} className="py-2 flex justify-between gap-3 text-sm">
         <div className="min-w-0">
           <span className="font-semibold text-zinc-500 tabular-nums mr-2">{item.quantity}×</span>
