@@ -687,7 +687,7 @@ const config = {
       "value": "prisma-client-js"
     },
     "output": {
-      "value": "C:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\src\\generated\\prisma_v2",
+      "value": "C:\\Users\\Mritunjay Kumar\\Desktop\\scan-my-order\\apps\\backend\\src\\generated\\prisma_v2",
       "fromEnvVar": null
     },
     "config": {
@@ -701,7 +701,7 @@ const config = {
       }
     ],
     "previewFeatures": [],
-    "sourceFilePath": "C:\\Users\\nextj\\OneDrive\\Documents\\scan-my-order\\apps\\backend\\prisma\\schema.prisma",
+    "sourceFilePath": "C:\\Users\\Mritunjay Kumar\\Desktop\\scan-my-order\\apps\\backend\\prisma\\schema.prisma",
     "isCustomOutput": true
   },
   "relativeEnvPaths": {

@@ -109,7 +109,7 @@ enum PaymentMethod {
 
 // How a single tender line was collected
 enum PaymentChannel {
-  RAZORPAY_UPI // Razorpay dynamic QR / payment link, verified with the gateway
+  RAZORPAY // Razorpay QR code, payment link or checkout; verified with the gateway
   UPI_OFFLINE // Store's own UPI ID, confirmed manually by staff
   CASH
 }
@@ -236,6 +236,7 @@ model User {
   pushSubscriptions PushSubscription[]
   notifications     Notification[]
   collectedPayments Payment[]             @relation("CollectedPayments")
+  cancelledOrders   Order[]               @relation("CancelledOrders")
 
   @@unique([tenantId, email])
   @@index([role])
@@ -479,6 +480,8 @@ model Order {
   paymentMethod PaymentMethod?
   cashAmount    Int            @default(0)
   onlineAmount  Int            @default(0)
+  // Set once payments cover the bill; a paid order auto-settles when served
+  paidAt        DateTime?
   status        OrderStatus    @default(DRAFT)
 
   subTotal       Int        @default(0)
@@ -488,6 +491,14 @@ model Order {
   promoCodeId    String?
   promoCode      PromoCode? @relation(fields: [promoCodeId], references: [id])
   totalAmount    Int        @default(0)
+  // Tax rules in force when the order was placed; edits keep using these rates
+  taxRules       Json?
+
+  // Set when staff cancel the order (reason is mandatory)
+  cancelReason  String?
+  cancelledAt   DateTime?
+  cancelledById String?
+  cancelledBy   User?     @relation("CancelledOrders", fields: [cancelledById], references: [id], onDelete: SetNull)
 
   paymentLinkId  String?
   paymentLinkUrl String?
@@ -522,9 +533,9 @@ model Payment {
   status  PaymentStatus  @default(PENDING)
   amount  Int
 
-  // Gateway tracking (RAZORPAY_UPI only)
-  providerKind      String? // 'QR_CODE' | 'PAYMENT_LINK'
-  providerRef       String? @unique // Razorpay qr_code / payment_link id
+  // Gateway tracking (RAZORPAY only)
+  providerKind      String? // 'QR_CODE' | 'PAYMENT_LINK' | 'ORDER'
+  providerRef       String? @unique // Razorpay qr_code / payment_link / order id
   providerPaymentId String? @unique // Razorpay pay_xxx once captured
   qrImageUrl        String? // Hosted QR image (Razorpay QR codes)
   qrPayload         String? // String to encode as QR (upi:// intent or link URL)
