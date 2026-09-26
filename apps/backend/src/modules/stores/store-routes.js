@@ -21,6 +21,8 @@ const promoRoutes = require("./promo-routes");
 const reservationRoutes = require("../reservations/reservation-routes");
 const loyaltyRoutes = require("../loyalty/loyalty-routes");
 const paymentRoutes = require("../payments/payment-routes");
+const auditRoutes = require("../audit/audit-routes");
+const invoiceRoutes = require("../invoices/invoice-routes");
 const { billingGuard } = require("../../middleware/billing-guard");
 
 const router = express.Router();
@@ -75,5 +77,7 @@ router.use("/:storeId/promos", promoRoutes);
 router.use("/:storeId/reservations", reservationRoutes);
 router.use("/:storeId/loyalty", loyaltyRoutes);
 router.use("/:storeId/payments", paymentRoutes);
+router.use("/:storeId/audit", auditRoutes);
+router.use("/:storeId/invoices", invoiceRoutes);
 
 module.exports = router;

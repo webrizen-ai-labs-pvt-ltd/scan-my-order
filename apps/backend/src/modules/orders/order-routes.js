@@ -21,6 +21,8 @@ const {
 } = require("./order-service");
 const { verifyStoreAccess } = require("../menu/menu-service");
 const { getRefundOptions, createRefund } = require("../payments/refund-service");
+const { getOrderAudit } = require("../audit/audit-service");
+const { getInvoiceForOrder } = require("../invoices/invoice-service");
 const { subscribeToStore } = require("./sse-service");
 
 const router = express.Router({ mergeParams: true });
@@ -116,6 +118,18 @@ router.post("/:id/recall", asyncHandler(async (req, res) => {
 // POST /api/stores/:storeId/orders/:id/delay  { minutes: 5|10|15|20|30 }
 router.post("/:id/delay", asyncHandler(async (req, res) => {
   const result = await announceOrderDelay(req.user, req.params.storeId, req.params.id, req.body?.minutes);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/orders/:id/invoice  (the order's GST invoice, or its table bill's)
+router.get("/:id/invoice", asyncHandler(async (req, res) => {
+  const result = await getInvoiceForOrder(req.user, req.params.storeId, req.params.id);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/orders/:id/audit  (full change history, managers/owners)
+router.get("/:id/audit", asyncHandler(async (req, res) => {
+  const result = await getOrderAudit(req.user, req.params.storeId, req.params.id);
   res.json(createApiResponse(result));
 }));
 

@@ -1,11 +1,12 @@
 let PrismaClient;
+let Prisma;
 try {
-  ({ PrismaClient } = require("../generated/prisma_v2"));
+  ({ PrismaClient, Prisma } = require("../generated/prisma_v2"));
 } catch (e) {
   try {
-    ({ PrismaClient } = require("../generated/prisma"));
+    ({ PrismaClient, Prisma } = require("../generated/prisma"));
   } catch (e2) {
-    ({ PrismaClient } = require("@prisma/client"));
+    ({ PrismaClient, Prisma } = require("@prisma/client"));
   }
 }
 const { env } = require("../config/env");
@@ -36,6 +37,7 @@ async function disconnectPrisma() {
 }
 
 module.exports = {
+  Prisma,
   disconnectPrisma,
   getPrismaClient
 };

@@ -17,7 +17,8 @@ import {
   Tag01Icon
 } from 'hugeicons-react';
 
-export const MaintenanceJobsManager = () => {
+/** @param {{ embedded?: boolean }} props embedded: inside Settings, which supplies the heading */
+export const MaintenanceJobsManager = ({ embedded = false }) => {
   const { user } = useAuthStore();
   const [stores, setStores] = useState([]);
   const [selectedStoreId, setSelectedStoreId] = useState(user?.storeId || user?.store?.id || null);
@@ -216,10 +217,10 @@ export const MaintenanceJobsManager = () => {
   const filteredJobs = activeCategory === 'ALL' ? jobs : jobs.filter(j => j.category === activeCategory);
 
   return (
-    <section className="mt-10">
+    <section className={embedded ? "" : "mt-10"}>
       {/* Section Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-        <div>
+      <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${embedded && stores.length <= 1 ? "" : "mb-6"}`}>
+        {!embedded && <div>
           <div className="flex items-center gap-2">
             <div className="p-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 rounded-lg">
               <Settings01Icon className="w-5 h-5" />
@@ -231,7 +232,7 @@ export const MaintenanceJobsManager = () => {
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Configure dynamic recurring schedules, adjust store operational thresholds, and trigger on-demand routine tasks.
           </p>
-        </div>
+        </div>}
 
         {/* Store Selector for Admins */}
         {stores.length > 1 && (
@@ -252,7 +253,7 @@ export const MaintenanceJobsManager = () => {
 
       {/* Global Feedback Banner */}
       {feedback.text && (
-        <div className={`mb-6 p-4 rounded-xl text-sm flex items-start gap-3 border shadow-sm ${
+        <div className={`mb-6 p-4 rounded-xl text-sm flex items-start gap-3 border ${
           feedback.error 
             ? 'bg-red-50 text-red-800 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900/40' 
             : 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/40'
@@ -276,7 +277,7 @@ export const MaintenanceJobsManager = () => {
             onClick={() => setActiveCategory(cat)}
             className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors whitespace-nowrap ${
               activeCategory === cat
-                ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm'
+                ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
                 : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800/80 dark:text-zinc-300 dark:hover:bg-zinc-800'
             }`}
           >
@@ -309,7 +310,7 @@ export const MaintenanceJobsManager = () => {
             return (
               <Card 
                 key={job.key}
-                className="flex flex-col justify-between border-zinc-200 dark:border-zinc-800 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-700 transition-all rounded-xl overflow-hidden"
+                className="flex flex-col justify-between border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all rounded-xl overflow-hidden"
               >
                 <CardContent className="p-5 flex flex-col h-full justify-between gap-4">
                   {/* Top: Icon, Title, Status Switch */}

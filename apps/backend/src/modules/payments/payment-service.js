@@ -30,6 +30,8 @@ const lastRefreshAt = new Map();
 
 // Lazy to avoid a require cycle with order-service
 const orderService = () => require("../orders/order-service");
+const { logOrderEvent } = require("../audit/audit-service");
+const CHANNEL_LABEL = { RAZORPAY: "Razorpay", UPI_OFFLINE: "UPI (own QR)", CASH: "Cash" };
 
 function assertCanCollect(actor) {
   if (!actor || !COLLECTOR_ROLES.includes(actor.role)) {
@@ -271,6 +273,16 @@ async function applySettlement(storeId, ref) {
   const onlineAmount = paidAmount - cashAmount;
   const paymentMethod = cashAmount > 0 && onlineAmount > 0 ? "SPLIT" : cashAmount > 0 ? "CASH" : "ONLINE";
 
+  await logOrderEvent({
+    storeId,
+    orderId: target.kind === "ORDER" ? target.id : null,
+    tableSessionId: target.kind === "TABLE_SESSION" ? target.id : null,
+    type: "BILL_SETTLED",
+    source: "SYSTEM",
+    amountAfter: target.totalAmount,
+    data: { paymentMethod, cashAmount, onlineAmount, orders: target.orders.map(o => o.id) }
+  });
+
   if (target.kind === "ORDER") {
     await markOrderPaid(storeId, target.orders[0], { paymentMethod, cashAmount, onlineAmount });
   } else {
@@ -302,6 +314,10 @@ async function applySettlement(storeId, ref) {
     }
   }
 
+  // Numbered GST invoice for the paid bill (never blocks settlement)
+  const { issueStandardInvoice } = require("../invoices/invoice-service");
+  await issueStandardInvoice(storeId, ref).catch(err => console.error("[Invoices] could not issue invoice:", err.message));
+
   return broadcastSummary(storeId, ref);
 }
 
@@ -328,6 +344,17 @@ async function markPaymentPaid(paymentId, { providerPaymentId = null, collectedB
   if (result.count === 0) return false;
 
   const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+  if (payment.channel === "RAZORPAY") {
+    await logOrderEvent({
+      storeId: payment.storeId,
+      orderId: payment.orderId,
+      tableSessionId: payment.tableSessionId,
+      type: "PAYMENT_RECEIVED",
+      source: "SYSTEM",
+      amountAfter: payment.amount,
+      data: { channel: payment.channel, paymentId: payment.id, providerPaymentId: payment.providerPaymentId }
+    });
+  }
   await applySettlement(payment.storeId, targetRef(payment));
   await broadcastSummary(payment.storeId, targetRef(payment));
   return true;
@@ -509,6 +536,21 @@ async function createPayment(actor, storeId, input = {}) {
     }
   }
 
+  await logOrderEvent({
+    storeId,
+    orderId: ref.orderId || null,
+    tableSessionId: ref.tableSessionId || null,
+    type: payment.status === "PAID" ? "PAYMENT_RECEIVED" : "PAYMENT_STARTED",
+    actor,
+    amountAfter: amount,
+    data: {
+      channel: payment.channel,
+      label: CHANNEL_LABEL[payment.channel],
+      paymentId: payment.id,
+      ...(payment.channel === "CASH" ? { cashTendered: payment.cashTendered, changeDue: payment.changeDue } : {})
+    }
+  });
+
   const summary = payment.status === "PAID"
     ? await applySettlement(storeId, ref)
     : await broadcastSummary(storeId, ref);
@@ -543,6 +585,15 @@ async function confirmOfflinePayment(actor, storeId, paymentId) {
   if (payment.status !== "PENDING") throw createHttpError(409, `Payment is already ${payment.status.toLowerCase()}`);
 
   await markPaymentPaid(payment.id, { collectedById: actor.id });
+  await logOrderEvent({
+    storeId,
+    orderId: payment.orderId,
+    tableSessionId: payment.tableSessionId,
+    type: "PAYMENT_CONFIRMED",
+    actor,
+    amountAfter: payment.amount,
+    data: { channel: payment.channel, paymentId: payment.id }
+  });
   return getPayment(actor, storeId, paymentId);
 }
 
@@ -554,6 +605,15 @@ async function cancelPayment(actor, storeId, paymentId) {
   if (payment.status !== "PENDING") throw createHttpError(409, `Payment is already ${payment.status.toLowerCase()}`);
 
   const outcome = await withdrawPayment(storeId, payment);
+  await logOrderEvent({
+    storeId,
+    orderId: payment.orderId,
+    tableSessionId: payment.tableSessionId,
+    type: outcome === "PAID" ? "PAYMENT_RECEIVED" : "PAYMENT_WITHDRAWN",
+    actor,
+    amountAfter: payment.amount,
+    data: { channel: payment.channel, paymentId: payment.id, paidJustBeforeCancel: outcome === "PAID" }
+  });
   if (outcome === "PAID") {
     await applySettlement(storeId, targetRef(payment));
   }

@@ -23,7 +23,7 @@ const STATUS_TONE = {
  *
  * @param {{ storeId: string, orderId: string|null, label?: string, onClose: Function, onChanged?: Function }} props
  */
-export const RefundDialog = ({ storeId, orderId, label, onClose, onChanged }) => {
+export const RefundDialog = ({ storeId, orderId, label, onClose, onChanged, asPage = false }) => {
   const [options, setOptions] = useState(null);
   const [method, setMethod] = useState(null);
   const [paymentId, setPaymentId] = useState(null);
@@ -103,8 +103,8 @@ export const RefundDialog = ({ storeId, orderId, label, onClose, onChanged }) =>
   ];
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="refund-title">
-      <div className="w-full sm:max-w-md max-h-[92vh] flex flex-col bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+    <div className={asPage ? "w-full max-w-md" : "fixed inset-0 z-[60] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4"} {...(asPage ? {} : { role: "dialog", "aria-modal": "true" })} aria-labelledby="refund-title">
+      <div className={`w-full flex flex-col bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden ${asPage ? "rounded-2xl" : "sm:max-w-md max-h-[92vh] rounded-t-3xl sm:rounded-2xl shadow-2xl"}`}>
         <div className="px-5 pt-5 pb-3 flex items-start gap-3">
           <div className="min-w-0 flex-1">
             <h2 id="refund-title" className="text-base font-black">Refund guest</h2>

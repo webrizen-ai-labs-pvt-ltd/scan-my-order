@@ -180,6 +180,13 @@ The backend will be available at `http://localhost:8000` (or whatever `PORT` is 
 | `POST`   | `/api/stores/:storeId/orders/:id/delay` | Bearer | Announce a delay to waiter and guest (`minutes`: 5, 10, 15, 20 or 30) |
 | `GET`    | `/api/stores/:storeId/orders/:id/refunds` | Bearer | Amount owed, refundable Razorpay payments, refund history |
 | `POST`   | `/api/stores/:storeId/orders/:id/refunds` | Bearer | Refund via `RAZORPAY` (managers; through the tenant's Razorpay) or record `CASH` / `UPI_OFFLINE` |
+| `GET`    | `/api/stores/:storeId/orders/:id/audit` | Bearer | Full change history of an order (managers/owners) |
+| `GET`    | `/api/stores/:storeId/audit` | Bearer | Store audit log with filters and per-person counts; `/audit/export.csv` for CSV |
+| `GET`    | `/api/stores/:storeId/orders/:id/invoice` | Bearer | GST invoice covering an order (issued automatically when the bill is paid) |
+| `GET`    | `/api/stores/:storeId/invoices` | Bearer | Invoices and credit notes with totals; `/invoices/export.csv` for accounts |
+| `POST`   | `/api/stores/:storeId/invoices/:id/corporate` | Bearer | Re-issue as a corporate tax invoice (credit note + new number); cashiers same day, managers any time |
+| `POST`   | `/api/stores/:storeId/invoices/:id/email` | Bearer | Email an invoice |
+| `GET`    | `/api/stores/:storeId/invoices/clients` | Bearer | Saved corporate clients for the brand |
 | `POST`   | `/api/public/stores/:storeId/orders`  | —        | Create QR Menu Cart / Order      |
 | `GET`    | `/api/stores/:storeId/orders/stream`  | Bearer   | SSE Real-time order events       |
 | `GET`    | `/api/stores/:storeId/kds/orders`     | Bearer   | Kitchen processing queue         |
@@ -234,6 +241,8 @@ smo/
 - Real credentials live only in git-ignored `.env` files.
 - Tests are removed by request — no test runner is configured.
 - Money is only recorded as `Payment` rows (`apps/backend/src/modules/payments`). An order/table bill is paid when PAID payments cover its total; never set `SETTLED` or payment amounts directly.
+- Every change to an order must be recorded with `logOrderEvent` (`apps/backend/src/modules/audit`); the audit table is append-only.
+- Invoices are never edited: corrections are a credit note plus a new invoice (`apps/backend/src/modules/invoices`).
 - Bill arithmetic (promo, store credits, tax after discount) lives in `packages/shared/src/pricing.mjs` and is shared by the backend and every frontend.
 
 ---

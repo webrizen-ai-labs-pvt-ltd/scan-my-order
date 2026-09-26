@@ -174,6 +174,7 @@ model Tenant {
   users            User[]
   subscription     TenantSubscription?
   paymentGateways  TenantPaymentGateway[]
+  corporateClients CorporateClient[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 }
@@ -207,6 +208,9 @@ model Store {
   payments            Payment[]
   refunds             Refund[]
   jobConfigs          StoreJobConfig[]
+  orderEvents         OrderEvent[]
+  invoices            Invoice[]
+  invoiceSequences    InvoiceSequence[]
 
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
   taxRules     Json?       @default("[]")
@@ -234,6 +238,8 @@ model User {
   phone        String?
   profilePhoto String?
   passwordHash String?
+  // Bumped on password change/reset; login tokens carrying an older value stop working
+  tokenVersion Int        @default(0)
   currentChallenge String?
   role         UserRole
   status       UserStatus @default(ACTIVE)
@@ -252,6 +258,8 @@ model User {
   cancelledOrders   Order[]   @relation("CancelledOrders")
   rejectedOrderItems OrderItem[] @relation("RejectedOrderItems")
   processedRefunds  Refund[]    @relation("ProcessedRefunds")
+  orderEvents       OrderEvent[] @relation("OrderEventActor")
+  issuedInvoices    Invoice[]   @relation("IssuedInvoices")
 
   @@unique([tenantId, email])
   @@index([role])
@@ -512,6 +520,9 @@ model Order {
   // Money owed back to the guest after the kitchen rejected paid items (cleared by refunds)
   refundDue       Int            @default(0)
 
+  // Corporate details chosen before payment; the invoice is issued with them on settlement
+  invoiceRequest  Json?
+
   // Kitchen timing: when the order was marked ready (enables a short "recall"), and delay minutes announced to the guest
   readyAt         DateTime?
   delayMinutes    Int            @default(0)
@@ -528,6 +539,8 @@ model Order {
   items           OrderItem[]
   payments        Payment[]
   refunds         Refund[]
+  events          OrderEvent[]
+  invoices        Invoice[]
   feedbacks       Feedback[]
   walletTransactions CustomerWalletTransaction[]
 
@@ -698,8 +711,12 @@ model TableSession {
   paymentMethod   PaymentMethod?
   cashAmount      Int?               @default(0)
   onlineAmount    Int?               @default(0)
+  // Corporate details chosen before payment; the invoice is issued with them on settlement
+  invoiceRequest  Json?
   orders          Order[]
   payments        Payment[]
+  events          OrderEvent[]
+  invoices        Invoice[]
 
   lastOrderAt     DateTime           @default(now())
   createdAt       DateTime           @default(now())
@@ -852,4 +869,114 @@ model StoreJobConfig {
   updatedAt         DateTime  @updatedAt
 
   @@unique([storeId, jobKey])
+}
+
+// Permanent, append-only audit trail for everything that happens to an order or table bill.
+// There is intentionally no API to edit or delete these rows.
+model OrderEvent {
+  id             String        @id @default(cuid())
+  storeId        String
+  store          Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId        String?
+  order          Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  tableSessionId String?
+  tableSession   TableSession? @relation(fields: [tableSessionId], references: [id], onDelete: SetNull)
+
+  type           String        // e.g. ORDER_CREATED, STATUS_CHANGED, ITEMS_EDITED, PAYMENT_RECEIVED, INVOICE_ISSUED
+  source         String        // POS | KDS | WAITER | QR_MENU | SYSTEM | WEBHOOK
+  // Who did it, as they were at that moment (kept even if the user later changes or leaves)
+  actorId        String?
+  actor          User?         @relation("OrderEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName      String?
+  actorRole      String?
+  reason         String?
+  amountBefore   Int?
+  amountAfter    Int?
+  data           Json?         // before/after details
+  createdAt      DateTime      @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([orderId])
+  @@index([tableSessionId])
+  @@index([actorId])
+}
+
+enum InvoiceKind {
+  STANDARD    // Regular GST bill (B2C)
+  CORPORATE   // Tax invoice billed to a company (B2B), with the company's GSTIN
+  CREDIT_NOTE // Reverses all or part of an earlier invoice
+}
+
+enum InvoiceStatus {
+  ISSUED
+  CANCELLED
+}
+
+// Numbered GST documents. Contents are frozen in `snapshot` when issued and never change;
+// corrections are made with a credit note and, if needed, a new invoice.
+model Invoice {
+  id                String        @id @default(cuid())
+  storeId           String
+  store             Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  number            String        // e.g. NLCF/25-26/00012 (max 16 chars)
+  series            String        // INV | CN
+  financialYear     String        // e.g. 25-26 (April–March, IST)
+  seq               Int
+  kind              InvoiceKind
+  status            InvoiceStatus @default(ISSUED)
+
+  orderId           String?
+  order             Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  tableSessionId    String?
+  tableSession      TableSession? @relation(fields: [tableSessionId], references: [id], onDelete: SetNull)
+  // Credit notes point at the invoice they reverse; replacement invoices point at the one they replace
+  relatedInvoiceId  String?
+  relatedInvoice    Invoice?      @relation("InvoiceRelation", fields: [relatedInvoiceId], references: [id], onDelete: SetNull)
+  relatedInvoices   Invoice[]     @relation("InvoiceRelation")
+
+  totalAmount       Int
+  taxAmount         Int
+  snapshot          Json          // supplier, bill-to, lines, taxes, totals, payments at issue time
+  billTo            Json?         // corporate details (name, GSTIN, address, employee, PO…)
+
+  issuedById        String?
+  issuedBy          User?         @relation("IssuedInvoices", fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt          DateTime      @default(now())
+  cancelledAt       DateTime?
+  cancelReason      String?
+  emailedTo         String?
+  emailedAt         DateTime?
+
+  @@unique([storeId, number])
+  @@unique([storeId, series, financialYear, seq])
+  @@index([storeId, issuedAt])
+  @@index([orderId])
+  @@index([tableSessionId])
+}
+
+// Gap-free counters for invoice numbers, per store, series and financial year
+model InvoiceSequence {
+  storeId       String
+  store         Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  series        String
+  financialYear String
+  lastSeq       Int    @default(0)
+
+  @@id([storeId, series, financialYear])
+}
+
+// Companies a brand regularly bills (saved from the corporate invoice form)
+model CorporateClient {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String   // Legal name as it should appear on the invoice
+  gstin     String?
+  address   String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, gstin])
+  @@index([tenantId, name])
 }

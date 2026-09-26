@@ -20,7 +20,7 @@ const errorText = (err) => err?.response?.data?.error?.message || err?.message |
  * @param {{ storeId: string, order: { id: string, table?: { tableNumber: number }, totalAmount?: number } | null,
  *           onClose: Function, onCancelled?: Function }} props
  */
-export const CancelOrderDialog = ({ storeId, order, onClose, onCancelled }) => {
+export const CancelOrderDialog = ({ storeId, order, onClose, onCancelled, asPage = false }) => {
   const [preset, setPreset] = useState('');
   const [details, setDetails] = useState('');
   const [busy, setBusy] = useState(false);
@@ -65,8 +65,8 @@ export const CancelOrderDialog = ({ storeId, order, onClose, onCancelled }) => {
   const label = `Order #${order.id.slice(-6).toUpperCase()}${order.table ? ` · Table ${order.table.tableNumber}` : ''}`;
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="cancel-order-title">
-      <form onSubmit={submit} className="w-full sm:max-w-md bg-white dark:bg-zinc-900 rounded-t-3xl sm:rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+    <div className={asPage ? "w-full max-w-md" : "fixed inset-0 z-[60] bg-black/60 flex items-end sm:items-center justify-center p-0 sm:p-4"} {...(asPage ? {} : { role: "dialog", "aria-modal": "true" })} aria-labelledby="cancel-order-title">
+      <form onSubmit={submit} className={`w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 overflow-hidden ${asPage ? "rounded-2xl" : "sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl"}`}>
         <div className="px-5 pt-5 pb-3 flex items-start gap-3">
           <div className="size-10 rounded-full bg-rose-100 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center shrink-0">
             <Alert01Icon size={20} />

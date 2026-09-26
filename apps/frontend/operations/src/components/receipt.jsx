@@ -20,6 +20,19 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
         {storeData.tenant?.gstin && <div>GSTIN: {storeData.tenant.gstin}</div>}
       </div>
 
+      {order.invoice && (
+        <div className="border-b border-dashed border-black pb-2 mb-2 text-center">
+          <div className="font-bold uppercase tracking-wider">{order.invoice.isTaxInvoice ? 'Tax Invoice' : 'Bill'}</div>
+          <div>{order.invoice.isTaxInvoice ? 'Invoice' : 'Bill'} No: <span className="font-bold">{order.invoice.number}</span></div>
+          {order.invoice.company && (
+            <div className="text-xs mt-1">
+              Billed to: {order.invoice.company}
+              {order.invoice.companyGstin && <div>GSTIN: {order.invoice.companyGstin}</div>}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="border-b border-dashed border-black pb-2 mb-2">
         <div className="flex justify-between">
           <span>Order #{order.id.slice(-6).toUpperCase()}</span>
@@ -92,7 +105,12 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
             <span>-₹{order.discountAmount.toFixed(2)}</span>
           </div>
         )}
-        {order.taxAmount > 0 && (
+        {order.taxAmount > 0 && order.invoice?.taxes?.length > 0 ? order.invoice.taxes.map(t => (
+          <div key={t.name} className="flex justify-between">
+            <span>{t.name} @ {t.rate}%</span>
+            <span>₹{Number(t.amount).toFixed(2)}</span>
+          </div>
+        )) : order.taxAmount > 0 && (
           <div className="flex justify-between">
             <span>Taxes</span>
             <span>₹{order.taxAmount.toFixed(2)}</span>

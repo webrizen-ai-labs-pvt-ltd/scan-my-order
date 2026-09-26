@@ -27,7 +27,8 @@ export function printReceipt(node) {
       .uppercase { text-transform: uppercase; } .border-b { border-bottom: 1px dashed black; }
       .border-t { border-top: 1px dashed black; }
       .flex-1 { flex: 1; } .w-10 { width: 2.5rem; } .w-16 { width: 4rem; }
-      .text-xs { font-size: 0.75rem; }
+      .text-xs { font-size: 0.75rem; } .mt-1 { margin-top: 0.25rem; }
+      .tracking-wider { letter-spacing: 0.05em; }
     </style>
   </head>
   <body>${node.innerHTML}</body>

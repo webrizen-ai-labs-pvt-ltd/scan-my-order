@@ -3,6 +3,29 @@ const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
 const { broadcastToStore } = require("../orders/sse-service");
 const { getTenantRazorpay, describeRazorpayError } = require("./razorpay-gateway");
+const { logOrderEvent } = require("../audit/audit-service");
+
+// A credit note reduces the invoiced amount, but only once the money has really been returned
+async function creditNoteForRefund(order, refund, actor) {
+  if (refund.status !== "PROCESSED") return;
+  const { issueRefundCreditNote } = require("../invoices/invoice-service");
+  await issueRefundCreditNote(order, refund, actor).catch(err => console.error("[Invoices] refund credit note failed:", err.message));
+}
+
+async function logRefund(actor, order, refund, type = "REFUND_ISSUED") {
+  await logOrderEvent({
+    storeId: order.storeId,
+    orderId: order.id,
+    tableSessionId: order.tableSessionId,
+    type,
+    actor,
+    source: actor ? undefined : "SYSTEM",
+    reason: refund.reason || refund.failureReason,
+    amountBefore: order.refundDue,
+    amountAfter: type === "REFUND_FAILED" ? order.refundDue : order.refundDue - refund.amount,
+    data: { refundId: refund.id, method: refund.method, amount: refund.amount, status: refund.status, providerRefundId: refund.providerRefundId || null }
+  });
+}
 
 const REFUND_ROLES = ["CASHIER", "STORE_MANAGER", "TENANT_ADMIN", "SUPER_ADMIN"];
 // Sending money back through the gateway is limited to managers
@@ -145,6 +168,8 @@ async function createRefund(actor, storeId, orderId, input = {}) {
       include: { processedBy: { select: { id: true, name: true } } }
     });
     broadcastRefund(storeId, { ...order, refundDue: order.refundDue - amount }, refund);
+    await logRefund(actor, order, refund);
+    await creditNoteForRefund(order, refund, actor);
     return getRefundOptions(actor, storeId, orderId);
   }
 
@@ -202,6 +227,8 @@ async function createRefund(actor, storeId, orderId, input = {}) {
   }
 
   broadcastRefund(storeId, { ...order, refundDue: order.refundDue - amount }, refund);
+  await logRefund(actor, order, refund);
+  await creditNoteForRefund(order, refund, actor);
   return getRefundOptions(actor, storeId, orderId);
 }
 
@@ -223,10 +250,13 @@ async function applyGatewayRefundStatus(refund, razorpayStatus, failureReason = 
   });
   if (updated.count === 0) return false;
   if (status === "FAILED") {
+    const failedOrder = await prisma.order.findUnique({ where: { id: refund.orderId } });
+    if (failedOrder) await logRefund(null, failedOrder, { ...refund, status, failureReason }, "REFUND_FAILED");
     await prisma.order.update({ where: { id: refund.orderId }, data: { refundDue: { increment: refund.amount } } });
   }
   const order = await prisma.order.findUnique({ where: { id: refund.orderId } });
   broadcastRefund(refund.storeId, order, { ...refund, status });
+  if (status === "PROCESSED") await creditNoteForRefund(order, { ...refund, status }, null);
   return true;
 }
 

@@ -3,6 +3,7 @@ const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
 const { computeOrderTotals } = require("@smo/shared/pricing");
+const { logOrderEvent, describeItems, sourceFor } = require("../audit/audit-service");
 const { broadcastToStore, broadcastToCustomer } = require("./sse-service");
 const { sendNotification } = require("../notifications/notification-service");
 const { evaluateMenuItemAvailability } = require("../inventory/inventory-service");
@@ -69,8 +70,55 @@ function serializeOrder(order) {
   if (!order) return order;
   return {
     ...order,
+    invoiceRequest: publicInvoiceRequest(order.invoiceRequest),
     items: (order.items || []).map(serializeOrderItem)
   };
+}
+
+// Helper: Corporate details chosen for an unpaid bill, without who entered them
+function publicInvoiceRequest(request) {
+  return request?.billTo ? { billTo: request.billTo, sendEmail: Boolean(request.sendEmail) } : null;
+}
+
+// Helper: What a printed receipt needs from the bill's GST invoice
+function receiptInvoice(inv) {
+  const snap = inv.snapshot || {};
+  return {
+    id: inv.id,
+    number: inv.number,
+    kind: inv.kind,
+    isTaxInvoice: Boolean(snap.supplier?.gstinValid),
+    company: inv.billTo?.name || null,
+    companyGstin: inv.billTo?.gstin || null,
+    taxes: (snap.taxes || []).map(t => ({ name: t.name, rate: t.rate, amount: t.amount }))
+  };
+}
+
+// Helper: Adds each order's current invoice (its own, else its table bill's) as `invoice`
+async function attachInvoices(prisma, storeId, orders) {
+  const ids = orders.map(o => o.id);
+  if (ids.length === 0) return orders;
+  const sessionIds = [...new Set(orders.map(o => o.tableSessionId).filter(Boolean))];
+  const invoices = await prisma.invoice.findMany({
+    where: {
+      storeId,
+      status: 'ISSUED',
+      kind: { in: ['STANDARD', 'CORPORATE'] },
+      OR: [{ orderId: { in: ids } }, ...(sessionIds.length ? [{ tableSessionId: { in: sessionIds } }] : [])]
+    },
+    orderBy: { issuedAt: 'desc' },
+    select: { id: true, number: true, kind: true, orderId: true, tableSessionId: true, snapshot: true, billTo: true }
+  });
+  const byOrder = new Map();
+  const bySession = new Map();
+  for (const inv of invoices) {
+    if (inv.orderId && !byOrder.has(inv.orderId)) byOrder.set(inv.orderId, receiptInvoice(inv));
+    if (inv.tableSessionId && !bySession.has(inv.tableSessionId)) bySession.set(inv.tableSessionId, receiptInvoice(inv));
+  }
+  return orders.map(o => ({
+    ...o,
+    invoice: byOrder.get(o.id) || (o.tableSessionId ? bySession.get(o.tableSessionId) : null) || null
+  }));
 }
 
 // Helper: Get or automatically provision a store's system "Open Custom Dish" MenuItem
@@ -462,6 +510,26 @@ async function createOrder(storeId, actor, origin, input) {
     }
   });
 
+  await logOrderEvent({
+    storeId,
+    orderId: order.id,
+    tableSessionId: tableSession ? tableSession.id : null,
+    type: 'ORDER_CREATED',
+    actor,
+    source: origin === 'QR_MENU' ? 'QR_MENU' : sourceFor(actor),
+    amountAfter: order.totalAmount,
+    data: {
+      origin,
+      orderType: type,
+      paymentModel,
+      status,
+      table: order.table?.tableNumber ?? null,
+      items: describeItems(order.items.map(serializeOrderItem)),
+      promo: promo?.code || null,
+      walletDiscount: totals.walletDiscount || 0
+    }
+  });
+
   // Deduct applied wallet credits from customer balance
   if (totals.walletDiscount > 0 && actor) {
     try {
@@ -800,6 +868,11 @@ async function updateOrderItems(actor, storeId, orderId, input) {
   }
 
   const { items: itemsInput } = input;
+  const editReason = typeof input.reason === 'string' ? input.reason.trim().slice(0, 200) : '';
+  if (editReason.length < 3) {
+    throw createHttpError(400, "Please give a reason for changing this order");
+  }
+  const orderBeforeEdit = await getOrderById(storeId, order.id);
 
   // Lines already on the order keep the price they were sold at; only new lines use today's menu
   const existingItems = await prisma.orderItem.findMany({
@@ -899,6 +972,23 @@ async function updateOrderItems(actor, storeId, orderId, input) {
   }
 
   const updatedOrder = await getOrderById(storeId, order.id);
+
+  await logOrderEvent({
+    storeId,
+    orderId: order.id,
+    tableSessionId: order.tableSessionId,
+    type: 'ITEMS_EDITED',
+    actor,
+    reason: editReason,
+    amountBefore: order.totalAmount,
+    amountAfter: newTotalAmount,
+    data: {
+      before: describeItems(orderBeforeEdit.items),
+      after: describeItems(updatedOrder.items),
+      promoRemoved: Boolean(order.promoCodeId && !promo),
+      walletRefund
+    }
+  });
 
   // Broadcast real-time SSE updates to POS, KDS, Waiter, and Customer
   broadcastToStore(storeId, 'ORDER_UPDATED', updatedOrder);
@@ -1029,6 +1119,19 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
         }
       }
     }
+  });
+
+  await logOrderEvent({
+    storeId,
+    orderId,
+    tableSessionId: order.tableSessionId,
+    type: options.auditType || (newStatus === 'CANCELLED' ? 'ORDER_CANCELLED' : 'STATUS_CHANGED'),
+    actor: actor || null,
+    source: actor ? sourceFor(actor) : 'SYSTEM',
+    reason: newStatus === 'CANCELLED' ? updateData.cancelReason : options.reason,
+    amountBefore: order.totalAmount,
+    amountAfter: updatedOrder.totalAmount,
+    data: { from: order.status, to: newStatus }
   });
 
   // Award cashback if transitioning to SETTLED, or refund wallet credits if cancelled
@@ -1306,6 +1409,18 @@ async function rejectOrderItems(actor, storeId, orderId, input = {}) {
     order: updatedOrder
   };
 
+  await logOrderEvent({
+    storeId,
+    orderId,
+    tableSessionId: order.tableSessionId,
+    type: 'ITEMS_REJECTED',
+    actor,
+    reason,
+    amountBefore: order.totalAmount,
+    amountAfter: updatedOrder.totalAmount,
+    data: { items: itemLabels, wholeOrder, markedSoldOut: soldOutIds.length > 0, refundDue }
+  });
+
   broadcastToStore(storeId, 'ORDER_ITEMS_REJECTED', event);
   broadcastToStore(storeId, 'ORDER_UPDATED', updatedOrder);
   sendNotification({
@@ -1394,6 +1509,14 @@ async function setOrderItemReady(actor, storeId, orderId, itemId, ready = true) 
   if (!item || item.status !== 'ACTIVE') throw createHttpError(404, "Item not found on this order");
 
   await prisma.orderItem.update({ where: { id: itemId }, data: { readyAt: ready ? new Date() : null } });
+  await logOrderEvent({
+    storeId,
+    orderId,
+    tableSessionId: order.tableSessionId,
+    type: ready ? 'ITEM_READY' : 'ITEM_UNREADY',
+    actor,
+    data: { item: `${item.quantity}× ${serializeOrderItem(item).displayName}` }
+  });
 
   const label = `${item.quantity}× ${serializeOrderItem(item).displayName}`;
   broadcastToStore(storeId, 'ORDER_ITEM_READY', { orderId, itemId, ready, label, tableNumber: order.table?.tableNumber ?? null });
@@ -1432,7 +1555,7 @@ async function recallOrder(actor, storeId, orderId) {
   }
 
   await prisma.orderItem.updateMany({ where: { orderId, status: 'ACTIVE' }, data: { readyAt: null } });
-  const updated = await updateOrderStatus(actor, storeId, orderId, 'PROCESSING', true, { silent: true });
+  const updated = await updateOrderStatus(actor, storeId, orderId, 'PROCESSING', true, { silent: true, auditType: 'ORDER_RECALLED' });
 
   broadcastToStore(storeId, 'ORDER_RECALLED', { orderId, tableNumber: order.table?.tableNumber ?? null });
   sendNotification({
@@ -1462,6 +1585,14 @@ async function announceOrderDelay(actor, storeId, orderId, minutes) {
   await prisma.order.update({ where: { id: orderId }, data: { delayMinutes: { increment: mins } } });
   const updated = await getOrderById(storeId, orderId);
   const event = { orderId, tableNumber: order.table?.tableNumber ?? null, minutes: mins, totalDelay: updated.delayMinutes };
+  await logOrderEvent({
+    storeId,
+    orderId,
+    tableSessionId: order.tableSessionId,
+    type: 'DELAY_ANNOUNCED',
+    actor,
+    data: { minutes: mins, totalDelay: updated.delayMinutes }
+  });
 
   broadcastToStore(storeId, 'ORDER_DELAYED', event);
   broadcastToStore(storeId, 'ORDER_UPDATED', updated);
@@ -1619,7 +1750,7 @@ async function getOrderHistory(actor, storeId, filters = {}) {
   ]);
   
   return {
-    orders: orders.map(serializeOrder),
+    orders: (await attachInvoices(prisma, storeId, orders)).map(serializeOrder),
     pagination: {
       total,
       pages: Math.ceil(total / limit),
@@ -1659,7 +1790,8 @@ async function getOrderById(storeId, orderId) {
   if (!order || order.storeId !== storeId) {
     throw createHttpError(404, "Order not found");
   }
-  return serializeOrder(order);
+  const [withInvoice] = await attachInvoices(prisma, storeId, [order]);
+  return serializeOrder(withInvoice);
 }
 
 // 6. TABLE SESSION BILLING
@@ -1733,7 +1865,15 @@ async function getTableSessionBill(storeId, tableSessionId, { includePin = false
     }
   }
 
+  const invoice = await prisma.invoice.findFirst({
+    where: { storeId, tableSessionId, status: 'ISSUED', kind: { in: ['STANDARD', 'CORPORATE'] } },
+    orderBy: { issuedAt: 'desc' },
+    select: { id: true, number: true, kind: true, snapshot: true, billTo: true }
+  });
+
   return {
+    invoice: invoice ? receiptInvoice(invoice) : null,
+    invoiceRequest: publicInvoiceRequest(session.invoiceRequest),
     session: {
       id: session.id,
       ...(includePin ? { pin: session.pin } : {}),

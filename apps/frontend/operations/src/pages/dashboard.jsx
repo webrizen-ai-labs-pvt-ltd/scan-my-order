@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../lib/api';
@@ -12,16 +12,11 @@ import {
   SelectItem
 } from '@smo/ui';
 import {
-  Restaurant01Icon,
   Store01Icon,
   Clock01Icon,
-  CheckmarkBadge01Icon,
-  AlertCircleIcon,
-  Layers01Icon,
   DashboardSquare01Icon,
   Tick02Icon,
-  Cancel01Icon,
-  Calendar01Icon
+  Cancel01Icon
 } from 'hugeicons-react';
 
 // Toast component for notifications
@@ -58,7 +53,7 @@ const Toast = ({ message, type, onClose }) => {
       : 'text-blue-500';
 
   return (
-    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 p-4 rounded-lg border ${bgColor} shadow-lg animate-slide-in`}>
+    <div className={`fixed top-4 right-4 z-50 flex items-center gap-3 p-4 rounded-lg border ${bgColor} animate-slide-in`}>
       {type === 'success' ? (
         <Tick02Icon size={20} className={iconColor} />
       ) : type === 'error' ? (
@@ -83,7 +78,6 @@ export const Dashboard = () => {
   const [floorStatus, setFloorStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
-  const [activeFloorView, setActiveFloorView] = useState('live_floor'); // 'live_floor' | 'pipeline'
   const [toast, setToast] = useState(null);
 
   // Fetch available stores if multi-store user
@@ -226,9 +220,53 @@ export const Dashboard = () => {
   const readyOrders = floorStatus?.orders?.filter((o) => o.status === 'READY').length || 0;
   const waiterCallsCount = floorStatus?.waiterCalls || 0;
   const activeReservationsCount = floorStatus?.activeReservations || 0;
+  const storeName = stores.find((st) => st.id === selectedStoreId)?.name || user?.store?.name;
+  const isLive = connectionStatus === 'connected';
+
+  // One flat strip; colour only when a number needs someone's attention
+  const stats = [
+    {
+      key: 'occupancy',
+      label: 'Tables occupied',
+      value: occupiedTables,
+      suffix: `/ ${totalTables}`,
+      detail: `${occupancyPercent}% of the floor`,
+      progress: occupancyPercent,
+    },
+    {
+      key: 'kitchen',
+      label: 'In kitchen',
+      value: kitchenOrders,
+      detail: kitchenOrders === 1 ? 'order cooking' : 'orders cooking',
+      to: '/dashboard/kds',
+    },
+    {
+      key: 'ready',
+      label: 'Ready to serve',
+      value: readyOrders,
+      detail: readyOrders > 0 ? 'waiting at the pass' : 'nothing waiting',
+      tone: readyOrders > 0 ? 'text-violet-600 dark:text-violet-400' : '',
+      to: '/dashboard/waiter',
+    },
+    {
+      key: 'calls',
+      label: 'Waiter calls',
+      value: waiterCallsCount,
+      detail: waiterCallsCount > 0 ? 'guests waiting' : 'all handled',
+      tone: waiterCallsCount > 0 ? 'text-rose-600 dark:text-rose-400' : '',
+      to: '/dashboard/waiter',
+    },
+    {
+      key: 'bookings',
+      label: 'Bookings today',
+      value: activeReservationsCount,
+      detail: 'confirmed or seated',
+      to: '/dashboard/reservations',
+    },
+  ];
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-5 pb-12">
       {toast && (
         <Toast
           message={toast.message}
@@ -236,206 +274,99 @@ export const Dashboard = () => {
           onClose={() => setToast(null)}
         />
       )}
-      {/* Top Header & Store Selector */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center gap-3">
-            Welcome back, {user?.name?.split(' ')[0] || 'Staff'}!
-            {/* Live SSE Status Badge */}
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">Welcome back, {user?.name?.split(' ')[0] || 'there'}</p>
+          <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center gap-2.5">
+            <span className="truncate">{storeName || 'Floor overview'}</span>
             <span
-              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold border ${
-                connectionStatus === 'connected'
-                  ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
-                  : 'bg-zinc-500/10 text-zinc-500 border-zinc-500/20'
-              }`}
-              title={connectionStatus === 'connected' ? 'Zero-latency SSE Connected' : 'Connecting stream...'}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400"
+              title={isLive ? 'Updates arrive instantly' : 'Reconnecting to live updates'}
             >
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  connectionStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-400'
-                }`}
-              />
-              {connectionStatus === 'connected' ? 'Live Floor Sync' : 'Reconnecting...'}
+              <span className={`size-1.5 rounded-full ${isLive ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+              {isLive ? 'Live' : 'Reconnecting…'}
             </span>
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Real-time operations & live table status overview.
-          </p>
         </div>
 
-        {/* Store Selector for Admin/Multi-store Managers */}
         {stores.length > 0 && (
-          <div className="flex items-center gap-2">
-            <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
-              <SelectTrigger className="w-[220px] h-9 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-xs font-medium">
-                <Store01Icon size={16} className="mr-1.5 text-zinc-400" />
-                <SelectValue placeholder="Select a store" />
-              </SelectTrigger>
-              <SelectContent>
-                {stores.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
+            <SelectTrigger className="w-full sm:w-[220px] h-9 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-sm">
+              <Store01Icon size={16} className="mr-1.5 text-zinc-400" />
+              <SelectValue placeholder="Select a store" />
+            </SelectTrigger>
+            <SelectContent>
+              {stores.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         )}
       </div>
 
-      {/* Real-Time Operational KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Metric 1: Table Occupancy */}
-        <div className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Floor Occupancy</span>
-            <div className="p-1.5 rounded-lg bg-blue-500/10 text-blue-500">
-              <Restaurant01Icon size={16} />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className="text-3xl font-black text-zinc-900 dark:text-zinc-50">
-              {occupiedTables} <span className="text-lg font-medium text-zinc-400">/ {totalTables}</span>
-            </div>
-            <div className="mt-2 flex items-center gap-2">
-              <div className="flex-1 h-2 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
-                <div
-                  className="h-full bg-blue-500 rounded-full transition-all duration-500"
-                  style={{ width: `${occupancyPercent}%` }}
-                />
-              </div>
-              <span className="text-xs font-bold text-blue-600 dark:text-blue-400">{occupancyPercent}%</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Metric 2: Active Kitchen Orders */}
-        <div className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">In Kitchen (KDS)</span>
-            <div className="p-1.5 rounded-lg bg-amber-500/10 text-amber-500">
-              <Clock01Icon size={16} />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className="text-3xl font-black text-zinc-900 dark:text-zinc-50">{kitchenOrders}</div>
-            <p className="text-xs text-zinc-400 mt-1">Dishes currently being prepared</p>
-          </div>
-        </div>
-
-        {/* Metric 3: Ready for Serving */}
-        <div className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Ready on Pass</span>
-            <div className="p-1.5 rounded-lg bg-purple-500/10 text-purple-500">
-              <CheckmarkBadge01Icon size={16} />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className="text-3xl font-black text-purple-600 dark:text-purple-400">{readyOrders}</div>
-            <p className="text-xs text-zinc-400 mt-1">Hot dishes awaiting table pickup</p>
-          </div>
-        </div>
-
-        {/* Metric 4: Waiter Calls */}
-        <div className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Waiter Calls</span>
-            <div className={`p-1.5 rounded-lg ${waiterCallsCount > 0 ? 'bg-red-500/10 text-red-500 animate-bounce' : 'bg-zinc-500/10 text-zinc-400'}`}>
-              <AlertCircleIcon size={16} />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className={`text-3xl font-black ${waiterCallsCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-900 dark:text-zinc-50'}`}>
-              {waiterCallsCount}
-            </div>
-            <p className="text-xs text-zinc-400 mt-1">
-              {waiterCallsCount > 0 ? 'Active customer call alerts!' : 'All customer requests resolved'}
-            </p>
-          </div>
-        </div>
-
-        {/* Metric 5: Today's Reservations */}
-        <div
-          onClick={() => navigate('/dashboard/reservations')}
-          className="p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm flex flex-col justify-between cursor-pointer hover:border-pink-300 dark:hover:border-pink-800 transition-colors"
-        >
-          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400">
-            <span className="text-xs font-semibold uppercase tracking-wider">Bookings Today</span>
-            <div className="p-1.5 rounded-lg bg-pink-500/10 text-pink-500">
-              <Calendar01Icon size={16} />
-            </div>
-          </div>
-          <div className="mt-2">
-            <div className="text-3xl font-black text-pink-600 dark:text-pink-400">
-              {activeReservationsCount}
-            </div>
-            <p className="text-xs text-zinc-400 mt-1 flex items-center justify-between">
-              <span>Confirmed / Seated</span>
-              <span className="text-pink-600 dark:text-pink-400 font-semibold hover:underline">View →</span>
-            </p>
-          </div>
-        </div>
+      {/* Stats strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 divide-zinc-200 dark:divide-zinc-800 lg:divide-x overflow-hidden">
+        {stats.map((stat, i) => {
+          const body = (
+            <>
+              <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{stat.label}</span>
+              <span className="mt-1 flex items-baseline gap-1">
+                <span className={`text-2xl font-semibold tabular-nums ${stat.tone || 'text-zinc-900 dark:text-zinc-50'}`}>
+                  {loading && !floorStatus ? '–' : stat.value}
+                </span>
+                {stat.suffix && <span className="text-sm text-zinc-400 tabular-nums">{stat.suffix}</span>}
+              </span>
+              {stat.progress !== undefined ? (
+                <span className="mt-2 h-1 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden" aria-hidden="true">
+                  <span className="block h-full bg-zinc-900 dark:bg-zinc-100 transition-[width] duration-500" style={{ width: `${stat.progress}%` }} />
+                </span>
+              ) : null}
+              <span className="mt-1.5 text-xs text-zinc-400 dark:text-zinc-500">{stat.detail}</span>
+            </>
+          );
+          // Borders between cells on small screens (2-column grid)
+          const cellClass = `flex flex-col p-4 text-left ${i % 2 === 1 ? 'border-l lg:border-l-0' : ''} ${i >= 2 ? 'border-t lg:border-t-0' : ''} border-zinc-200 dark:border-zinc-800 ${i === stats.length - 1 && stats.length % 2 === 1 ? 'col-span-2 lg:col-span-1' : ''}`;
+          return stat.to ? (
+            <button
+              key={stat.key}
+              type="button"
+              onClick={() => navigate(stat.to)}
+              className={`${cellClass} hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors`}
+            >
+              {body}
+            </button>
+          ) : (
+            <div key={stat.key} className={cellClass}>{body}</div>
+          );
+        })}
       </div>
 
-      {/* Floor Plan Header & View Switcher */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2">
-        <div>
-          <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            Live Table Floor
-          </h2>
-          <p className="text-xs text-zinc-500">
-            Live SVG tables changing colors based on guest and order status.
-          </p>
-        </div>
-
-        {/* Switcher: Table Floor Canvas vs Flow Pipeline */}
-        <div className="flex bg-zinc-200/80 dark:bg-zinc-800/80 rounded-xl p-1 border border-zinc-300/50 dark:border-zinc-700/50">
-          <button
-            onClick={() => setActiveFloorView('live_floor')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeFloorView === 'live_floor'
-                ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-            }`}
-          >
-            <Layers01Icon size={15} />
-            SVG Table Floor
-          </button>
-          <button
-            onClick={() => setActiveFloorView('pipeline')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              activeFloorView === 'pipeline'
-                ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-            }`}
-          >
-            <DashboardSquare01Icon size={15} />
-            Department Pipeline
-          </button>
-        </div>
-      </div>
-
-      {/* Main Floor Plan Component */}
-      {activeFloorView === 'live_floor' ? (
-        <LiveTableFloorPlan
-          floorStatus={floorStatus}
-          onResolveWaiterCall={handleResolveWaiterCall}
-          onOpenPOS={handleOpenPOS}
-          onSeatReservation={handleSeatReservation}
-          onBookTable={(table) => {
-            if (table) {
-              navigate(`/dashboard/reservations?tableId=${table.id}&tableNumber=${table.tableNumber}`);
-            } else {
-              navigate('/dashboard/reservations?new=true');
-            }
-          }}
-        />
-      ) : (
-        <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800 p-4 shadow-sm">
-          <FloorMap floorStatus={floorStatus} />
-        </div>
-      )}
+      {/* Floor */}
+      <LiveTableFloorPlan
+        floorStatus={floorStatus}
+        onResolveWaiterCall={handleResolveWaiterCall}
+        onOpenPOS={handleOpenPOS}
+        onSeatReservation={handleSeatReservation}
+        onBookTable={(table) => {
+          if (table) {
+            navigate(`/dashboard/reservations?tableId=${table.id}&tableNumber=${table.tableNumber}`);
+          } else {
+            navigate('/dashboard/reservations?new=true');
+          }
+        }}
+        extraViews={[
+          {
+            id: 'pipeline',
+            label: 'Pipeline',
+            icon: DashboardSquare01Icon,
+            render: () => <FloorMap floorStatus={floorStatus} />,
+          },
+        ]}
+      />
     </div>
   );
 };

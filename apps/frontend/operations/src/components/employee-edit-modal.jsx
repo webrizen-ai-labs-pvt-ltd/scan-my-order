@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { useAuthStore } from '../store/authStore';
 import {
   Button,
   Input,
@@ -119,6 +120,9 @@ export const EmployeeEditModal = ({
   const [status, setStatus] = useState('ACTIVE');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const currentUser = useAuthStore(state => state.user);
+  const canResetPassword = Boolean(employee) && employee.id !== currentUser?.id
+    && !(employee.role === 'TENANT_ADMIN' && currentUser?.role !== 'SUPER_ADMIN');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -487,7 +491,8 @@ export const EmployeeEditModal = ({
                 </div>
               </section>
 
-              {/* Section: Password reset */}
+              {/* Section: Password reset (never your own account; other owners only by platform support) */}
+              {canResetPassword ? (
               <section>
                 <div className="mb-3 flex items-center justify-between">
                   <h4 className={SECTION_TITLE_CLASS + ' mb-0'}>
@@ -539,6 +544,16 @@ export const EmployeeEditModal = ({
                   </div>
                 </div>
               </section>
+              ) : (
+                <section>
+                  <h4 className={SECTION_TITLE_CLASS}>Password Reset</h4>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {employee?.id === currentUser?.id
+                      ? "Change your own password under Settings → Password."
+                      : "Another owner's password can only be reset by platform support."}
+                  </p>
+                </section>
+              )}
             </div>
 
             {/* Right: Change Summary */}
@@ -613,8 +628,8 @@ export const EmployeeEditModal = ({
                         Password will be reset
                       </p>
                       <p className="mt-1 text-[10px] leading-snug text-amber-800/80 dark:text-amber-200/70">
-                        The employee will need to use the new password on their
-                        next sign-in.
+                        They'll be signed out of all devices and must sign in
+                        with the new password.
                       </p>
                     </div>
                   )}
