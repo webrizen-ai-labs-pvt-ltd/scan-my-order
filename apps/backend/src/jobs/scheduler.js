@@ -5,18 +5,21 @@ const { env } = require('../config/env');
 const {
   getStoreConfig,
   getStoreAllConfigs,
+  getAllStoresConfigs,
   saveStoreJobConfig,
-  recordJobRun
+  recordJobRun,
+  importLegacyFileConfigs
 } = require('./config-store');
 
 // Active cron tasks map: `${storeId}:${jobKey}` => cronTask
 const activeCronTasks = new Map();
 
-function getEffectiveJobConfig(storeId, jobKey) {
+// Registry defaults overlaid with what the store saved
+function buildEffectiveConfig(jobKey, storedConfig) {
   const jobMeta = JOB_REGISTRY[jobKey];
   if (!jobMeta) return null;
 
-  const stored = getStoreConfig(storeId, jobKey) || {};
+  const stored = storedConfig || {};
   return {
     key: jobKey,
     title: jobMeta.title,
@@ -41,8 +44,23 @@ function getEffectiveJobConfig(storeId, jobKey) {
   };
 }
 
-function getAllStoreJobsEffective(storeId) {
-  return Object.keys(JOB_REGISTRY).map(jobKey => getEffectiveJobConfig(storeId, jobKey));
+async function getEffectiveJobConfig(storeId, jobKey) {
+  if (!JOB_REGISTRY[jobKey]) return null;
+  return buildEffectiveConfig(jobKey, await getStoreConfig(storeId, jobKey));
+}
+
+async function getAllStoreJobsEffective(storeId) {
+  const stored = await getStoreAllConfigs(storeId);
+  return Object.keys(JOB_REGISTRY).map(jobKey => buildEffectiveConfig(jobKey, stored[jobKey]));
+}
+
+// Recording a run must never turn a successful job into a failed one
+async function safeRecordJobRun(storeId, jobKey, run) {
+  try {
+    await recordJobRun(storeId, jobKey, run);
+  } catch (err) {
+    console.warn(`[Scheduler] Could not record run of ${jobKey} for ${storeId}:`, err.message);
+  }
 }
 
 async function executeJob(jobKey, { storeId, tenantId, params, triggeredBy = 'CRON' }) {
@@ -65,7 +83,7 @@ async function executeJob(jobKey, { storeId, tenantId, params, triggeredBy = 'CR
     const summary = result.summary || `Completed in ${durationMs}ms`;
 
     if (storeId) {
-      recordJobRun(storeId, jobKey, {
+      await safeRecordJobRun(storeId, jobKey, {
         status: 'SUCCESS',
         summary,
         durationMs
@@ -85,7 +103,7 @@ async function executeJob(jobKey, { storeId, tenantId, params, triggeredBy = 'CR
     console.error(`[Scheduler] [${triggeredBy}] Error in ${jobKey}:`, err);
 
     if (storeId) {
-      recordJobRun(storeId, jobKey, {
+      await safeRecordJobRun(storeId, jobKey, {
         status: 'FAILED',
         summary: `Error: ${err.message}`,
         durationMs,
@@ -146,7 +164,7 @@ async function updateAndRescheduleJob(storeId, jobKey, newConfig) {
     throw new Error(`Invalid cron schedule pattern: ${newConfig.schedule}`);
   }
 
-  const saved = saveStoreJobConfig(storeId, jobKey, newConfig);
+  await saveStoreJobConfig(storeId, jobKey, newConfig);
 
   // Fetch tenantId for this store
   const prisma = getPrismaClient();
@@ -156,7 +174,7 @@ async function updateAndRescheduleJob(storeId, jobKey, newConfig) {
   });
   const tenantId = store?.tenantId;
 
-  const effective = getEffectiveJobConfig(storeId, jobKey);
+  const effective = await getEffectiveJobConfig(storeId, jobKey);
   const taskKey = `${storeId}:${jobKey}`;
 
   if (activeCronTasks.has(taskKey)) {
@@ -179,6 +197,9 @@ async function updateAndRescheduleJob(storeId, jobKey, newConfig) {
 }
 
 async function startDynamicScheduler() {
+  // Bring settings from the old cron-configs.json file into the database (once, any machine)
+  await importLegacyFileConfigs().catch(err => console.warn('[Scheduler] Legacy config import failed:', err.message));
+
   if (!env.jobs.enabled) {
     console.log('[Scheduler] RUN_SCHEDULED_JOBS=false — scheduled jobs are off on this machine (manual runs still work).');
     return;
@@ -194,10 +215,12 @@ async function startDynamicScheduler() {
 
     console.log(`[Scheduler] Found ${activeStores.length} active store(s) to schedule.`);
 
+    const storedByStore = await getAllStoresConfigs(activeStores.map(s => s.id));
     let scheduledCount = 0;
     for (const store of activeStores) {
+      const stored = storedByStore.get(store.id) || {};
       for (const jobKey of Object.keys(JOB_REGISTRY)) {
-        const effective = getEffectiveJobConfig(store.id, jobKey);
+        const effective = buildEffectiveConfig(jobKey, stored[jobKey]);
         if (effective && effective.enabled) {
           const ok = scheduleSingleTask(
             store.id,

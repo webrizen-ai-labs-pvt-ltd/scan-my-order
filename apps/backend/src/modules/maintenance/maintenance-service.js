@@ -52,7 +52,7 @@ async function resolveAuthorizedStoreId(user, requestedStoreId) {
 
 async function listStoreMaintenanceJobs(user, query = {}) {
   const storeId = await resolveAuthorizedStoreId(user, query.storeId);
-  const jobs = getAllStoreJobsEffective(storeId);
+  const jobs = await getAllStoreJobsEffective(storeId);
   return {
     storeId,
     jobs
@@ -85,7 +85,7 @@ async function runStoreMaintenanceJobManual(user, jobKey, body = {}) {
   }
 
   const storeId = await resolveAuthorizedStoreId(user, body.storeId);
-  const effective = getEffectiveJobConfig(storeId, jobKey);
+  const effective = await getEffectiveJobConfig(storeId, jobKey);
 
   const result = await executeJob(jobKey, {
     storeId,

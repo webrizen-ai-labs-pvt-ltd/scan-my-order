@@ -7,5 +7,5 @@ node_modules
 # Prisma client is generated per machine (postinstall runs `prisma generate`); it embeds absolute paths
 apps/backend/src/generated/
 
-# Scheduler state written at runtime by each backend (last-run times, per-store job settings)
-apps/backend/data/cron-configs.json
+# Legacy scheduler state file (now stored in the StoreJobConfig table; imported once on startup)
+apps/backend/data/cron-configs.json*

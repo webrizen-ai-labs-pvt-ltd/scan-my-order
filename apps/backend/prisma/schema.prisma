@@ -206,6 +206,7 @@ model Store {
   offlineUpiPayeeName String?
   payments            Payment[]
   refunds             Refund[]
+  jobConfigs          StoreJobConfig[]
 
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
   taxRules     Json?       @default("[]")
@@ -828,5 +829,27 @@ model Notification {
   @@index([isRead])
 }
 
+// Per-store settings and last-run status for scheduled maintenance jobs (see src/jobs/registry.js).
+// Kept in the database so settings survive deploys and are shared by every backend instance.
+model StoreJobConfig {
+  id                String    @id @default(cuid())
+  storeId           String
+  store             Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  jobKey            String
 
+  // null = use the job's default from the registry
+  enabled           Boolean?
+  schedule          String?
+  params            Json?
 
+  lastRunAt         DateTime?
+  lastRunStatus     String?   // 'SUCCESS' | 'FAILED'
+  lastRunSummary    String?
+  lastRunDurationMs Int?
+  lastRunError      String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([storeId, jobKey])
+}
