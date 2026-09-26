@@ -28,6 +28,8 @@ import {
   Loading03Icon,
 } from 'hugeicons-react';
 import { CallWaiterModal } from '../components/call-waiter-modal';
+import { WaiterFab } from '../components/waiter-fab';
+import { useWaiterCall } from '../hooks/use-waiter-call';
 import { CustomerWalletModal } from '../components/customer-wallet-modal';
 
 // ─── Dietary Badge (FSSAI-style, refined) ────────────────────────────────────
@@ -221,7 +223,6 @@ export const StoreMenuPage = () => {
 
   // Call Waiter Modal State
   const [showCallWaiter, setShowCallWaiter] = useState(false);
-  const [isCallActive, setIsCallActive] = useState(false);
 
   // Store Loyalty & Wallet State
   const [walletData, setWalletData] = useState(null);
@@ -243,6 +244,10 @@ export const StoreMenuPage = () => {
     const num = parseInt(tableNumber, 10);
     return store.tables.find(t => t.tableNumber === num) || null;
   }, [store?.tables, tableNumber]);
+
+  // Waiter call for this table (shared by the corner waiter, the header bell and the call sheet)
+  const waiterCall = useWaiterCall({ storeId: store?.id, tableNumber, tableId: resolvedTable?.id, watching: showCallWaiter });
+  const isCallActive = Boolean(waiterCall.activeCall);
 
   const showToast = (message, type = 'info') => {
     setToast({ message, type });
@@ -855,8 +860,8 @@ export const StoreMenuPage = () => {
               </button>
             )}
 
-            {/* Call Waiter (inline icon) */}
-            {tableNumber && (
+            {/* Call Waiter (header icon): shown while the corner waiter is tucked away behind the cart bar */}
+            {tableNumber && (getTotalItems() > 0 || isCallActive) && (
               <button
                 type="button"
                 onClick={() => setShowCallWaiter(true)}
@@ -1087,6 +1092,17 @@ export const StoreMenuPage = () => {
               </button>
             </div>
           </div>
+        )}
+
+        {/* ── Waiter in the corner: tap to call; tucked away while the cart bar shows ── */}
+        {tableNumber && (
+          <WaiterFab
+            hidden={getTotalItems() > 0 || showCallWaiter}
+            activeCall={waiterCall.activeCall}
+            tableNumber={tableNumber}
+            accentColor={brandColorHex}
+            onClick={() => setShowCallWaiter(true)}
+          />
         )}
 
         {/* ── Sticky Cart Footer Bar ─────────────────────────────────── */}
@@ -1572,10 +1588,9 @@ export const StoreMenuPage = () => {
           <CallWaiterModal
             open={showCallWaiter}
             onClose={() => setShowCallWaiter(false)}
-            storeId={store.id}
             tableNumber={tableNumber}
-            tableId={resolvedTable?.id}
-            onCallActiveChange={setIsCallActive}
+            accentColor={brandColorHex}
+            call={waiterCall}
           />
         )}
 

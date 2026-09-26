@@ -619,6 +619,7 @@ export const WaiterTasks = () => {
                     <div className="truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">
                       T{call.table?.tableNumber || '—'} · {label}
                     </div>
+                    {call.note && <div className="truncate text-xs italic text-zinc-500" title={call.note}>“{call.note}”</div>}
                     <div className="text-xs text-zinc-400">
                       {isAcknowledged ? 'On the way' : isAssignedToMe ? `${remainingSec}s to respond` : call.assignedWaiterName || 'Unassigned'}
                     </div>

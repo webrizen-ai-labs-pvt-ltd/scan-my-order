@@ -28,6 +28,7 @@ import { StoreEdit } from './pages/store-edit';
 import { BrandSetup } from './pages/brand-setup';
 import { Subscriptions } from './pages/subscriptions';
 import { Reservations } from './pages/reservations';
+import { NewReservationPage } from './pages/reservations/new-reservation-page';
 import { Employees } from './pages/employees';
 import { TableAnalytics } from './pages/table-analytics';
 import { Invoices } from './pages/invoices';
@@ -48,6 +49,7 @@ function App() {
           {/* Reservations (Cashier + Waiter + Manager/Admin) */}
           <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'CASHIER', 'WAITER']} />}>
             <Route path="/dashboard/reservations" element={<Reservations />} />
+            <Route path="/dashboard/reservations/new" element={<NewReservationPage />} />
           </Route>
 
           {/* POS & Orders (Cashier + Manager/Admin) */}

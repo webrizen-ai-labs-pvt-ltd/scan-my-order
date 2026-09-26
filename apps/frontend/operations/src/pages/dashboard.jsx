@@ -353,9 +353,9 @@ export const Dashboard = () => {
         onSeatReservation={handleSeatReservation}
         onBookTable={(table) => {
           if (table) {
-            navigate(`/dashboard/reservations?tableId=${table.id}&tableNumber=${table.tableNumber}`);
+            navigate(`/dashboard/reservations/new?tableId=${table.id}${selectedStoreId ? `&store=${selectedStoreId}` : ''}`);
           } else {
-            navigate('/dashboard/reservations?new=true');
+            navigate(`/dashboard/reservations/new${selectedStoreId ? `?store=${selectedStoreId}` : ''}`);
           }
         }}
         extraViews={[

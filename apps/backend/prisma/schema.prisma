@@ -148,6 +148,8 @@ enum WaiterCallType {
   WATER
   BILL
   CALL_WAITER
+  CUTLERY
+  CLEAN_TABLE
 }
 
 enum WaiterCallStatus {
@@ -669,6 +671,8 @@ model WaiterCall {
   tableId     String
   table       Table            @relation(fields: [tableId], references: [id], onDelete: Cascade)
   type        WaiterCallType
+  // What the guest typed (optional, max 100 chars)
+  note        String?
   status      WaiterCallStatus @default(PENDING)
   resolvedById String?
   resolvedBy  User?            @relation(fields: [resolvedById], references: [id])

@@ -3,11 +3,11 @@ const { createHttpError } = require("../../middleware/error-handler");
 const { broadcastToStore } = require("../orders/sse-service");
 const { sendNotification } = require("../notifications/notification-service");
 const dispatchEngine = require("./waiter-dispatch-engine");
+const { CALL_TYPE_LABELS, callTypeLabel } = require("./call-types");
 
 // Helper to safely map customer call types to DB enum (WATER, BILL, CALL_WAITER)
 function mapToDbCallType(type) {
-  if (type === 'WATER' || type === 'BILL') return type;
-  return 'CALL_WAITER';
+  return Object.prototype.hasOwnProperty.call(CALL_TYPE_LABELS, type) ? type : 'CALL_WAITER';
 }
 
 // --- Public (QR Menu) ---
@@ -34,6 +34,7 @@ async function createWaiterCall(storeId, input) {
   }
 
   const dbType = mapToDbCallType(type);
+  note = typeof note === 'string' ? note.trim().slice(0, 100) : '';
 
   // Anti-Spam Filter: Check if a call is already active for this table within last 60 seconds
   const existingCall = await prisma.waiterCall.findFirst({
@@ -71,6 +72,7 @@ async function createWaiterCall(storeId, input) {
       storeId,
       tableId,
       type: dbType,
+      note: note || null,
       status: 'PENDING'
     },
     include: {
@@ -79,7 +81,7 @@ async function createWaiterCall(storeId, input) {
   });
 
   // Run the Intelligent Dispatch Engine (with 60-second escalation timer)
-  const dispatchState = await dispatchEngine.dispatchCall(call, call.table?.tableNumber, note || type);
+  const dispatchState = await dispatchEngine.dispatchCall(call, call.table?.tableNumber, note);
 
   // Broadcast to store staff
   broadcastToStore(storeId, "WAITER_CALL_CREATED", {
@@ -98,7 +100,7 @@ async function createWaiterCall(storeId, input) {
     storeId,
     type: 'WAITER_CALL',
     title: `Table ${tblNumber} Request`,
-    body: `Customer requested: ${type || 'Call Waiter'}${note ? ` (${note})` : ''}`,
+    body: `Customer requested: ${callTypeLabel(dbType)}${note ? ` (${note})` : ''}`,
     data: {
       callId: call.id,
       tableId: call.tableId,
@@ -172,7 +174,7 @@ async function getTableCallStatus(storeId, tableIdentifier) {
     createdAt: activeCall.createdAt,
     assignedWaiterName: dispatch?.assignedWaiterName || activeCall.resolvedBy?.name || null,
     escalationLevel: dispatch?.escalationLevel || 0,
-    note: dispatch?.note || ''
+    note: activeCall.note || ''
   };
 }
 
@@ -230,7 +232,7 @@ async function getActiveCalls(storeId) {
       assignedWaiterId: dispatch?.assignedWaiterId || c.resolvedById || null,
       assignedWaiterName: dispatch?.assignedWaiterName || c.resolvedBy?.name || null,
       escalationLevel: dispatch?.escalationLevel || 0,
-      note: dispatch?.note || '',
+      note: c.note || '',
       remainingSeconds
     };
   });
