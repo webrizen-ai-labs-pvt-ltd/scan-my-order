@@ -1,13 +1,19 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   SidebarProvider,
   Sidebar,
   SidebarContent,
   SidebarHeader,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarMenuSub,
+  SidebarMenuSubItem,
+  SidebarMenuSubButton,
   SidebarFooter,
   Button,
   Breadcrumb,
@@ -39,7 +45,11 @@ import {
   Building02Icon,
   Calendar01Icon,
   UserGroupIcon,
-  Analytics01Icon
+  Analytics01Icon,
+  Settings02Icon,
+  ArrowDown01Icon,
+  CashierIcon,
+  ChartLineData01Icon
 } from 'hugeicons-react';
 import { StaffNotificationCenter } from '../components/staff-notification-center';
 
@@ -53,7 +63,11 @@ export const OperationsLayout = () => {
     navigate('/login');
   };
 
-  const navItems = useMemo(() => {
+  // The sidebar is organised into categories. A group with `label: null` renders as
+  // plain top-level items; a group with `collapsible: true` renders as a single
+  // clickable row that expands to reveal its items. Groups with no visible items
+  // for the current role are dropped entirely.
+  const navGroups = useMemo(() => {
     const role = user?.role;
     const isSuperOrTenantAdmin = role === 'SUPER_ADMIN' || role === 'TENANT_ADMIN';
     const isManager = role === 'STORE_MANAGER' || isSuperOrTenantAdmin;
@@ -61,38 +75,97 @@ export const OperationsLayout = () => {
     const isKitchen = role === 'KITCHEN_STAFF' || isManager;
     const isWaiter = role === 'WAITER' || isManager;
 
-    const items = [
-      { name: 'Dashboard', path: '/dashboard', icon: DashboardSquare01Icon, show: true },
-      { name: 'POS (Point of Sale)', path: '/dashboard/pos', icon: Store01Icon, show: isCashier },
-      { name: 'Reservations', path: '/dashboard/reservations', icon: Calendar01Icon, show: isCashier || isWaiter },
-      { name: 'KDS (Kitchen)', path: '/dashboard/kds', icon: Pot02Icon, show: isKitchen },
-      { name: 'Waiter Panel', path: '/dashboard/waiter', icon: Dish01Icon, show: isWaiter },
-      { name: 'Orders History', path: '/dashboard/orders', icon: Invoice01Icon, show: isCashier },
-      { name: 'Employees', path: '/dashboard/employees', icon: UserGroupIcon, show: isSuperOrTenantAdmin },
-      { name: 'Table Analytics', path: '/dashboard/table-analytics', icon: Analytics01Icon, show: isSuperOrTenantAdmin },
-      { name: 'Inventory', path: '/dashboard/inventory', icon: DeliveryTruck01Icon, show: isManager },
-      { name: 'Stores Setup', path: '/dashboard/stores', icon: Store02Icon, show: isManager },
-      { name: 'Brand Setup', path: '/dashboard/brand', icon: Building02Icon, show: isSuperOrTenantAdmin },
-      { name: 'Subscriptions', path: '/dashboard/subscriptions', icon: CreditCardIcon, show: isSuperOrTenantAdmin },
-      { name: 'Settings', path: '/dashboard/settings', icon: Settings01Icon, show: true },
+    const groups = [
+      {
+        key: 'primary',
+        label: null,
+        items: [
+          { name: 'Dashboard', path: '/dashboard', icon: DashboardSquare01Icon, show: true },
+        ],
+      },
+      {
+        key: 'cashier',
+        label: 'Cashier',
+        icon: CashierIcon,
+        collapsible: true,
+        items: [
+          { name: 'POS', path: '/dashboard/pos', icon: Store01Icon, show: isCashier },
+          { name: 'Reservations', path: '/dashboard/reservations', icon: Calendar01Icon, show: isCashier || isWaiter },
+          { name: 'Order History', path: '/dashboard/orders', icon: Invoice01Icon, show: isCashier },
+        ],
+      },
+      {
+        key: 'floor',
+        label: 'Floor Management',
+        icon: RestaurantIcon,
+        collapsible: true,
+        items: [
+          { name: 'KOT', path: '/dashboard/kds', icon: Pot02Icon, show: isKitchen },
+          { name: 'Waiter Panel', path: '/dashboard/waiter', icon: Dish01Icon, show: isWaiter },
+          { name: 'Inventory', path: '/dashboard/inventory', icon: DeliveryTruck01Icon, show: isManager },
+        ],
+      },
+      {
+        key: 'setup',
+        label: 'Store Setup & Payments',
+        icon: Settings02Icon,
+        collapsible: true,
+        items: [
+          { name: 'Store Setup', path: '/dashboard/stores', icon: Store02Icon, show: isManager },
+          { name: 'Brand Setup', path: '/dashboard/brand', icon: Building02Icon, show: isSuperOrTenantAdmin },
+          { name: 'Employee Management', path: '/dashboard/employees', icon: UserGroupIcon, show: isSuperOrTenantAdmin },
+          { name: 'Subscription', path: '/dashboard/subscriptions', icon: CreditCardIcon, show: isSuperOrTenantAdmin },
+          { name: 'Settings', path: '/dashboard/settings', icon: Settings01Icon, show: true },
+        ],
+      },
+      {
+        key: 'reports',
+        label: 'Reports',
+        icon: ChartLineData01Icon,
+        collapsible: true,
+        items: [
+          { name: 'Table Analytics', path: '/dashboard/table-analytics', icon: Analytics01Icon, show: isSuperOrTenantAdmin },
+        ],
+      },
     ];
 
-    return items.filter(item => item.show);
+    return groups
+      .map(group => ({ ...group, items: group.items.filter(item => item.show) }))
+      .filter(group => group.items.length > 0);
   }, [user?.role]);
+
+  const isItemActive = (path) =>
+    location.pathname === path || (path !== '/dashboard' && location.pathname.startsWith(path));
+
+  // Open/closed state for collapsible groups. A group not yet toggled by the user
+  // (`undefined`) auto-opens whenever one of its routes is active.
+  const [openGroups, setOpenGroups] = useState({});
+  const isGroupOpen = (group) =>
+    openGroups[group.key] !== undefined
+      ? openGroups[group.key]
+      : group.items.some(item => isItemActive(item.path));
+  const toggleGroup = (group) =>
+    setOpenGroups(prev => ({ ...prev, [group.key]: !isGroupOpen(group) }));
+
+  const itemLinkClass = (isActive) =>
+    `flex items-center gap-3 px-3 py-2 rounded transition-all duration-200 ${isActive
+      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-medium'
+      : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-zinc-100'
+    }`;
 
   const routeConfig = {
     "dashboard": { label: "Dashboard", icon: DashboardSquare01Icon },
-    "employees": { label: "Employees", icon: UserGroupIcon },
+    "employees": { label: "Employee Management", icon: UserGroupIcon },
     "table-analytics": { label: "Table Analytics", icon: Analytics01Icon },
-    "pos": { label: "Point of Sale", icon: Store01Icon },
+    "pos": { label: "POS", icon: Store01Icon },
     "reservations": { label: "Table Reservations", icon: Calendar01Icon },
-    "kds": { label: "Kitchen Display", icon: Pot02Icon },
+    "kds": { label: "KOT", icon: Pot02Icon },
     "waiter": { label: "Waiter View", icon: Dish01Icon },
-    "orders": { label: "Orders", icon: Invoice01Icon },
+    "orders": { label: "Order History", icon: Invoice01Icon },
     "inventory": { label: "Inventory Management", icon: DeliveryTruck01Icon },
-    "stores": { label: "Stores Setup", icon: Store02Icon },
+    "stores": { label: "Store Setup", icon: Store02Icon },
     "brand": { label: "Brand Setup", icon: Building02Icon },
-    "subscriptions": { label: "Subscriptions", icon: CreditCardIcon },
+    "subscriptions": { label: "Subscription", icon: CreditCardIcon },
     "settings": { label: "Settings", icon: Settings01Icon },
   };
 
@@ -139,28 +212,87 @@ export const OperationsLayout = () => {
             </Link>
           </SidebarHeader>
 
-          <SidebarContent className="p-2 pt-4">
-            <SidebarMenu>
-              {navItems.map((item) => {
-                const isActive = location.pathname === item.path || (item.path !== '/dashboard' && location.pathname.startsWith(item.path));
+          <SidebarContent className="gap-0 p-2 pt-2">
+            {navGroups.map((group) => {
+              // Collapsible category: one clickable row that expands into its items.
+              if (group.collapsible) {
+                const open = isGroupOpen(group);
+                const hasActiveChild = group.items.some(item => isItemActive(item.path));
                 return (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.name}>
-                      <Link
-                        to={item.path}
-                        className={`flex items-center gap-3 px-3 py-2 rounded transition-all duration-200 ${isActive
-                          ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-medium'
-                          : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-zinc-100'
-                          }`}
-                      >
-                        <item.icon size={18} variant={isActive ? "solid" : "stroke"} />
-                        <span>{item.name}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <SidebarGroup key={group.key} className="py-1.5">
+                    <SidebarGroupContent>
+                      <SidebarMenu>
+                        <SidebarMenuItem>
+                          <SidebarMenuButton
+                            isActive={hasActiveChild && !open}
+                            tooltip={group.label}
+                            onClick={() => toggleGroup(group)}
+                            aria-expanded={open}
+                            className={`${itemLinkClass(hasActiveChild && !open)} h-auto w-full justify-between`}
+                          >
+                            <span className="flex items-center gap-3">
+                              <group.icon size={18} variant={open || hasActiveChild ? "solid" : "stroke"} />
+                              <span>{group.label}</span>
+                            </span>
+                            <ArrowDown01Icon
+                              size={16}
+                              className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+                            />
+                          </SidebarMenuButton>
+
+                          {open && (
+                            <SidebarMenuSub className="mx-3 mt-1 border-zinc-200 dark:border-zinc-800">
+                              {group.items.map((item) => {
+                                const isActive = isItemActive(item.path);
+                                return (
+                                  <SidebarMenuSubItem key={item.path}>
+                                    <SidebarMenuSubButton asChild isActive={isActive}>
+                                      <Link to={item.path} className={`${itemLinkClass(isActive)} h-auto gap-2.5 px-2.5 py-1.5`}>
+                                        <item.icon size={16} variant={isActive ? "solid" : "stroke"} className="shrink-0" />
+                                        {/* Wrap rather than truncate so long labels stay readable */}
+                                        <span className="!whitespace-normal">{item.name}</span>
+                                      </Link>
+                                    </SidebarMenuSubButton>
+                                  </SidebarMenuSubItem>
+                                );
+                              })}
+                            </SidebarMenuSub>
+                          )}
+                        </SidebarMenuItem>
+                      </SidebarMenu>
+                    </SidebarGroupContent>
+                  </SidebarGroup>
                 );
-              })}
-            </SidebarMenu>
+              }
+
+              // Flat category: optional section heading followed by its items.
+              return (
+                <SidebarGroup key={group.key} className="py-1.5">
+                  {group.label && (
+                    <SidebarGroupLabel className="px-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
+                      {group.label}
+                    </SidebarGroupLabel>
+                  )}
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {group.items.map((item) => {
+                        const isActive = isItemActive(item.path);
+                        return (
+                          <SidebarMenuItem key={item.path}>
+                            <SidebarMenuButton asChild isActive={isActive} tooltip={item.name}>
+                              <Link to={item.path} className={itemLinkClass(isActive)}>
+                                <item.icon size={18} variant={isActive ? "solid" : "stroke"} />
+                                <span>{item.name}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              );
+            })}
           </SidebarContent>
 
           <SidebarFooter className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
