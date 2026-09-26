@@ -140,6 +140,7 @@ async function getTableAnalytics(actor, filters = {}) {
         paymentModel: true,
         paymentMethod: true,
         cashAmount: true,
+        duesAmount: true,
         onlineAmount: true,
         createdAt: true,
         updatedAt: true
@@ -159,6 +160,7 @@ async function getTableAnalytics(actor, filters = {}) {
         status: true,
         paymentMethod: true,
         cashAmount: true,
+        duesAmount: true,
         onlineAmount: true,
         createdAt: true,
         updatedAt: true
@@ -288,12 +290,15 @@ async function getTableAnalytics(actor, filters = {}) {
     // Payment method breakdown
     let cashRevenue = 0;
     let onlineRevenue = 0;
+    let duesRevenue = 0; // sold on credit, collected later on the Dues page
     for (const o of tblOrders) {
       if (o.paymentMethod === 'CASH') cashRevenue += o.totalAmount;
       else if (o.paymentMethod === 'ONLINE') onlineRevenue += o.totalAmount;
+      else if (o.paymentMethod === 'DUES') duesRevenue += o.totalAmount;
       else if (o.paymentMethod === 'SPLIT') {
         cashRevenue += (o.cashAmount || 0);
         onlineRevenue += (o.onlineAmount || 0);
+        duesRevenue += (o.duesAmount || 0);
       } else {
         cashRevenue += o.totalAmount; // fallback
       }
@@ -320,6 +325,7 @@ async function getTableAnalytics(actor, filters = {}) {
       revpash,
       cashRevenue,
       onlineRevenue,
+      duesRevenue,
       waiterCallsCount: tblCalls.length,
       totalReservations,
       noShowReservations,

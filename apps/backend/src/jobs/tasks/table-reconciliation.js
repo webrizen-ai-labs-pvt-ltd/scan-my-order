@@ -17,10 +17,8 @@ async function runTableReconciliationJob({ storeId, tenantId, params = {} }) {
   // 1. Reconcile lingering active table sessions older than 2 hours of no order placement
   const sessionWhere = {
     status: 'ACTIVE',
-    OR: [
-      { lastOrderAt: { lt: sessionCutoff } },
-      { lastOrderAt: null, updatedAt: { lt: sessionCutoff } }
-    ],
+    // lastOrderAt is never null (defaults to when the session opened), so no fallback is needed
+    lastOrderAt: { lt: sessionCutoff },
     // Never close a session that still has open or unpaid orders — that bill must be collected
     orders: {
       none: { status: { in: ['DRAFT', 'PENDING_VERIFICATION', 'PENDING_PAYMENT', 'PROCESSING', 'READY', 'SERVED'] } }

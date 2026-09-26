@@ -12,11 +12,17 @@ import { PosActiveOrdersPage } from './pages/pos/pos-active-orders-page';
 import { PosCheckoutPage } from './pages/pos/pos-checkout-page';
 import { PosCustomDishPage } from './pages/pos/pos-custom-dish-page';
 import { PosDeliveryPage } from './pages/pos/pos-delivery-page';
+import { PosCorporateDetailsPage, PosInvoicePage } from './pages/pos/pos-invoice-pages';
+import { PosDuesPage } from './pages/pos/pos-dues-page';
+import { Dues } from './pages/dues/dues-page';
+import { DuesPaymentPage, DuesAccountPage } from './pages/dues/dues-child-pages';
 import { KDS } from './pages/kds';
 import { Waiter } from './pages/waiter';
 import { WaiterTasks } from './pages/waiter-tasks';
 import { WaiterPOS } from './pages/waiter-pos';
 import { Orders } from './pages/orders';
+import { OrderDetailPage } from './pages/orders/order-detail-page';
+import { OrderInvoicePage, OrderRefundPage, OrderCancelPage } from './pages/orders/order-action-pages';
 import { Inventory } from './pages/inventory';
 import { Settings } from './pages/settings';
 import { Stores } from './pages/stores';
@@ -25,8 +31,12 @@ import { StoreEdit } from './pages/store-edit';
 import { BrandSetup } from './pages/brand-setup';
 import { Subscriptions } from './pages/subscriptions';
 import { Reservations } from './pages/reservations';
+import { NewReservationPage } from './pages/reservations/new-reservation-page';
 import { Employees } from './pages/employees';
 import { TableAnalytics } from './pages/table-analytics';
+import { Invoices } from './pages/invoices';
+import { AuditLog } from './pages/audit-log';
+import { Sales } from './pages/sales/sales-page';
 
 function App() {
   return (
@@ -43,6 +53,7 @@ function App() {
           {/* Reservations (Cashier + Waiter + Manager/Admin) */}
           <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'CASHIER', 'WAITER']} />}>
             <Route path="/dashboard/reservations" element={<Reservations />} />
+            <Route path="/dashboard/reservations/new" element={<NewReservationPage />} />
           </Route>
 
           {/* POS & Orders (Cashier + Manager/Admin) */}
@@ -54,8 +65,20 @@ function App() {
               <Route path="custom-dish" element={<PosCustomDishPage />} />
               <Route path="delivery" element={<PosDeliveryPage />} />
               <Route path="checkout/:kind/:id" element={<PosCheckoutPage />} />
+              <Route path="checkout/:kind/:id/corporate" element={<PosCorporateDetailsPage />} />
+              <Route path="checkout/:kind/:id/invoice" element={<PosInvoicePage />} />
+              <Route path="checkout/:kind/:id/dues" element={<PosDuesPage />} />
             </Route>
             <Route path="/dashboard/orders" element={<Orders />} />
+            <Route path="/dashboard/orders/:orderId" element={<OrderDetailPage />} />
+            <Route path="/dashboard/orders/:orderId/invoice" element={<OrderInvoicePage />} />
+            <Route path="/dashboard/orders/:orderId/refund" element={<OrderRefundPage />} />
+            <Route path="/dashboard/orders/:orderId/cancel" element={<OrderCancelPage />} />
+            <Route path="/dashboard/invoices" element={<Invoices />} />
+            <Route path="/dashboard/dues" element={<Dues />} />
+            <Route path="/dashboard/dues/record-payment" element={<DuesPaymentPage />} />
+            <Route path="/dashboard/dues/accounts/new" element={<DuesAccountPage />} />
+            <Route path="/dashboard/dues/accounts/:accountId" element={<DuesAccountPage />} />
           </Route>
 
           {/* KDS (Kitchen + Manager/Admin) */}
@@ -76,6 +99,8 @@ function App() {
             <Route path="/dashboard/inventory" element={<Inventory />} />
             <Route path="/dashboard/stores" element={<Stores />} />
             <Route path="/dashboard/stores/:id/edit" element={<StoreEdit />} />
+            <Route path="/dashboard/audit" element={<AuditLog />} />
+            <Route path="/dashboard/sales" element={<Sales />} />
           </Route>
 
           {/* Tenant Setup, Staff & Subscriptions (Tenant/Super Admin) */}

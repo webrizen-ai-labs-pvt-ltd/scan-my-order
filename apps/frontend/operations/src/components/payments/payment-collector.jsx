@@ -36,7 +36,7 @@ const CHANNELS = [
   },
 ];
 
-const CHANNEL_LABEL = { RAZORPAY: 'Online (Razorpay)', UPI_OFFLINE: 'UPI (own QR)', CASH: 'Cash' };
+const CHANNEL_LABEL = { RAZORPAY: 'Online (Razorpay)', UPI_OFFLINE: 'UPI (own QR)', CASH: 'Cash', DUES: 'Dues' };
 const STATUS_TONE = {
   PAID: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
   PENDING: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',

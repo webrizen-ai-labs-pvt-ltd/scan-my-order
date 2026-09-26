@@ -97,63 +97,23 @@ export const TABLE_STATUS_CONFIG = {
 };
 
 /**
- * Renders a realistic architectural dining chair with curved cushioned backrest and seat pad.
- * In floor view: rotation=0 means backrest at top, seat pointing down toward table.
+ * Flat chair marker: a small rounded pill, tinted with the table's status colour when seated.
+ * rotation=0 places it above the table (long side facing the table).
  */
-const RealisticChair = ({ x, y, rotation = 0, isOccupied = false, accentColor = '#3b82f6' }) => {
-  return (
-    <g transform={`translate(${x}, ${y}) rotate(${rotation})`} className="chair-element">
-      {/* Soft ambient floor shadow */}
-      <ellipse cx="0" cy="2" rx="9" ry="6.5" fill="rgba(0,0,0,0.55)" filter="url(#chair-drop-shadow)" />
-
-      {/* Cushioned Seat Base */}
-      <rect
-        x="-9.5"
-        y="-8"
-        width="19"
-        height="14.5"
-        rx="4.5"
-        fill={isOccupied ? "url(#chair-seat-occupied)" : "url(#chair-seat-cushion)"}
-        stroke="#1c1917"
-        strokeWidth="0.8"
-      />
-
-      {/* Fine upholstery seam line */}
-      <rect
-        x="-7.5"
-        y="-6.5"
-        width="15"
-        height="11"
-        rx="3.5"
-        fill="none"
-        stroke="rgba(255,255,255,0.1)"
-        strokeWidth="0.6"
-      />
-
-      {/* Ergonomic Curved Backrest (Solid Walnut Rail / Dark Steel Frame) */}
-      <path
-        d="M -11,-7 Q 0,-13 11,-7 C 11.2,-5 9.5,-4 8,-5.2 Q 0,-10 -8,-5.2 C -9.5,-4 -11.2,-5 -11,-7 Z"
-        fill={isOccupied ? accentColor : "url(#chair-rail-wood)"}
-        stroke="#0c0a09"
-        strokeWidth="1"
-      />
-
-      {/* Subtle backrest highlight */}
-      <path
-        d="M -8.5,-7.5 Q 0,-11.5 8.5,-7.5"
-        fill="none"
-        stroke="rgba(255,255,255,0.25)"
-        strokeWidth="0.8"
-        strokeLinecap="round"
-      />
-
-      {/* Diner dot / avatar if seated */}
-      {isOccupied && (
-        <circle cx="0" cy="-1.5" r="3" fill="#ffffff" opacity="0.85" />
-      )}
-    </g>
-  );
-};
+const RealisticChair = ({ x, y, rotation = 0, isOccupied = false, accentColor = '#3b82f6' }) => (
+  <g transform={`translate(${x}, ${y}) rotate(${rotation})`}>
+    <rect
+      x="-8"
+      y="-4"
+      width="16"
+      height="8"
+      rx="4"
+      className={isOccupied ? undefined : 'fill-zinc-200 dark:fill-zinc-800'}
+      fill={isOccupied ? accentColor : undefined}
+      fillOpacity={isOccupied ? 0.45 : undefined}
+    />
+  </g>
+);
 
 /**
  * Computes exact chair positions around a table according to its seating capacity N.
@@ -268,7 +228,7 @@ function computeFloorLayout(tables = []) {
   const colWidth = 1000 / cols;
   const rowHeight = 150;
   const startX = 60 + colWidth / 2;
-  const startY = 105;
+  const startY = 90;
 
   return tables.map((tbl, index) => {
     const col = index % cols;
@@ -324,19 +284,6 @@ const SvgTableElement = ({ table, isSelected, onSelect }) => {
     return generateChairsForTable(capacity, table.shape, W, H, isOccupied, cfg.color);
   }, [capacity, table.shape, W, H, isOccupied, cfg.color]);
 
-  // Glow filters based on status
-  const glowId = isAttention
-    ? 'url(#glow-red)'
-    : isReady
-      ? 'url(#glow-purple)'
-      : isBill
-        ? 'url(#glow-gold)'
-        : isReserved
-          ? 'url(#glow-pink)'
-          : isSelected
-            ? 'url(#glow-selected)'
-            : 'none';
-
   return (
     <g
       id={`table-node-${table.tableNumber}`}
@@ -364,24 +311,21 @@ const SvgTableElement = ({ table, isSelected, onSelect }) => {
         </circle>
       )}
 
-      {/* Selected Dashed Orbital Halo */}
+      {/* Selection ring */}
       {isSelected && (
         <circle
           cx="0"
           cy="0"
-          r={isRound ? R + 18 : Math.max(W, H) / 2 + 18}
-          stroke="#ffffff"
-          strokeWidth="1.8"
+          r={isRound ? R + 17 : Math.max(W, H) / 2 + 17}
+          stroke={cfg.color}
+          strokeWidth="1.5"
           strokeDasharray="4 3"
           fill="none"
-          opacity="0.85"
-        >
-          <animateTransform attributeName="transform" type="rotate" from="0" to="360" dur="18s" repeatCount="indefinite" />
-        </circle>
+        />
       )}
 
-      {/* 1. Realistic Chairs Placed Around Table (Exactly N Chairs) */}
-      <g className="table-chairs-group">
+      {/* Chairs (exactly one per seat) */}
+      <g>
         {chairs.map((chair) => (
           <RealisticChair
             key={chair.id}
@@ -394,241 +338,92 @@ const SvgTableElement = ({ table, isSelected, onSelect }) => {
         ))}
       </g>
 
-      {/* 2. Physical Table Top with Architectural Depth */}
-      <g className="table-top-group">
-        {isRound ? (
-          <>
-            {/* Table Floor Cast Shadow */}
-            <circle cx="0" cy="5" r={R} fill="rgba(0,0,0,0.6)" filter="url(#table-floor-shadow)" />
+      {/* Table top: flat surface with a status-coloured outline */}
+      {isRound ? (
+        <circle
+          cx="0"
+          cy="0"
+          r={R}
+          className="fill-white dark:fill-zinc-900"
+          stroke={cfg.color}
+          strokeWidth={isSelected ? 2.5 : 1.5}
+        />
+      ) : (
+        <rect
+          x={-W / 2}
+          y={-H / 2}
+          width={W}
+          height={H}
+          rx="8"
+          className="fill-white dark:fill-zinc-900"
+          stroke={cfg.color}
+          strokeWidth={isSelected ? 2.5 : 1.5}
+        />
+      )}
 
-            {/* Solid Wood Beveled Rim */}
-            <circle
-              cx="0"
-              cy="0"
-              r={R}
-              fill="url(#walnut-dark-wood)"
-              stroke="#18181b"
-              strokeWidth="1.2"
-              filter={glowId}
-            />
-
-            {/* Ambient LED Status Ring */}
-            <circle
-              cx="0"
-              cy="0"
-              r={R - 2}
-              fill="url(#tabletop-slate-surface)"
-              stroke={cfg.color}
-              strokeWidth={isSelected ? 3 : 2}
-            />
-
-            {/* Fine Specular Inner Rim */}
-            <circle cx="0" cy="0" r={R - 4} fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.8" />
-          </>
-        ) : (
-          <>
-            {/* Table Floor Cast Shadow */}
-            <rect
-              x={-W / 2}
-              y={-H / 2 + 5}
-              width={W}
-              height={H}
-              rx="8"
-              fill="rgba(0,0,0,0.6)"
-              filter="url(#table-floor-shadow)"
-            />
-
-            {/* Solid Wood Beveled Rim */}
-            <rect
-              x={-W / 2}
-              y={-H / 2}
-              width={W}
-              height={H}
-              rx="8"
-              fill="url(#walnut-dark-wood)"
-              stroke="#18181b"
-              strokeWidth="1.2"
-              filter={glowId}
-            />
-
-            {/* Ambient LED Status Ring */}
-            <rect
-              x={-W / 2 + 2}
-              y={-H / 2 + 2}
-              width={W - 4}
-              height={H - 4}
-              rx="6"
-              fill="url(#tabletop-slate-surface)"
-              stroke={cfg.color}
-              strokeWidth={isSelected ? 3 : 2}
-            />
-
-            {/* Fine Specular Inner Rim */}
-            <rect
-              x={-W / 2 + 4}
-              y={-H / 2 + 4}
-              width={W - 8}
-              height={H - 8}
-              rx="5"
-              fill="none"
-              stroke="rgba(255,255,255,0.15)"
-              strokeWidth="0.8"
-            />
-          </>
-        )}
-      </g>
-
-      {/* 3. Surface Architectural Information Display */}
-      <g className="table-info-display pointer-events-none">
-        {/* Table Number Pill */}
-        <g transform="translate(0, -7)">
-          <rect
-            x="-18"
-            y="-9"
-            width="36"
-            height="18"
-            rx="5"
-            fill="#09090b"
-            stroke="rgba(255,255,255,0.2)"
-            strokeWidth="0.8"
-          />
-          <text
-            x="0"
-            y="0.5"
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="#ffffff"
-            fontSize="10.5"
-            fontWeight="900"
-            letterSpacing="0.4"
-          >
-            T{table.tableNumber}
-          </text>
-        </g>
-
-        {/* Capacity Label */}
+      {/* Table text */}
+      <g className="pointer-events-none">
         <text
           x="0"
-          y="7"
+          y="-9"
           textAnchor="middle"
-          fill="#a1a1aa"
-          fontSize="7.5"
-          fontWeight="600"
-          letterSpacing="0.2"
+          dominantBaseline="central"
+          className="fill-zinc-900 dark:fill-zinc-100"
+          fontSize="13"
+          fontWeight="700"
+        >
+          T{table.tableNumber}
+        </text>
+        <text
+          x="0"
+          y="4"
+          textAnchor="middle"
+          dominantBaseline="central"
+          className="fill-zinc-400 dark:fill-zinc-500"
+          fontSize="8"
+          fontWeight="500"
         >
           {capacity} seats
         </text>
+        <text
+          x="0"
+          y="16"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill={isReserved && table.activeReservation ? TABLE_STATUS_CONFIG.RESERVED.color : table.nextReservation && !table.currentOrder ? '#a1a1aa' : cfg.color}
+          fontSize="8"
+          fontWeight="600"
+        >
+          {isReserved && table.activeReservation
+            ? `${new Date(table.activeReservation.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${table.activeReservation.guestName?.split(' ')[0] || 'Booked'}`
+            : table.currentOrder
+              ? `₹${Math.round(table.currentOrder.totalAmount).toLocaleString('en-IN')} · ${cfg.label}`
+              : table.nextReservation
+                ? `Next ${new Date(table.nextReservation.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                : cfg.label}
+        </text>
+      </g>
 
-        {/* Live Sub-Badge: Status / Order / Reservation */}
-        {isReserved && table.activeReservation ? (
-          <g transform="translate(0, 18)">
-            <rect
-              x="-35"
-              y="-7"
-              width="70"
-              height="14"
-              rx="4"
-              fill="rgba(236,72,153,0.3)"
-              stroke="#EC4899"
-              strokeWidth="0.8"
-            />
-            <text
-              x="0"
-              y="0.5"
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#F472B6"
-              fontSize="7.5"
-              fontWeight="800"
-            >
-              {new Date(table.activeReservation.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} • {table.activeReservation.guestName?.split(' ')[0]}
-            </text>
-          </g>
-        ) : table.currentOrder ? (
-          <g transform="translate(0, 18)">
-            <rect
-              x="-30"
-              y="-7"
-              width="60"
-              height="14"
-              rx="4"
-              fill="rgba(59,130,246,0.25)"
-              stroke={cfg.color}
-              strokeWidth="0.8"
-            />
-            <text
-              x="0"
-              y="0.5"
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#93C5FD"
-              fontSize="7.5"
-              fontWeight="800"
-            >
-              ₹{Math.round(table.currentOrder.totalAmount).toLocaleString('en-IN')} • {cfg.label}
-            </text>
-          </g>
-        ) : table.nextReservation ? (
-          <g transform="translate(0, 18)">
-            <rect
-              x="-32"
-              y="-6.5"
-              width="64"
-              height="13"
-              rx="3.5"
-              fill="rgba(236,72,153,0.15)"
-              stroke="rgba(236,72,153,0.6)"
-              strokeWidth="0.6"
-              strokeDasharray="2 1"
-            />
-            <text
-              x="0"
-              y="0.5"
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill="#F472B6"
-              fontSize="7"
-              fontWeight="700"
-            >
-              Next: {new Date(table.nextReservation.startsAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </text>
-          </g>
-        ) : (
-          <g transform="translate(0, 18)">
-            <circle cx="-16" cy="0" r="2.5" fill="#10B981" />
-            <text
-              x="-10"
-              y="0.5"
-              textAnchor="start"
-              dominantBaseline="central"
-              fill="#10B981"
-              fontSize="7.5"
-              fontWeight="700"
-            >
-              Available
-            </text>
-          </g>
-        )}
-
-        {/* Top-Right Status Badge Indicator */}
+      <g className="pointer-events-none">
+        {/* Top-Right Status Badge Indicator */}        {/* Top-Right Status Badge Indicator */}
         {isAttention ? (
           <g transform={`translate(${isRound ? R - 6 : W / 2 - 4}, ${isRound ? -R + 6 : -H / 2 + 4})`}>
-            <circle cx="0" cy="0" r="7.5" fill="#EF4444" stroke="#ffffff" strokeWidth="1.2" />
+            <circle cx="0" cy="0" r="7.5" fill="#EF4444" className="stroke-white dark:stroke-zinc-950" strokeWidth="1.5" />
             <text x="0" y="3" textAnchor="middle" fill="#ffffff" fontSize="8.5" fontWeight="bold">!</text>
           </g>
         ) : isBill ? (
           <g transform={`translate(${isRound ? R - 6 : W / 2 - 4}, ${isRound ? -R + 6 : -H / 2 + 4})`}>
-            <circle cx="0" cy="0" r="7.5" fill="#EAB308" stroke="#ffffff" strokeWidth="1.2" />
+            <circle cx="0" cy="0" r="7.5" fill="#EAB308" className="stroke-white dark:stroke-zinc-950" strokeWidth="1.5" />
             <text x="0" y="3" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">₹</text>
           </g>
         ) : isReady ? (
           <g transform={`translate(${isRound ? R - 6 : W / 2 - 4}, ${isRound ? -R + 6 : -H / 2 + 4})`}>
-            <circle cx="0" cy="0" r="7.5" fill="#8B5CF6" stroke="#ffffff" strokeWidth="1.2" />
+            <circle cx="0" cy="0" r="7.5" fill="#8B5CF6" className="stroke-white dark:stroke-zinc-950" strokeWidth="1.5" />
             <text x="0" y="2.5" textAnchor="middle" fill="#ffffff" fontSize="8" fontWeight="bold">✓</text>
           </g>
         ) : isReserved ? (
           <g transform={`translate(${isRound ? R - 6 : W / 2 - 4}, ${isRound ? -R + 6 : -H / 2 + 4})`}>
-            <circle cx="0" cy="0" r="7.5" fill="#EC4899" stroke="#ffffff" strokeWidth="1.2" />
+            <circle cx="0" cy="0" r="7.5" fill="#EC4899" className="stroke-white dark:stroke-zinc-950" strokeWidth="1.5" />
             <text x="0" y="2.5" textAnchor="middle" fill="#ffffff" fontSize="7" fontWeight="bold">R</text>
           </g>
         ) : null}
@@ -644,6 +439,8 @@ export const LiveTableFloorPlan = ({
   onOpenPOS,
   onSeatReservation,
   onBookTable,
+  // Additional tabs rendered by the host page: [{ id, label, icon, render: () => node }]
+  extraViews = [],
   className = ''
 }) => {
   const [selectedTable, setSelectedTable] = useState(null);
@@ -689,6 +486,13 @@ export const LiveTableFloorPlan = ({
     return counts;
   }, [tables]);
 
+  // Height of the drawing: enough rows for the tables shown
+  const floorHeight = useMemo(() => {
+    const n = Math.max(1, (floorStatus?.tables || []).length);
+    const cols = n <= 4 ? Math.max(n, 2) : n <= 8 ? 4 : n <= 15 ? 5 : 6;
+    return Math.max(300, Math.ceil(n / cols) * 150 + 60);
+  }, [floorStatus]);
+
   // Filtered tables
   const displayedTables = useMemo(() => {
     if (filterStatus === 'ALL') return layoutTables;
@@ -701,127 +505,100 @@ export const LiveTableFloorPlan = ({
   };
 
   return (
-    <div className={`flex flex-col bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-sm overflow-hidden ${className}`}>
-      {/* Top Header & Interactive Legend */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-900/50">
-        <div className="flex items-center gap-2">
-          <div className="p-2 rounded-xl bg-primary/10 text-primary">
-            <Restaurant01Icon size={20} />
-          </div>
-          <div>
-            <h3 className="font-bold text-base text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-              Live Restaurant Floor
-              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                Live Sync
-              </span>
-            </h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Architectural floor plan with realistic tables, exact seating chairs & reservation schedule.
-            </p>
-          </div>
+    <div className={`flex flex-col bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden ${className}`}>
+      {/* Toolbar: views on the left, zoom on the right */}
+      <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex items-center gap-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 p-0.5" role="tablist" aria-label="Floor views">
+          {[
+            { id: 'floor', label: 'Floor plan', icon: Layers01Icon },
+            ...extraViews.map(v => ({ id: v.id, label: v.label, icon: v.icon })),
+            { id: 'schedule', label: 'Reservations', icon: Calendar01Icon },
+            { id: 'grid', label: 'Grid', icon: GridIcon },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              role="tab"
+              aria-selected={viewMode === id}
+              onClick={() => setViewMode(id)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-colors ${viewMode === id
+                ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
+                : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'}`}
+            >
+              {Icon && <Icon size={14} />}
+              {label}
+            </button>
+          ))}
         </div>
 
-        {/* View Switcher: Floor vs Schedule vs Grid */}
-        <div className="flex items-center gap-2">
-          {/* Zoom controls (only in Floor mode) */}
-          {viewMode === 'floor' && (
-            <div className="flex items-center bg-zinc-200/80 dark:bg-zinc-800/80 rounded-lg p-0.5 border border-zinc-300/60 dark:border-zinc-700/60">
-              <button
-                onClick={() => setZoomLevel((z) => Math.max(0.7, z - 0.15))}
-                className="p-1.5 hover:bg-white dark:hover:bg-zinc-700 rounded text-zinc-600 dark:text-zinc-300 transition-colors"
-                title="Zoom Out"
-              >
-                <ZoomOutAreaIcon size={16} />
-              </button>
-              <button
-                onClick={() => setZoomLevel(1)}
-                className="px-2 text-xs font-medium text-zinc-600 dark:text-zinc-300"
-                title="Reset Zoom"
-              >
-                {Math.round(zoomLevel * 100)}%
-              </button>
-              <button
-                onClick={() => setZoomLevel((z) => Math.min(1.4, z + 0.15))}
-                className="p-1.5 hover:bg-white dark:hover:bg-zinc-700 rounded text-zinc-600 dark:text-zinc-300 transition-colors"
-                title="Zoom In"
-              >
-                <ZoomInAreaIcon size={16} />
-              </button>
-            </div>
-          )}
-
-          {/* 3-way view switcher */}
-          <div className="flex bg-zinc-200/80 dark:bg-zinc-800/80 rounded-lg p-0.5 border border-zinc-300/60 dark:border-zinc-700/60">
+        {viewMode === 'floor' && (
+          <div className="flex items-center gap-0.5 rounded-lg border border-zinc-200 dark:border-zinc-800 p-0.5">
             <button
-              onClick={() => setViewMode('floor')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'floor'
-                  ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                }`}
+              type="button"
+              onClick={() => setZoomLevel((z) => Math.max(0.7, z - 0.15))}
+              className="p-1.5 rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label="Zoom out"
             >
-              <Layers01Icon size={14} />
-              Floor Plan
+              <ZoomOutAreaIcon size={15} />
             </button>
             <button
-              onClick={() => setViewMode('schedule')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'schedule'
-                  ? 'bg-white dark:bg-zinc-900 text-pink-600 dark:text-pink-400 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                }`}
+              type="button"
+              onClick={() => setZoomLevel(1)}
+              className="px-1.5 text-xs font-medium tabular-nums text-zinc-500"
+              title="Reset zoom"
             >
-              <Calendar01Icon size={14} />
-              Reservations Schedule
+              {Math.round(zoomLevel * 100)}%
             </button>
             <button
-              onClick={() => setViewMode('grid')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${viewMode === 'grid'
-                  ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                }`}
+              type="button"
+              onClick={() => setZoomLevel((z) => Math.min(1.4, z + 0.15))}
+              className="p-1.5 rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              aria-label="Zoom in"
             >
-              <GridIcon size={14} />
-              Grid View
+              <ZoomInAreaIcon size={15} />
             </button>
           </div>
+        )}
+      </div>
+
+      {/* Status filters double as the legend; empty statuses are muted, not hidden */}
+      {(viewMode === 'floor' || viewMode === 'grid') && (
+        <div className="flex items-center gap-1 px-4 py-2 overflow-x-auto border-b border-zinc-100 dark:border-zinc-800/60 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setFilterStatus('ALL')}
+            className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium shrink-0 transition-colors ${filterStatus === 'ALL'
+              ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900'
+              : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+          >
+            All <span className="tabular-nums opacity-70">{statusCounts.ALL}</span>
+          </button>
+          {Object.entries(TABLE_STATUS_CONFIG).map(([statusKey, cfg]) => {
+            const count = statusCounts[statusKey] || 0;
+            const isActive = filterStatus === statusKey;
+            return (
+              <button
+                key={statusKey}
+                type="button"
+                onClick={() => setFilterStatus(isActive ? 'ALL' : statusKey)}
+                title={cfg.description}
+                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-medium shrink-0 transition-colors ${isActive
+                  ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100'
+                  : count === 0
+                    ? 'text-zinc-400 dark:text-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800'
+                    : 'text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}
+              >
+                <span className={`size-1.5 rounded-full ${cfg.dotColor} ${count === 0 && !isActive ? 'opacity-40' : ''}`} />
+                {cfg.label}
+                <span className="tabular-nums opacity-70">{count}</span>
+              </button>
+            );
+          })}
         </div>
-      </div>
-
-      {/* Filter Chips Bar */}
-      <div className="flex items-center gap-1.5 px-5 py-2.5 overflow-x-auto border-b border-zinc-100 dark:border-zinc-800/60 bg-white dark:bg-zinc-950 scrollbar-none">
-        <span className="text-xs font-semibold text-zinc-400 mr-1 shrink-0">Filter:</span>
-        <button
-          onClick={() => setFilterStatus('ALL')}
-          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors shrink-0 ${filterStatus === 'ALL'
-              ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 border-transparent shadow-sm'
-              : 'border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-            }`}
-        >
-          All ({statusCounts.ALL})
-        </button>
-
-        {Object.entries(TABLE_STATUS_CONFIG).map(([statusKey, cfg]) => {
-          const count = statusCounts[statusKey] || 0;
-          const isActive = filterStatus === statusKey;
-          return (
-            <button
-              key={statusKey}
-              onClick={() => setFilterStatus(statusKey)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-all shrink-0 ${isActive
-                  ? 'ring-2 ring-offset-1 ring-zinc-500 ' + cfg.bgColor
-                  : 'border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800'
-                }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${cfg.dotColor}`} />
-              <span>{cfg.label}</span>
-              <span className="text-[10px] font-bold opacity-75">({count})</span>
-            </button>
-          );
-        })}
-      </div>
+      )}
 
       {/* Main Content Area */}
-      <div className="relative flex-1 min-h-[540px] overflow-hidden" ref={containerRef}>
+      <div className="relative flex-1 overflow-hidden" ref={containerRef}>
         {tables.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-24 text-center px-4">
             <div className="w-16 h-16 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center mb-4">
@@ -834,7 +611,7 @@ export const LiveTableFloorPlan = ({
           </div>
         ) : viewMode === 'floor' ? (
           /* Architectural Floor Plan SVG */
-          <div className="w-full h-full min-h-[540px] flex items-center justify-center p-2 bg-[#0c0a09] relative select-none overflow-auto">
+          <div className="w-full h-full flex items-center justify-center p-4 bg-zinc-50 dark:bg-zinc-950 relative select-none overflow-auto">
             <div
               style={{
                 transform: `scale(${zoomLevel})`,
@@ -843,163 +620,8 @@ export const LiveTableFloorPlan = ({
               }}
               className="w-full max-w-[1100px]"
             >
-              <svg
-                viewBox="0 0 1100 660"
-                className="w-full h-auto drop-shadow-2xl rounded-xl"
-                style={{ background: '#0c0a09' }}
-              >
-                <defs>
-                  {/* Luxury Parquet Hardwood Floor Tile Pattern */}
-                  <pattern id="floor-hardwood-pattern" width="64" height="64" patternUnits="userSpaceOnUse">
-                    {/* Planks Background */}
-                    <rect width="64" height="64" fill="#14110f" />
-                    {/* Staggered Planks Outline */}
-                    <line x1="0" y1="32" x2="64" y2="32" stroke="#1f1b18" strokeWidth="0.8" />
-                    <line x1="32" y1="0" x2="32" y2="32" stroke="#1f1b18" strokeWidth="0.8" />
-                    <line x1="64" y1="32" x2="64" y2="64" stroke="#1f1b18" strokeWidth="0.8" />
-                    <line x1="0" y1="64" x2="64" y2="64" stroke="#1f1b18" strokeWidth="0.8" />
-                    {/* Subtle Woodgrain Grain Lines */}
-                    <line x1="4" y1="8" x2="28" y2="8" stroke="#191512" strokeWidth="0.5" strokeDasharray="3 4" />
-                    <line x1="36" y1="44" x2="60" y2="44" stroke="#191512" strokeWidth="0.5" strokeDasharray="4 5" />
-                  </pattern>
-
-                  {/* Table Ambient Floor Shadow */}
-                  <filter id="table-floor-shadow" x="-30%" y="-30%" width="160%" height="160%">
-                    <feGaussianBlur in="SourceAlpha" stdDeviation="6" />
-                    <feOffset dx="0" dy="5" result="offsetblur" />
-                    <feComponentTransfer>
-                      <feFuncA type="linear" slope="0.55" />
-                    </feComponentTransfer>
-                    <feMerge>
-                      <feMergeNode />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-
-                  {/* Chair Drop Shadow */}
-                  <filter id="chair-drop-shadow" x="-30%" y="-30%" width="160%" height="160%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="1.8" />
-                  </filter>
-
-                  {/* Realistic Dark Walnut Wood Tabletop Gradient */}
-                  <linearGradient id="walnut-dark-wood" x1="0%" y1="0%" x2="100%" y2="100%">
-                    <stop offset="0%" stopColor="#382417" />
-                    <stop offset="35%" stopColor="#291a10" />
-                    <stop offset="70%" stopColor="#1e130c" />
-                    <stop offset="100%" stopColor="#140c08" />
-                  </linearGradient>
-
-                  {/* Architectural Matte Carbon Slate Surface */}
-                  <radialGradient id="tabletop-slate-surface" cx="45%" cy="40%" r="65%">
-                    <stop offset="0%" stopColor="#27272a" />
-                    <stop offset="60%" stopColor="#18181b" />
-                    <stop offset="100%" stopColor="#09090b" />
-                  </radialGradient>
-
-                  {/* Chair Seat Cushion Gradient (Neutral Leather) */}
-                  <linearGradient id="chair-seat-cushion" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#3f3f46" />
-                    <stop offset="60%" stopColor="#27272a" />
-                    <stop offset="100%" stopColor="#18181b" />
-                  </linearGradient>
-
-                  {/* Chair Seat Cushion Gradient (Occupied) */}
-                  <linearGradient id="chair-seat-occupied" x1="0%" y1="0%" x2="0%" y2="100%">
-                    <stop offset="0%" stopColor="#1e293b" />
-                    <stop offset="100%" stopColor="#0f172a" />
-                  </linearGradient>
-
-                  {/* Chair Curved Backrest Rail Wood */}
-                  <linearGradient id="chair-rail-wood" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#291a10" />
-                    <stop offset="50%" stopColor="#452c1c" />
-                    <stop offset="100%" stopColor="#291a10" />
-                  </linearGradient>
-
-                  {/* Status Halos & Glows */}
-                  <filter id="glow-red" x="-40%" y="-40%" width="180%" height="180%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-
-                  <filter id="glow-gold" x="-40%" y="-40%" width="180%" height="180%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-
-                  <filter id="glow-purple" x="-40%" y="-40%" width="180%" height="180%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-
-                  <filter id="glow-pink" x="-40%" y="-40%" width="180%" height="180%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-
-                  <filter id="glow-selected" x="-50%" y="-50%" width="200%" height="200%">
-                    <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
-                    <feMerge>
-                      <feMergeNode in="blur" />
-                      <feMergeNode in="SourceGraphic" />
-                    </feMerge>
-                  </filter>
-                </defs>
-
-                {/* Hardwood Parquet Canvas */}
-                <rect
-                  x="0"
-                  y="0"
-                  width="1100"
-                  height={Math.max(480, Math.ceil(displayedTables.length / (displayedTables.length <= 4 ? Math.max(displayedTables.length, 2) : displayedTables.length <= 8 ? 4 : displayedTables.length <= 15 ? 5 : 6)) * 150 + 70)}
-                  fill="url(#floor-hardwood-pattern)"
-                  rx="16"
-                />
-
-                {/* Ambient Floor Lighting Vignette (Spotlight in center of floor) */}
-                <rect
-                  x="0"
-                  y="0"
-                  width="1100"
-                  height={Math.max(480, Math.ceil(displayedTables.length / (displayedTables.length <= 4 ? Math.max(displayedTables.length, 2) : displayedTables.length <= 8 ? 4 : displayedTables.length <= 15 ? 5 : 6)) * 150 + 70)}
-                  fill="none"
-                  rx="16"
-                  stroke="#292524"
-                  strokeWidth="2"
-                />
-
-                {/* Architectural Wall Perimeter Outline */}
-                <rect
-                  x="14"
-                  y="14"
-                  width="1072"
-                  height={Math.max(480, Math.ceil(displayedTables.length / (displayedTables.length <= 4 ? Math.max(displayedTables.length, 2) : displayedTables.length <= 8 ? 4 : displayedTables.length <= 15 ? 5 : 6)) * 150 + 70) - 28}
-                  rx="14"
-                  fill="none"
-                  stroke="#3f3f46"
-                  strokeWidth="1.5"
-                  strokeDasharray="8 6"
-                />
-
-                {/* Architectural Service Pass & Bar Area at Top-Right */}
-                <g transform="translate(860, 26)">
-                  <rect x="0" y="0" width="180" height="24" rx="4" fill="#1c1917" stroke="#44403c" strokeWidth="1" />
-                  <text x="90" y="15" textAnchor="middle" fill="#78716c" fontSize="9" fontWeight="700" letterSpacing="1.2">
-                    KITCHEN PASS / BAR
-                  </text>
-                </g>
+              <svg viewBox={`0 0 1100 ${floorHeight}`} className="w-full h-auto">
+                <rect x="0" y="0" width="1100" height={floorHeight} className="fill-zinc-50 dark:fill-zinc-950" />
 
                 {/* Render All Realistic SVG Tables with Exact Chairs */}
                 {displayedTables.map((tbl) => (
@@ -1013,6 +635,8 @@ export const LiveTableFloorPlan = ({
               </svg>
             </div>
           </div>
+        ) : extraViews.some(v => v.id === viewMode) ? (
+          <div className="p-4">{extraViews.find(v => v.id === viewMode).render()}</div>
         ) : viewMode === 'schedule' ? (
           /* Reservations Schedule & Timeline View */
           <div className="p-6 bg-zinc-50/50 dark:bg-zinc-950 space-y-6">
@@ -1030,7 +654,7 @@ export const LiveTableFloorPlan = ({
               {onBookTable && (
                 <button
                   onClick={() => onBookTable(null)}
-                  className="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white font-semibold text-xs rounded-xl shadow-sm gap-1.5 flex items-center transition-colors"
+                  className="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white font-semibold text-xs rounded-xl gap-1.5 flex items-center transition-colors"
                 >
                   <PlusSignIcon size={14} /> New Reservation
                 </button>
@@ -1047,7 +671,7 @@ export const LiveTableFloorPlan = ({
                   <div
                     key={table.id}
                     className={`p-4 rounded-2xl border transition-all bg-white dark:bg-zinc-900 ${activeRes
-                        ? 'border-pink-300 dark:border-pink-800/80 shadow-sm'
+                        ? 'border-pink-300 dark:border-pink-800/80'
                         : 'border-zinc-200 dark:border-zinc-800'
                       }`}
                   >
@@ -1169,7 +793,7 @@ export const LiveTableFloorPlan = ({
                   key={tbl.id || tbl.tableNumber}
                   onClick={() => handleTableClick(tbl)}
                   className={`p-4 rounded-xl border cursor-pointer transition-all flex flex-col items-center justify-between gap-2 bg-white dark:bg-zinc-900 ${isSelected
-                      ? 'ring-2 ring-primary border-transparent shadow-md'
+                      ? 'ring-2 ring-primary border-transparent'
                       : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
                     }`}
                 >
@@ -1223,13 +847,13 @@ export const LiveTableFloorPlan = ({
           if (!open) setSelectedTable(null);
         }}
       >
-        <DialogContent className="sm:max-w-[620px] max-h-[88vh] overflow-y-auto p-0 gap-0 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-2xl rounded-2xl">
+        <DialogContent className="sm:max-w-[620px] max-h-[88vh] overflow-y-auto p-0 gap-0 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 rounded-2xl">
           {selectedTable && (
             <div className="flex flex-col">
               {/* Modal Header */}
               <div className="p-6 pb-4 border-b border-zinc-100 dark:border-zinc-800 flex items-start gap-4">
                 <div
-                  className="w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black text-xl text-white shadow-md shrink-0"
+                  className="w-14 h-14 rounded-2xl flex flex-col items-center justify-center font-black text-xl text-white shrink-0"
                   style={{ backgroundColor: TABLE_STATUS_CONFIG[selectedTable.status]?.color || '#10B981' }}
                 >
                   <span className="text-[10px] font-bold uppercase opacity-80 leading-none">Table</span>
@@ -1307,7 +931,7 @@ export const LiveTableFloorPlan = ({
                         }}
                         disabled={isResolvingCall}
                         size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 h-8 rounded-lg shadow-sm flex items-center gap-1.5 shrink-0 transition-all"
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1.5 h-8 rounded-lg flex items-center gap-1.5 shrink-0 transition-all"
                       >
                         <Tick02Icon size={14} />
                         {isResolvingCall ? 'Resolving...' : 'Resolve Call'}
@@ -1440,7 +1064,7 @@ export const LiveTableFloorPlan = ({
                                   onSeatReservation(res.id, selectedTable.id);
                                   setSelectedTable(null);
                                 }}
-                                className="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white font-semibold rounded-lg text-xs transition-colors shrink-0 shadow-sm"
+                                className="px-3 py-1.5 bg-pink-600 hover:bg-pink-700 text-white font-semibold rounded-lg text-xs transition-colors shrink-0"
                               >
                                 Seat Guests
                               </button>

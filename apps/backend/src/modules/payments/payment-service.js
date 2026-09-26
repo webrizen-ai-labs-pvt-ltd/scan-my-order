@@ -5,6 +5,7 @@ const { userRoles } = require("../../constants/roles");
 const { broadcastToStore } = require("../orders/sse-service");
 const { invalidateTablesCache } = require("../../lib/cache");
 const { buildUpiIntent, UPI_ID_PATTERN } = require("@smo/shared/pricing");
+const { cleanPhone, cleanEmail } = require("../../lib/contact");
 const {
   getQrCodesStatus,
   getTenantRazorpay,
@@ -30,6 +31,8 @@ const lastRefreshAt = new Map();
 
 // Lazy to avoid a require cycle with order-service
 const orderService = () => require("../orders/order-service");
+const { logOrderEvent } = require("../audit/audit-service");
+const CHANNEL_LABEL = { RAZORPAY: "Razorpay", UPI_OFFLINE: "UPI (own QR)", CASH: "Cash", DUES: "Dues" };
 
 function assertCanCollect(actor) {
   if (!actor || !COLLECTOR_ROLES.includes(actor.role)) {
@@ -51,6 +54,7 @@ function toWholeRupees(value, field) {
 
 async function loadStore(prisma, storeId) {
   const store = await prisma.store.findUnique({
+    relationLoadStrategy: "join",
     where: { id: storeId },
     select: {
       id: true,
@@ -90,6 +94,7 @@ function serializePayment(p) {
     cashTendered: p.cashTendered,
     changeDue: p.changeDue,
     collectedBy: p.collectedBy ? { id: p.collectedBy.id, name: p.collectedBy.name } : null,
+    duesAccount: p.duesAccount ? { id: p.duesAccount.id, name: p.duesAccount.name } : null,
     paidAt: p.paidAt,
     expiresAt: p.expiresAt,
     createdAt: p.createdAt
@@ -98,7 +103,10 @@ function serializePayment(p) {
 
 const paymentInclude = {
   orderBy: { createdAt: "asc" },
-  include: { collectedBy: { select: { id: true, name: true } } }
+  include: {
+    collectedBy: { select: { id: true, name: true } },
+    duesAccount: { select: { id: true, name: true } }
+  }
 };
 
 /**
@@ -108,6 +116,7 @@ const paymentInclude = {
 async function loadTarget(prisma, storeId, ref) {
   if (ref.orderId) {
     const order = await prisma.order.findUnique({
+      relationLoadStrategy: "join",
       where: { id: ref.orderId },
       include: { table: true, payments: paymentInclude }
     });
@@ -134,6 +143,7 @@ async function loadTarget(prisma, storeId, ref) {
 
   if (ref.tableSessionId) {
     const session = await prisma.tableSession.findUnique({
+      relationLoadStrategy: "join",
       where: { id: ref.tableSessionId },
       include: {
         table: true,
@@ -208,6 +218,13 @@ async function broadcastSummary(storeId, ref) {
   }
 }
 
+/** One word for how a bill was paid: a single channel, or SPLIT when mixed */
+function methodFor(cash, online, dues) {
+  const used = [cash > 0 && "CASH", online > 0 && "ONLINE", dues > 0 && "DUES"].filter(Boolean);
+  if (used.length > 1) return "SPLIT";
+  return used[0] || "ONLINE";
+}
+
 /**
  * Splits an amount across orders in proportion to their totals (remainder on the last order).
  */
@@ -234,7 +251,8 @@ async function markOrderPaid(storeId, order, tender) {
       paidAt: new Date(),
       paymentMethod: tender.paymentMethod,
       cashAmount: tender.cashAmount,
-      onlineAmount: tender.onlineAmount
+      onlineAmount: tender.onlineAmount,
+      duesAmount: tender.duesAmount || 0
     }
   });
 
@@ -268,27 +286,38 @@ async function applySettlement(storeId, ref) {
   }
 
   const cashAmount = paid.filter(p => p.channel === "CASH").reduce((s, p) => s + p.amount, 0);
-  const onlineAmount = paidAmount - cashAmount;
-  const paymentMethod = cashAmount > 0 && onlineAmount > 0 ? "SPLIT" : cashAmount > 0 ? "CASH" : "ONLINE";
+  const duesAmount = paid.filter(p => p.channel === "DUES").reduce((s, p) => s + p.amount, 0);
+  const onlineAmount = paidAmount - cashAmount - duesAmount;
+  const paymentMethod = methodFor(cashAmount, onlineAmount, duesAmount);
+
+  await logOrderEvent({
+    storeId,
+    orderId: target.kind === "ORDER" ? target.id : null,
+    tableSessionId: target.kind === "TABLE_SESSION" ? target.id : null,
+    type: "BILL_SETTLED",
+    source: "SYSTEM",
+    amountAfter: target.totalAmount,
+    data: { paymentMethod, cashAmount, onlineAmount, duesAmount, orders: target.orders.map(o => o.id) }
+  });
 
   if (target.kind === "ORDER") {
-    await markOrderPaid(storeId, target.orders[0], { paymentMethod, cashAmount, onlineAmount });
+    await markOrderPaid(storeId, target.orders[0], { paymentMethod, cashAmount, onlineAmount, duesAmount });
   } else {
     const cashShares = allocate(cashAmount, target.orders);
     const onlineShares = allocate(onlineAmount, target.orders);
+    const duesShares = allocate(duesAmount, target.orders);
     for (let i = 0; i < target.orders.length; i++) {
-      const cash = cashShares[i];
-      const online = onlineShares[i];
       await markOrderPaid(storeId, target.orders[i], {
-        paymentMethod: cash > 0 && online > 0 ? "SPLIT" : cash > 0 ? "CASH" : "ONLINE",
-        cashAmount: cash,
-        onlineAmount: online
+        paymentMethod: methodFor(cashShares[i], onlineShares[i], duesShares[i]),
+        cashAmount: cashShares[i],
+        onlineAmount: onlineShares[i],
+        duesAmount: duesShares[i]
       });
     }
 
     const session = await prisma.tableSession.update({
       where: { id: target.id },
-      data: { status: "SETTLED", paymentMethod, cashAmount, onlineAmount },
+      data: { status: "SETTLED", paymentMethod, cashAmount, onlineAmount, duesAmount },
       include: { table: true }
     });
     broadcastToStore(storeId, "TABLE_SESSION_SETTLED", { tableSessionId: session.id, tableId: session.tableId });
@@ -302,7 +331,90 @@ async function applySettlement(storeId, ref) {
     }
   }
 
+  // Numbered GST invoice for the paid bill (never blocks settlement)
+  const { issueStandardInvoice } = require("../invoices/invoice-service");
+  await issueStandardInvoice(storeId, ref).catch(err => console.error("[Invoices] could not issue invoice:", err.message));
+
   return broadcastSummary(storeId, ref);
+}
+
+// Cashiers and managers can put a bill on dues (a note and the guest's details are required)
+const DUES_ROLES = [userRoles.superAdmin, userRoles.tenantAdmin, userRoles.storeManager, userRoles.cashier];
+
+/** Who ate: a name plus at least one way to reach them */
+function cleanGuest(input = {}) {
+  const name = String(input.name || "").trim().slice(0, 80);
+  if (name.length < 2) throw createHttpError(400, "Enter the guest's name");
+  const phone = cleanPhone(input.phone, "phone number");
+  const whatsapp = cleanPhone(input.whatsapp, "WhatsApp number");
+  const email = cleanEmail(input.email);
+  if (!phone && !whatsapp && !email) throw createHttpError(400, "Add the guest's phone, WhatsApp or email");
+  return { name, phone, whatsapp, email };
+}
+
+/**
+ * Closes the rest of a bill on credit: the amount still due is recorded as a DUES payment owed by a
+ * dues account (the owner by default). The bill settles like any paid bill — it counts as a sale,
+ * gets its GST invoice and goes to the kitchen — and the money is collected later on the Dues page.
+ *
+ * @param {{orderId?: string, tableSessionId?: string}} ref
+ * @param {{ accountId?: string, guest: object, note: string }} input
+ */
+async function putBillOnDues(actor, storeId, ref, input = {}) {
+  if (!actor || !DUES_ROLES.includes(actor.role)) {
+    throw createHttpError(403, "Only cashiers and managers can put a bill on dues");
+  }
+  await verifyStoreAccess(actor, storeId);
+  const note = String(input.note || "").trim().slice(0, 200);
+  if (note.length < 3) throw createHttpError(400, "Add a note: why is this bill going on dues?");
+  const guest = cleanGuest(input.guest);
+
+  const prisma = getPrismaClient();
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
+  const { resolveDuesAccount } = require("../dues/dues-service");
+  const account = await resolveDuesAccount(store.tenantId, input.accountId);
+
+  const target = await loadTarget(prisma, storeId, ref);
+  if (target.isSettled) throw createHttpError(409, "This bill is already paid");
+  if (target.isCancelled) throw createHttpError(409, "This bill was cancelled");
+  if (target.blockers.length > 0) throw createHttpError(409, target.blockers[0].reason);
+
+  // A QR still on screen must not also take the guest's money
+  for (const p of target.payments.filter(p => p.status === "PENDING")) {
+    await withdrawPayment(storeId, p);
+  }
+  const paidAmount = target.payments.filter(p => p.status === "PAID").reduce((s, p) => s + p.amount, 0);
+  const amount = target.totalAmount - paidAmount;
+  if (amount <= 0) throw createHttpError(409, "Nothing is left to pay on this bill");
+
+  const now = new Date();
+  const payment = await prisma.payment.create({
+    data: {
+      storeId,
+      ...(target.kind === "ORDER" ? { orderId: target.id } : { tableSessionId: target.id }),
+      channel: "DUES",
+      status: "PAID",
+      amount,
+      duesAccountId: account.id,
+      duesGuest: guest,
+      duesNote: note,
+      collectedById: actor.id,
+      paidAt: now
+    }
+  });
+
+  await logOrderEvent({
+    storeId,
+    orderId: target.kind === "ORDER" ? target.id : null,
+    tableSessionId: target.kind === "TABLE_SESSION" ? target.id : null,
+    type: "BILL_ON_DUES",
+    actor,
+    reason: note,
+    amountAfter: amount,
+    data: { account: account.name, accountId: account.id, guest: guest.name, paymentId: payment.id }
+  });
+
+  return applySettlement(storeId, ref);
 }
 
 /**
@@ -328,6 +440,17 @@ async function markPaymentPaid(paymentId, { providerPaymentId = null, collectedB
   if (result.count === 0) return false;
 
   const payment = await prisma.payment.findUnique({ where: { id: paymentId } });
+  if (payment.channel === "RAZORPAY") {
+    await logOrderEvent({
+      storeId: payment.storeId,
+      orderId: payment.orderId,
+      tableSessionId: payment.tableSessionId,
+      type: "PAYMENT_RECEIVED",
+      source: "SYSTEM",
+      amountAfter: payment.amount,
+      data: { channel: payment.channel, paymentId: payment.id, providerPaymentId: payment.providerPaymentId }
+    });
+  }
   await applySettlement(payment.storeId, targetRef(payment));
   await broadcastSummary(payment.storeId, targetRef(payment));
   return true;
@@ -404,12 +527,12 @@ async function getPaymentSummary(actor, storeId, ref) {
   await verifyStoreAccess(actor, storeId);
   const prisma = getPrismaClient();
 
-  let target = await loadTarget(prisma, storeId, ref);
+  // Bill and store settings load side by side
+  let [target, store] = await Promise.all([loadTarget(prisma, storeId, ref), loadStore(prisma, storeId)]);
   if (await refreshPendingForTarget(target)) {
     target = await loadTarget(prisma, storeId, ref);
   }
 
-  const store = await loadStore(prisma, storeId);
   const rp = await getTenantRazorpay(store.tenantId);
   const qrStatus = rp ? await getQrCodesStatus(store.tenantId, rp) : null;
   const offlineUpi = resolveOfflineUpi(store);
@@ -509,6 +632,21 @@ async function createPayment(actor, storeId, input = {}) {
     }
   }
 
+  await logOrderEvent({
+    storeId,
+    orderId: ref.orderId || null,
+    tableSessionId: ref.tableSessionId || null,
+    type: payment.status === "PAID" ? "PAYMENT_RECEIVED" : "PAYMENT_STARTED",
+    actor,
+    amountAfter: amount,
+    data: {
+      channel: payment.channel,
+      label: CHANNEL_LABEL[payment.channel],
+      paymentId: payment.id,
+      ...(payment.channel === "CASH" ? { cashTendered: payment.cashTendered, changeDue: payment.changeDue } : {})
+    }
+  });
+
   const summary = payment.status === "PAID"
     ? await applySettlement(storeId, ref)
     : await broadcastSummary(storeId, ref);
@@ -543,6 +681,15 @@ async function confirmOfflinePayment(actor, storeId, paymentId) {
   if (payment.status !== "PENDING") throw createHttpError(409, `Payment is already ${payment.status.toLowerCase()}`);
 
   await markPaymentPaid(payment.id, { collectedById: actor.id });
+  await logOrderEvent({
+    storeId,
+    orderId: payment.orderId,
+    tableSessionId: payment.tableSessionId,
+    type: "PAYMENT_CONFIRMED",
+    actor,
+    amountAfter: payment.amount,
+    data: { channel: payment.channel, paymentId: payment.id }
+  });
   return getPayment(actor, storeId, paymentId);
 }
 
@@ -554,6 +701,15 @@ async function cancelPayment(actor, storeId, paymentId) {
   if (payment.status !== "PENDING") throw createHttpError(409, `Payment is already ${payment.status.toLowerCase()}`);
 
   const outcome = await withdrawPayment(storeId, payment);
+  await logOrderEvent({
+    storeId,
+    orderId: payment.orderId,
+    tableSessionId: payment.tableSessionId,
+    type: outcome === "PAID" ? "PAYMENT_RECEIVED" : "PAYMENT_WITHDRAWN",
+    actor,
+    amountAfter: payment.amount,
+    data: { channel: payment.channel, paymentId: payment.id, paidJustBeforeCancel: outcome === "PAID" }
+  });
   if (outcome === "PAID") {
     await applySettlement(storeId, targetRef(payment));
   }
@@ -668,6 +824,10 @@ async function handleRazorpayWebhook(tenantId, rawBody, signature) {
   }
 
   const payload = JSON.parse(rawBody);
+  if (String(payload.event || '').startsWith('refund.')) {
+    const { handleRefundWebhook } = require("./refund-service");
+    return handleRefundWebhook(tenantId, payload);
+  }
   const { providerRef, providerPaymentId } = extractWebhookRefs(payload);
   if (!providerRef) return { handled: false, event: payload.event };
 
@@ -698,6 +858,8 @@ async function reconcilePendingPayments() {
     take: 50
   });
   for (const p of pending) await refreshPayment(p, { force: true });
+  const { reconcilePendingRefunds } = require("./refund-service");
+  await reconcilePendingRefunds();
   return pending.length;
 }
 
@@ -729,6 +891,7 @@ function isValidUpiId(value) {
 }
 
 module.exports = {
+  putBillOnDues,
   getPaymentSummary,
   createPayment,
   getPayment,

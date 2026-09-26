@@ -3,3 +3,9 @@ node_modules
 .env
 .env.*
 !.env.example
+
+# Prisma client is generated per machine (postinstall runs `prisma generate`); it embeds absolute paths
+apps/backend/src/generated/
+
+# Legacy scheduler state file (now stored in the StoreJobConfig table; imported once on startup)
+apps/backend/data/cron-configs.json*

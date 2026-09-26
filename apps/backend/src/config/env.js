@@ -49,7 +49,10 @@ const env = {
   },
   database: {
     url: readEnv("DATABASE_URL"),
-    directUrl: readEnv("DIRECT_URL")
+    directUrl: readEnv("DIRECT_URL"),
+    // Database connections per backend process (Prisma pool). Supabase caps session-mode clients,
+    // so keep (instances × this) under the project's pool size.
+    connectionLimit: parseInt(process.env.DB_CONNECTION_LIMIT || "5", 10) || 5
   },
   supabase: {
     url: process.env.SUPABASE_URL,
@@ -77,6 +80,11 @@ const env = {
     saltKey: process.env.PHONEPE_SALT_KEY,
     saltIndex: process.env.PHONEPE_SALT_INDEX,
     redirectUrl: process.env.PHONEPE_REDIRECT_URL
+  },
+  jobs: {
+    // Set RUN_SCHEDULED_JOBS=false on every machine except one (e.g. local dev laptops)
+    // so jobs don't run twice against a shared database. Manual runs still work.
+    enabled: String(process.env.RUN_SCHEDULED_JOBS ?? 'true').toLowerCase() !== 'false'
   },
   apps: {
     apiUrl: process.env.API_URL || "http://localhost:8000",

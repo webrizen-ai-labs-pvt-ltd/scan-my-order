@@ -5,7 +5,7 @@ import '@xyflow/react/dist/style.css';
 // Custom node component to render a nice department card
 const DepartmentNode = ({ data }) => {
   return (
-    <div className={`px-4 py-2 shadow-md rounded-md bg-white dark:bg-zinc-900 border-2 ${data.active ? 'border-yellow-500' : 'border-zinc-200 dark:border-zinc-800'}`}>
+    <div className={`px-4 py-2 rounded-md bg-white dark:bg-zinc-900 border ${data.active ? 'border-yellow-500' : 'border-zinc-200 dark:border-zinc-800'}`}>
       <div className="flex items-center gap-2">
         <div className="font-bold text-zinc-900 dark:text-zinc-100">{data.label}</div>
       </div>

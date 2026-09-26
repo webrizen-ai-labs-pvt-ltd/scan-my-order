@@ -4,6 +4,20 @@ import { useAuthStore } from '../store/authStore';
 import { Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
 import { Store01Icon, Clock01Icon, Tick02Icon, Cancel01Icon, Alert01Icon, CheckmarkBadge01Icon } from 'hugeicons-react';
 import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
+import { KitchenRejectDialog } from '../components/kds/kitchen-reject-dialog';
+
+/** 12m · 4h 46m · 2d 3h — compact wait time for kitchen tickets */
+function formatWait(minutes) {
+  const m = Math.max(0, Math.floor(minutes));
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return m % 60 ? `${h}h ${m % 60}m` : `${h}h`;
+  const d = Math.floor(h / 24);
+  return h % 24 ? `${d}d ${h % 24}h` : `${d}d`;
+}
+
+// Tickets wrap to however many ~300px columns fit, whatever the screen or zoom
+const TICKET_GRID = 'grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-4 items-start auto-rows-max';
 
 // Specialized Toast for KDS (Large, High Contrast)
 const KdsToast = ({ message, type, onClose }) => {
@@ -52,6 +66,10 @@ export const KDS = () => {
   
   // Track tickets that are animating away
   const [completingTickets, setCompletingTickets] = useState(new Set());
+  const [rejectingOrder, setRejectingOrder] = useState(null);
+  const [delayMenuFor, setDelayMenuFor] = useState(null);
+  // Tickets this screen marked ready in the last few minutes, so an accidental tap can be recalled
+  const [recentlyReady, setRecentlyReady] = useState([]); // [{ id, label, at }]
 
   const showToast = (message, type = 'info') => setToast({ message, type });
 
@@ -100,7 +118,7 @@ export const KDS = () => {
           if (data.type === 'ORDER_PROCESSING' || data.type === 'KITCHEN_ALERT') {
             playNotificationChime({ haptic: true });
             fetchOrders(selectedStoreId, true);
-          } else if (['ORDER_READY', 'ORDER_CANCELLED', 'ORDER_UPDATED'].includes(data.type)) {
+          } else if (['ORDER_READY', 'ORDER_CANCELLED', 'ORDER_UPDATED', 'ORDER_ITEMS_REJECTED', 'ORDER_RECALLED', 'ORDER_ITEM_READY', 'ORDER_DELAYED'].includes(data.type)) {
             fetchOrders(selectedStoreId, true);
           }
         } catch(e) {}
@@ -126,6 +144,7 @@ export const KDS = () => {
            return newSet;
          });
          showToast(`Order ${orderId.slice(-4)} marked Ready`, 'success');
+         rememberReady(orderId);
       }, 400); // 400ms CSS animation match
       
     } catch (err) {
@@ -139,6 +158,63 @@ export const KDS = () => {
       });
     }
   };
+
+  const ticketLabel = (order, orderId) => (order?.table ? `Table ${order.table.tableNumber}` : `#${orderId.slice(-4).toUpperCase()}`);
+
+  const rememberReady = (orderId) => {
+    const ticket = orders.find(o => o.id === orderId);
+    setRecentlyReady(prev => [{ id: orderId, label: ticketLabel(ticket, orderId), at: Date.now() }, ...prev.filter(r => r.id !== orderId)].slice(0, 6));
+  };
+
+  const recall = async (orderId) => {
+    try {
+      await api.post(`/stores/${selectedStoreId}/orders/${orderId}/recall`);
+      showToast('Ticket recalled to the kitchen', 'info');
+      fetchOrders(selectedStoreId, true);
+    } catch (err) {
+      showToast(err?.response?.data?.error?.message || 'Could not recall', 'error');
+    } finally {
+      setRecentlyReady(prev => prev.filter(r => r.id !== orderId));
+    }
+  };
+
+  const toggleItemReady = async (order, item) => {
+    const ready = !item.readyAt;
+    // Optimistic tick; the stream refresh confirms it
+    setOrders(prev => prev.map(o => (o.id !== order.id ? o : {
+      ...o,
+      items: o.items.map(i => (i.id === item.id ? { ...i, readyAt: ready ? new Date().toISOString() : null } : i)),
+    })));
+    try {
+      const res = await api.post(`/stores/${selectedStoreId}/orders/${order.id}/items/${item.id}/ready`, { ready });
+      if (res.data.data?.status === 'READY') {
+        showToast(`All items ready: ${ticketLabel(order, order.id)} sent to the pass`, 'success');
+        rememberReady(order.id);
+      }
+      fetchOrders(selectedStoreId, true);
+    } catch (err) {
+      showToast(err?.response?.data?.error?.message || 'Could not update item', 'error');
+      fetchOrders(selectedStoreId, true);
+    }
+  };
+
+  const announceDelay = async (order, minutes) => {
+    setDelayMenuFor(null);
+    try {
+      await api.post(`/stores/${selectedStoreId}/orders/${order.id}/delay`, { minutes });
+      showToast(`Guest and waiter told: +${minutes} min`, 'info');
+      fetchOrders(selectedStoreId, true);
+    } catch (err) {
+      showToast(err?.response?.data?.error?.message || 'Could not send delay notice', 'error');
+    }
+  };
+
+  // Recall is only possible for 5 minutes after "Mark ready"
+  useEffect(() => {
+    if (recentlyReady.length === 0) return undefined;
+    const timer = setInterval(() => setRecentlyReady(prev => prev.filter(r => Date.now() - r.at < 5 * 60 * 1000)), 15000);
+    return () => clearInterval(timer);
+  }, [recentlyReady.length]);
 
   // Helper to calculate time waiting
   const getWaitTime = (createdAt) => {
@@ -164,6 +240,7 @@ export const KDS = () => {
     const itemMap = {};
     orders.forEach(order => {
       order.items.forEach(item => {
+        if (item.status === 'REJECTED') return;
         // Create a unique key for the item + modifiers + custom ingredients
         const modKey = (item.modifiers || []).map(m => m.modifierOption?.name).sort().join('|');
         const ingKey = (item.customIngredients || []).map(i => `${i.name}:${i.quantity}`).sort().join('|');
@@ -214,24 +291,66 @@ export const KDS = () => {
           }`}>
           <div>
             <span className={`text-[10px] uppercase tracking-widest font-bold block mb-0.5 ${isLate || isCompleting ? 'text-white/80' : 'text-zinc-400'}`}>
-              {order.type}
+              {order.type.replace('_', ' ')} · #{order.id.slice(-4).toUpperCase()}
             </span>
             <span className="text-xl font-bold text-white leading-none">
-              Tbl {order.table?.tableNumber || '?'}
+              {order.table ? `Table ${order.table.tableNumber}` : order.type === 'TAKEAWAY' ? 'Takeaway' : 'No table'}
             </span>
           </div>
+          <div className="flex flex-col items-end gap-1.5">
           <div className={`flex flex-col items-end ${isLate ? 'animate-pulse' : ''}`}>
-            <div className={`flex items-center gap-1 font-mono text-lg font-bold ${isLate || isCompleting ? 'text-white' : 'text-zinc-300'}`}>
+            <div className={`flex items-center gap-1 font-mono text-lg font-bold whitespace-nowrap ${isLate || isCompleting ? 'text-white' : 'text-zinc-300'}`}>
               <Clock01Icon size={18} className={isLate ? 'text-red-200' : 'text-zinc-500'} />
-              {waitTime}m
+              {formatWait(waitTime)}
             </div>
+          </div>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setDelayMenuFor(delayMenuFor === order.id ? null : order.id)}
+              disabled={isCompleting}
+              title="Tell the waiter and guest this order is running late"
+              className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-black/25 text-white/90 hover:bg-black/40"
+            >
+              {order.delayMinutes > 0 ? `Told +${order.delayMinutes}m · more` : 'Running late?'}
+            </button>
+            {delayMenuFor === order.id && (
+              <div className="absolute right-0 top-full mt-1 z-20 flex gap-1 p-1.5 rounded-lg bg-zinc-950 border border-zinc-700 shadow-xl">
+                {[5, 10, 15, 20, 30].map(m => (
+                  <button key={m} type="button" onClick={() => announceDelay(order, m)} className="px-2.5 py-1.5 rounded-md text-sm font-bold bg-zinc-800 hover:bg-amber-500 hover:text-zinc-950 text-white">
+                    +{m}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           </div>
         </div>
       
         {/* Ticket Items */}
         <div className="flex-1 p-4 space-y-4 bg-zinc-900">
-          {order.items.map((item, idx) => (
-            <div key={idx} className="relative pl-10 border-b border-zinc-800/80 pb-4 last:border-0 last:pb-0">
+          {order.items.map((item, idx) => item.status === 'REJECTED' ? (
+            <div key={item.id || idx} className="relative pl-10 border-b border-zinc-800/80 pb-4 last:border-0 last:pb-0 opacity-60">
+              <div className="absolute left-0 top-0 w-7 h-7 bg-zinc-700 text-zinc-400 font-bold rounded-md flex items-center justify-center text-sm line-through">
+                {item.quantity}
+              </div>
+              <h3 className="font-semibold text-lg leading-tight text-zinc-400 line-through">{item.customName || item.menuItem?.name}</h3>
+              <span className="mt-1 inline-block px-2 py-0.5 rounded text-[11px] font-bold bg-red-950 text-red-300 border border-red-900">
+                NOT MADE · {item.rejectReason}
+              </span>
+            </div>
+          ) : (
+            <div key={item.id || idx} className={`relative pl-10 pr-12 border-b border-zinc-800/80 pb-4 last:border-0 last:pb-0 ${item.readyAt ? 'opacity-60' : ''}`}>
+              <button
+                type="button"
+                onClick={() => toggleItemReady(order, item)}
+                disabled={isCompleting || !item.id}
+                aria-pressed={Boolean(item.readyAt)}
+                title={item.readyAt ? 'Undo item ready' : 'Mark just this item ready'}
+                className={`absolute right-0 top-0 size-10 rounded-lg border-2 flex items-center justify-center ${item.readyAt ? 'bg-green-600 border-green-600 text-white' : 'border-zinc-600 text-zinc-500 hover:border-green-500 hover:text-green-400'}`}
+              >
+                <Tick02Icon size={22} />
+              </button>
               {/* Normal Quantity Badge */}
               <div className="absolute left-0 top-0 w-7 h-7 bg-zinc-100 text-zinc-950 font-bold rounded-md flex items-center justify-center text-sm shadow-sm">
                 {item.quantity}
@@ -239,7 +358,8 @@ export const KDS = () => {
               
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                  <h3 className="font-semibold text-lg leading-tight text-white">{item.customName || item.menuItem?.name}</h3>
+                  <h3 className={`font-semibold text-lg leading-tight text-white ${item.readyAt ? 'line-through decoration-green-500' : ''}`}>{item.customName || item.menuItem?.name}</h3>
+                  {item.readyAt && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-600/30 text-green-300 border border-green-600/40">READY</span>}
                   {item.isCustom && (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                       CUSTOM DISH
@@ -285,9 +405,18 @@ export const KDS = () => {
         </div>
         
         {/* Action Footer */}
-        <div className={`p-3 bg-zinc-950 border-t transition-colors ${isCompleting ? 'border-green-800 bg-green-950' : 'border-zinc-800'}`}>
+        <div className={`p-3 bg-zinc-950 border-t transition-colors grid grid-cols-[auto_minmax(0,1fr)] gap-2 ${isCompleting ? 'border-green-800 bg-green-950' : 'border-zinc-800'}`}>
+          <button
+            type="button"
+            onClick={() => setRejectingOrder(order)}
+            disabled={isCompleting}
+            title="Can't make some or all of this order"
+            className="h-12 px-3 rounded-lg border-2 border-red-700 text-red-300 text-sm font-bold whitespace-nowrap hover:bg-red-700 hover:text-white active:scale-95 disabled:opacity-40"
+          >
+            CAN’T MAKE
+          </button>
           <Button 
-            className={`w-full h-12 text-lg font-bold rounded-lg transition-all shadow-md active:scale-95 ${
+            className={`w-full min-w-0 h-12 px-3 text-base font-bold whitespace-nowrap rounded-lg transition-all shadow-md active:scale-95 ${
               isCompleting 
                 ? 'bg-green-500 hover:bg-green-500 text-white' 
                 : 'bg-zinc-100 hover:bg-green-500 hover:text-white text-zinc-950'
@@ -309,6 +438,15 @@ export const KDS = () => {
   return (
     <div className="flex flex-col h-full bg-zinc-950 min-h-screen text-zinc-100 overflow-hidden">
       {toast && <KdsToast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <KitchenRejectDialog
+        storeId={selectedStoreId}
+        order={rejectingOrder}
+        onClose={() => setRejectingOrder(null)}
+        onDone={({ wholeOrder, count }) => {
+          showToast(wholeOrder ? 'Order rejected — staff notified' : `${count} item${count === 1 ? '' : 's'} rejected — staff notified`, 'info');
+          fetchOrders(selectedStoreId, true);
+        }}
+      />
       
       {/* KDS Header - Highly Visible */}
       <div className="flex justify-between items-center px-8 py-4 bg-zinc-900 border-b border-zinc-800 shadow-lg shrink-0">
@@ -379,11 +517,25 @@ export const KDS = () => {
         </div>
       )}
 
+      {recentlyReady.length > 0 && (
+        <div className="shrink-0 px-6 py-2 bg-zinc-900 border-b border-zinc-800 flex items-center gap-2 overflow-x-auto">
+          <span className="text-xs font-bold uppercase tracking-widest text-zinc-500 shrink-0">Just marked ready</span>
+          {recentlyReady.map(r => (
+            <span key={r.id} className="flex items-center gap-2 pl-3 pr-1 py-1 rounded-full bg-green-950 border border-green-800 text-sm font-bold text-green-200 shrink-0">
+              {r.label}
+              <button type="button" onClick={() => recall(r.id)} className="px-2.5 py-0.5 rounded-full bg-zinc-100 text-zinc-900 text-xs font-black hover:bg-amber-400">
+                RECALL
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+
       {/* Main KDS Board */}
       <div className="flex-1 overflow-y-auto p-6 bg-zinc-950">
         <div style={{ zoom }}>
           {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+            <div className={TICKET_GRID}>
               {[1,2,3,4,5].map(i => (
                  <Skeleton key={i} className="h-64 rounded-xl bg-zinc-900/50 border border-zinc-800/50" />
               ))}
@@ -399,7 +551,7 @@ export const KDS = () => {
           ) : (
             <div className="w-full">
               {viewMode === 'ORDER' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 items-start auto-rows-max">
+                <div className={TICKET_GRID}>
                   {orders.map(order => renderOrderCard(order))}
                 </div>
               )}
@@ -416,11 +568,11 @@ export const KDS = () => {
                           </div>
                         </div>
                         <div className={`flex items-center gap-2 font-mono text-xl font-bold ${group.oldestWait >= 15 ? 'text-red-400 animate-pulse' : 'text-zinc-400'}`}>
-                          <Clock01Icon size={24} /> Max Wait: {group.oldestWait}m
+                          <Clock01Icon size={24} /> Max Wait: {formatWait(group.oldestWait)}
                         </div>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 items-start auto-rows-max">
+                      <div className={TICKET_GRID}>
                         {group.orders.map(order => renderOrderCard(order))}
                       </div>
                     </div>
@@ -429,7 +581,7 @@ export const KDS = () => {
               )}
 
               {viewMode === 'ITEM' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4 items-start auto-rows-max">
+                <div className={TICKET_GRID}>
                   {groupedByItem.map((itemGroup, idx) => (
                     <div key={idx} className="relative rounded-xl overflow-hidden flex flex-col shadow-xl bg-zinc-900 border border-zinc-800">
                       <div className="px-4 py-3 flex justify-between items-center bg-zinc-800 border-b border-zinc-700">

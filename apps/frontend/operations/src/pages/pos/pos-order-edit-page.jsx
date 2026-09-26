@@ -49,6 +49,7 @@ export const PosOrderEditPage = () => {
   const [saving, setSaving] = useState(false);
   const [modifierItem, setModifierItem] = useState(null);
   const [customizing, setCustomizing] = useState(null);
+  const [reason, setReason] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -59,7 +60,8 @@ export const PosOrderEditPage = () => {
         setOrder(fetched);
         // Keep an existing draft (e.g. returning from the custom-dish page)
         if (!useOrderEditDraftStore.getState().drafts[orderId]) {
-          setDraft(orderId, (fetched.items || []).map(draftLineFromOrderItem));
+          // Kitchen-rejected lines are history, not editable items
+          setDraft(orderId, (fetched.items || []).filter(i => i.status !== 'REJECTED').map(draftLineFromOrderItem));
         }
       })
       .catch(err => { if (!cancelled) setLoadError(apiErrorMessage(err, 'Could not load this order')); });
@@ -125,6 +127,7 @@ export const PosOrderEditPage = () => {
     setSaving(true);
     try {
       await api.put(`/stores/${storeId}/orders/${orderId}/items`, {
+        reason: reason.trim(),
         items: lines.map(l => ({
           orderItemId: l.orderItemId || undefined,
           menuItemId: l.isCustom ? undefined : l.menuItemId,
@@ -262,9 +265,17 @@ export const PosOrderEditPage = () => {
             Items already on the order keep the price they were sold at; new items use today’s menu price.
             Tax uses the rates from when the order was placed. Discounts and tax are recalculated when you save.
           </p>
+          <input
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            maxLength={200}
+            placeholder="Reason for the change (required)"
+            aria-label="Reason for the change"
+            className="h-9 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 text-xs outline-none focus:ring-2 focus:ring-amber-400/40"
+          />
           <div className="grid grid-cols-2 gap-2">
             <Button variant="outline" onClick={leave} disabled={saving}>Discard</Button>
-            <Button onClick={save} disabled={saving || locked || lines.length === 0}>
+            <Button onClick={save} disabled={saving || locked || lines.length === 0 || reason.trim().length < 3}>
               {saving ? <Loading03Icon size={16} className="animate-spin" /> : <><CheckmarkBadge01Icon size={16} className="mr-1.5" /> Save changes</>}
             </Button>
           </div>

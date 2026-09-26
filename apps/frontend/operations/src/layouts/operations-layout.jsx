@@ -6,7 +6,6 @@ import {
   SidebarContent,
   SidebarHeader,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarGroupContent,
   SidebarMenu,
   SidebarMenuItem,
@@ -49,7 +48,12 @@ import {
   Settings02Icon,
   ArrowDown01Icon,
   CashierIcon,
-  ChartLineData01Icon
+  ChartLineData01Icon,
+  Logout01Icon,
+  Invoice03Icon,
+  NoteEditIcon,
+  ChartIncreaseIcon,
+  Activity01Icon
 } from 'hugeicons-react';
 import { StaffNotificationCenter } from '../components/staff-notification-center';
 
@@ -124,7 +128,11 @@ export const OperationsLayout = () => {
         icon: ChartLineData01Icon,
         collapsible: true,
         items: [
+          { name: 'Sales', path: '/dashboard/sales', icon: ChartIncreaseIcon, show: isManager },
           { name: 'Table Analytics', path: '/dashboard/table-analytics', icon: Analytics01Icon, show: isSuperOrTenantAdmin },
+          { name: 'Invoices', path: '/dashboard/invoices', icon: Invoice03Icon, show: isCashier },
+          { name: 'Dues', path: '/dashboard/dues', icon: NoteEditIcon, show: isCashier },
+          { name: 'Audit Log', path: '/dashboard/audit', icon: Activity01Icon, show: isManager },
         ],
       },
     ];
@@ -147,10 +155,11 @@ export const OperationsLayout = () => {
   const toggleGroup = (group) =>
     setOpenGroups(prev => ({ ...prev, [group.key]: !isGroupOpen(group) }));
 
-  const itemLinkClass = (isActive) =>
-    `flex items-center gap-3 px-3 py-2 rounded transition-all duration-200 ${isActive
-      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-medium'
-      : 'text-zinc-500 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-zinc-100'
+  // Every row shares one height, font size and icon column so the list lines up
+  const rowClass = (isActive) =>
+    `flex h-9 w-full min-w-0 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors ${isActive
+      ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold'
+      : 'font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100/70 dark:hover:bg-zinc-900 hover:text-zinc-900 dark:hover:text-zinc-100'
     }`;
 
   const routeConfig = {
@@ -167,6 +176,11 @@ export const OperationsLayout = () => {
     "brand": { label: "Brand Setup", icon: Building02Icon },
     "subscriptions": { label: "Subscription", icon: CreditCardIcon },
     "settings": { label: "Settings", icon: Settings01Icon },
+    "invoices": { label: "Invoices", icon: Invoice03Icon },
+    "dues": { label: "Dues", icon: NoteEditIcon },
+    "sales": { label: "Sales", icon: ChartIncreaseIcon },
+    "record-payment": { label: "Record payment" },
+    "audit": { label: "Audit Log", icon: Activity01Icon },
   };
 
   const getBreadcrumbs = () => {
@@ -178,12 +192,15 @@ export const OperationsLayout = () => {
 
     const breadcrumbs = paths.map((path, index) => {
       const config = routeConfig[path.toLowerCase()];
-      const formattedName = config?.label || path
+      // Record ids (orders, sessions…) read better as a short reference
+      const isId = /^[a-z0-9]{20,}$/i.test(path);
+      const formattedName = config?.label || (isId ? `#${path.slice(-6).toUpperCase()}` : path
         .split("-")
         .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join(" ");
+        .join(" "));
 
-      const href = "/" + paths.slice(0, index + 1).join("/");
+      // Keep ?store= and similar so parent pages open on the same store
+      const href = "/" + paths.slice(0, index + 1).join("/") + (index > 0 ? location.search : "");
 
       return {
         name: formattedName,
@@ -212,107 +229,97 @@ export const OperationsLayout = () => {
             </Link>
           </SidebarHeader>
 
-          <SidebarContent className="gap-0 p-2 pt-2">
-            {navGroups.map((group) => {
-              // Collapsible category: one clickable row that expands into its items.
-              if (group.collapsible) {
-                const open = isGroupOpen(group);
-                const hasActiveChild = group.items.some(item => isItemActive(item.path));
-                return (
-                  <SidebarGroup key={group.key} className="py-1.5">
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        <SidebarMenuItem>
-                          <SidebarMenuButton
-                            isActive={hasActiveChild && !open}
-                            tooltip={group.label}
-                            onClick={() => toggleGroup(group)}
-                            aria-expanded={open}
-                            className={`${itemLinkClass(hasActiveChild && !open)} h-auto w-full justify-between`}
-                          >
-                            <span className="flex items-center gap-3">
-                              <group.icon size={18} variant={open || hasActiveChild ? "solid" : "stroke"} />
-                              <span>{group.label}</span>
-                            </span>
-                            <ArrowDown01Icon
-                              size={16}
-                              className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
-                            />
-                          </SidebarMenuButton>
-
-                          {open && (
-                            <SidebarMenuSub className="mx-3 mt-1 border-zinc-200 dark:border-zinc-800">
-                              {group.items.map((item) => {
-                                const isActive = isItemActive(item.path);
-                                return (
-                                  <SidebarMenuSubItem key={item.path}>
-                                    <SidebarMenuSubButton asChild isActive={isActive}>
-                                      <Link to={item.path} className={`${itemLinkClass(isActive)} h-auto gap-2.5 px-2.5 py-1.5`}>
-                                        <item.icon size={16} variant={isActive ? "solid" : "stroke"} className="shrink-0" />
-                                        {/* Wrap rather than truncate so long labels stay readable */}
-                                        <span className="!whitespace-normal">{item.name}</span>
-                                      </Link>
-                                    </SidebarMenuSubButton>
-                                  </SidebarMenuSubItem>
-                                );
-                              })}
-                            </SidebarMenuSub>
-                          )}
-                        </SidebarMenuItem>
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </SidebarGroup>
-                );
-              }
-
-              // Flat category: optional section heading followed by its items.
-              return (
-                <SidebarGroup key={group.key} className="py-1.5">
-                  {group.label && (
-                    <SidebarGroupLabel className="px-3 text-[10px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-                      {group.label}
-                    </SidebarGroupLabel>
-                  )}
-                  <SidebarGroupContent>
-                    <SidebarMenu>
-                      {group.items.map((item) => {
+          <SidebarContent className="gap-0 px-2 py-2 no-scrollbar">
+            <SidebarGroup className="p-0">
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-0.5">
+                  {navGroups.map((group) => {
+                    // Plain top-level links (e.g. Dashboard)
+                    if (!group.collapsible) {
+                      return group.items.map((item) => {
                         const isActive = isItemActive(item.path);
                         return (
                           <SidebarMenuItem key={item.path}>
-                            <SidebarMenuButton asChild isActive={isActive} tooltip={item.name}>
-                              <Link to={item.path} className={itemLinkClass(isActive)}>
-                                <item.icon size={18} variant={isActive ? "solid" : "stroke"} />
-                                <span>{item.name}</span>
+                            <SidebarMenuButton asChild isActive={isActive} tooltip={item.name} className="h-9 p-0">
+                              <Link to={item.path} className={rowClass(isActive)}>
+                                <item.icon size={18} variant={isActive ? 'solid' : 'stroke'} className="shrink-0" />
+                                <span className="truncate">{item.name}</span>
                               </Link>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
                         );
-                      })}
-                    </SidebarMenu>
-                  </SidebarGroupContent>
-                </SidebarGroup>
-              );
-            })}
+                      });
+                    }
+
+                    // Collapsible category: one row that expands into its links
+                    const open = isGroupOpen(group);
+                    const hasActiveChild = group.items.some(item => isItemActive(item.path));
+                    return (
+                      <SidebarMenuItem key={group.key}>
+                        <SidebarMenuButton
+                          isActive={hasActiveChild && !open}
+                          tooltip={group.label}
+                          onClick={() => toggleGroup(group)}
+                          aria-expanded={open}
+                          className={`${rowClass(hasActiveChild && !open)} p-0 px-2.5`}
+                        >
+                          <group.icon size={18} variant={hasActiveChild ? 'solid' : 'stroke'} className="shrink-0" />
+                          <span className="min-w-0 flex-1 truncate text-left" title={group.label}>{group.label}</span>
+                          <ArrowDown01Icon
+                            size={15}
+                            className={`shrink-0 text-zinc-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`}
+                          />
+                        </SidebarMenuButton>
+
+                        {open && (
+                          <SidebarMenuSub className="mx-0 ml-[1.1rem] mt-0.5 mb-1 gap-0.5 border-l border-zinc-200 pl-2 pr-0 dark:border-zinc-800">
+                            {group.items.map((item) => {
+                              const isActive = isItemActive(item.path);
+                              return (
+                                <SidebarMenuSubItem key={item.path}>
+                                  <SidebarMenuSubButton asChild isActive={isActive} className="h-8 p-0">
+                                    <Link to={item.path} title={item.name} className={`${rowClass(isActive)} h-8 gap-2 px-2`}>
+                                      <item.icon size={16} variant={isActive ? 'solid' : 'stroke'} className="shrink-0" />
+                                      <span className="truncate">{item.name}</span>
+                                    </Link>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              );
+                            })}
+                          </SidebarMenuSub>
+                        )}
+                      </SidebarMenuItem>
+                    );
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
           </SidebarContent>
 
-          <SidebarFooter className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
-            <div className="flex items-center gap-3 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800 p-2 rounded-lg transition-colors w-full overflow-hidden">
+          {/* Compact footer: profile, theme and logout on one row */}
+          <SidebarFooter className="border-t border-zinc-200 p-2 dark:border-zinc-800">
+            <div className="flex items-center gap-2 rounded-lg p-1.5">
               <Avatar className="h-8 w-8 shrink-0">
                 <AvatarImage src={user?.profilePhoto || ''} alt={user?.name || 'User'} />
                 <AvatarFallback className="bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300">
                   {user?.name ? user.name.charAt(0).toUpperCase() : 'U'}
                 </AvatarFallback>
               </Avatar>
-              <div className="flex flex-col flex-1 overflow-hidden">
-                <span className="text-sm font-medium truncate text-zinc-900 dark:text-zinc-100">{user?.name || 'Staff'}</span>
-                <span className="text-[10px] text-zinc-500 truncate">{user?.role?.replace('_', ' ')}</span>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm font-semibold text-zinc-900 dark:text-zinc-100" title={user?.name}>{user?.name || 'Staff'}</span>
+                <span className="truncate text-[10px] uppercase tracking-wide text-zinc-500">{user?.role?.replace('_', ' ')}</span>
               </div>
-            </div>
-            <div className="w-full grid md:grid-cols-[1fr_auto] gap-2 items-center">
-              <Button onClick={handleLogout} className="w-full">
-                Logout
+              <AnimatedThemeToggler className="size-8 shrink-0" />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleLogout}
+                aria-label="Log out"
+                title="Log out"
+                className="size-8 shrink-0 text-zinc-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40"
+              >
+                <Logout01Icon size={17} />
               </Button>
-              <AnimatedThemeToggler className="size-10" />
             </div>
           </SidebarFooter>
         </Sidebar>

@@ -6,14 +6,76 @@ const { userRoles, userStatuses } = require("../../constants/roles");
 const { verifyGoogleIdToken } = require("../../lib/google-auth");
 const { createHttpError } = require("../../middleware/error-handler");
 const { serializeUser } = require("../users/user-service");
+const { authUserCache } = require("../../lib/cache");
+const { sendMail } = require("../../lib/mailer");
 
 function createUserToken(user) {
   return signJwt({
     sub: user.id,
     role: user.role,
     tenantId: user.tenantId,
-    storeId: user.storeId
+    storeId: user.storeId,
+    // Password changes bump the version, which ends every older session
+    tv: user.tokenVersion || 0
   });
+}
+
+// Only account owners change their own password; everyone else is reset by a manager
+const SELF_PASSWORD_ROLES = [userRoles.superAdmin, userRoles.tenantAdmin];
+
+function assertCanChangeOwnPassword(actor) {
+  if (!SELF_PASSWORD_ROLES.includes(actor.role)) {
+    throw createHttpError(403, "Ask your manager to reset your password");
+  }
+}
+
+async function getOwnPasswordStatus(actor) {
+  const user = await getPrismaClient().user.findUnique({ where: { id: actor.id }, select: { passwordHash: true } });
+  return {
+    canChange: SELF_PASSWORD_ROLES.includes(actor.role),
+    hasPassword: Boolean(user?.passwordHash)
+  };
+}
+
+/**
+ * Changes (or first sets, for Google sign-ups) the signed-in owner's password. Every other
+ * session is signed out; the returned token keeps this device signed in.
+ */
+async function changeOwnPassword(actor, input = {}) {
+  assertCanChangeOwnPassword(actor);
+  const prisma = getPrismaClient();
+  const user = await prisma.user.findUnique({ where: { id: actor.id } });
+  if (!user) throw createHttpError(404, "User not found");
+
+  const newPassword = typeof input.newPassword === "string" ? input.newPassword : "";
+  if (newPassword.length < 8) throw createHttpError(400, "New password must be at least 8 characters");
+  if (newPassword.length > 128) throw createHttpError(400, "New password must be at most 128 characters");
+
+  if (user.passwordHash) {
+    // 400, not 401: a wrong current password must not sign the user out
+    if (!input.currentPassword || !(await verifyPassword(input.currentPassword, user.passwordHash))) {
+      throw createHttpError(400, "Current password is incorrect");
+    }
+    if (await verifyPassword(newPassword, user.passwordHash)) {
+      throw createHttpError(400, "New password must be different from the current one");
+    }
+  }
+
+  const updated = await prisma.user.update({
+    where: { id: user.id },
+    data: { passwordHash: await hashPassword(newPassword), tokenVersion: { increment: 1 } },
+    include: { tenant: true, store: true }
+  });
+  authUserCache.del(user.id);
+
+  // Heads-up in case it wasn't them (never blocks the change)
+  Promise.resolve().then(() => sendMail({
+    to: updated.email,
+    subject: "Your Scan My Order password was changed",
+    text: `Hi ${updated.name || ""}, the password for ${updated.email} was ${user.passwordHash ? "changed" : "set"} on ${new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} IST. All other devices were signed out. If this wasn't you, contact support immediately.`
+  })).catch(err => console.warn("[Auth] password-change email:", err.message));
+
+  return { token: createUserToken(updated), user: serializeUser(updated) };
 }
 
 async function bootstrapSuperAdmin(input) {
@@ -241,6 +303,8 @@ async function customerRegister(input) {
 }
 
 module.exports = {
+  changeOwnPassword,
+  getOwnPasswordStatus,
   bootstrapSuperAdmin,
   createUserToken,
   customerRegister,

@@ -11,6 +11,7 @@ const {
   userStatuses
 } = require("../../constants/roles");
 const { createHttpError } = require("../../middleware/error-handler");
+const { authUserCache } = require("../../lib/cache");
 const { sendMail } = require("../../lib/mailer");
 const { env } = require("../../config/env");
 const { getWelcomeEmailTemplate } = require("../../lib/templates/welcome-email");
@@ -391,11 +392,21 @@ async function updateUser(actor, id, input) {
   }
 
   if (input.password !== undefined) {
-    if (input.password.length < 8) {
+    if (actor.id === existingUser.id) {
+      throw createHttpError(403, [userRoles.superAdmin, userRoles.tenantAdmin].includes(actor.role)
+        ? "Change your own password under Settings → Password"
+        : "Ask your manager to reset your password");
+    }
+    if (existingUser.role === userRoles.tenantAdmin && actor.role !== userRoles.superAdmin) {
+      throw createHttpError(403, "Another owner's password can only be reset by platform support");
+    }
+    if (typeof input.password !== "string" || input.password.length < 8) {
       throw createHttpError(400, "Password must be at least 8 characters");
     }
 
     data.passwordHash = await hashPassword(input.password);
+    // Signs the user out everywhere
+    data.tokenVersion = { increment: 1 };
   }
 
   if (input.role || input.tenantId !== undefined || input.storeId !== undefined) {
@@ -418,6 +429,7 @@ async function updateUser(actor, id, input) {
     data,
     include: userInclude
   });
+  authUserCache.del(id);
 
   const roleChanged = data.role && data.role !== existingUser.role;
 
@@ -480,6 +492,8 @@ async function updateUserStatus(actor, id, status) {
     },
     include: userInclude
   });
+  // Deactivation takes effect on the next request, not after the cache expires
+  authUserCache.del(id);
 
   return serializeUser(user);
 }

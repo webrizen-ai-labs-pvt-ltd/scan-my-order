@@ -1,268 +1,173 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
-import { CancelOrderDialog } from '../components/pos/cancel-order-dialog';
 import { useAuthStore } from '../store/authStore';
-import { 
-  Card, CardContent, CardHeader, CardTitle, 
+import {
+  Card, CardContent,
   Button, Input, Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-  Badge, Dialog, DialogContent, DialogHeader, DialogTitle,
-  Skeleton
+  Badge, Skeleton
 } from '@smo/ui';
-import { Search01Icon, FilterIcon, PrinterIcon, Download01Icon, Store01Icon, Edit02Icon, Shield01Icon, CheckmarkCircle02Icon, AlertCircleIcon, Loading03Icon } from 'hugeicons-react';
+import { Search01Icon, Store01Icon, CheckmarkCircle02Icon, AlertCircleIcon } from 'hugeicons-react';
+import { ORDER_STATUSES, statusTone } from './orders/order-status';
 
-const ORDER_STATUSES = ['DRAFT', 'PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED', 'SETTLED', 'CANCELLED'];
 const PAYMENT_MODELS = ['PREPAID', 'POSTPAID'];
 const ORIGINS = ['POS', 'QR_MENU', 'KIOSK', 'AGGREGATOR'];
+const PAGE_SIZE = 10;
 
+/**
+ * Order History list. Store, filters and page live in the URL, so returning from an order
+ * (Back, or the breadcrumb) lands on the same view.
+ */
 export const Orders = () => {
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const [cancellingOrder, setCancellingOrder] = useState(null);
+  const [params, setParams] = useSearchParams();
   const isManager = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role);
+  const ownStoreId = user?.store?.id || null;
+
   const [stores, setStores] = useState([]);
-  const [selectedStoreId, setSelectedStoreId] = useState(user?.store?.id || null);
-  const [currentStore, setCurrentStore] = useState(user?.store || null);
-  
+  const storeId = params.get('store') || ownStoreId || stores[0]?.id || null;
+  const status = params.get('status') || 'all';
+  const paymentModel = params.get('payment') || 'all';
+  const origin = params.get('origin') || 'all';
+  const q = params.get('q') || '';
+  const page = Math.max(1, parseInt(params.get('page') || '1', 10) || 1);
+
+  const [search, setSearch] = useState(q);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState({ total: 0, pages: 1, current: 1, limit: 10 });
+  const [pagination, setPagination] = useState({ total: 0, pages: 1, current: 1 });
+  const [updatingOrderId, setUpdatingOrderId] = useState(null);
+  const [feedback, setFeedback] = useState({ text: '', error: false });
+
+  /** Updates URL params; any filter change goes back to page 1 */
+  const setFilter = useCallback((changes) => {
+    setParams(prev => {
+      const next = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(changes)) {
+        if (v === null || v === undefined || v === '' || v === 'all') next.delete(k);
+        else next.set(k, String(v));
+      }
+      if (!('page' in changes)) next.delete('page');
+      return next;
+    }, { replace: true });
+  }, [setParams]);
 
   useEffect(() => {
-    if (!user?.store) {
-      api.get('/stores').then(res => {
-        if (res.data.success && res.data.data.length > 0) {
-          setStores(res.data.data);
-          if (!selectedStoreId) {
-            setSelectedStoreId(res.data.data[0].id);
-            setCurrentStore(res.data.data[0]);
-          }
-        }
-      });
-    } else {
-      setCurrentStore(user.store);
-    }
-  }, [user]);
-  
-  // Filters
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('all');
-  const [paymentModel, setPaymentModel] = useState('all');
-  const [origin, setOrigin] = useState('all');
-  
-  // View Details
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const receiptRef = useRef(null);
+    if (ownStoreId) return;
+    api.get('/stores')
+      .then(res => setStores(Array.isArray(res.data.data) ? res.data.data : []))
+      .catch(() => setStores([]));
+  }, [ownStoreId]);
 
-  const fetchOrders = async (page = 1) => {
-    if (!selectedStoreId) return;
+  // Pin the chosen store in the URL so the order pages know it
+  useEffect(() => {
+    if (storeId && !params.get('store') && !ownStoreId) setFilter({ store: storeId, page: params.get('page') });
+  }, [storeId, params, ownStoreId, setFilter]);
+
+  useEffect(() => {
+    if (!storeId) return undefined;
+    let stale = false;
     setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        page,
-        limit: pagination.limit
-      });
-      if (search) params.append('search', search);
-      if (status !== 'all') params.append('status', status);
-      if (paymentModel !== 'all') params.append('paymentModel', paymentModel);
-      if (origin !== 'all') params.append('origin', origin);
-
-      const res = await api.get(`/stores/${selectedStoreId}/orders/history?${params.toString()}`);
-      if (res.data.success) {
+    const query = new URLSearchParams({ page, limit: PAGE_SIZE });
+    if (q) query.append('search', q);
+    if (status !== 'all') query.append('status', status);
+    if (paymentModel !== 'all') query.append('paymentModel', paymentModel);
+    if (origin !== 'all') query.append('origin', origin);
+    api.get(`/stores/${storeId}/orders/history?${query}`)
+      .then(res => {
+        if (stale) return;
         setOrders(res.data.data.orders);
         setPagination(res.data.data.pagination);
-      }
-    } catch (err) {
-      console.error("Failed to fetch orders history:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+      })
+      .catch(err => { if (!stale) console.error('Failed to fetch orders history:', err); })
+      .finally(() => { if (!stale) setLoading(false); });
+    return () => { stale = true; };
+  }, [storeId, page, q, status, paymentModel, origin]);
 
-  useEffect(() => {
-    fetchOrders(1);
-  }, [selectedStoreId, status, paymentModel, origin]);
+  const storeQuery = storeId && !ownStoreId ? `?store=${storeId}` : '';
+  const openOrder = (id) => navigate(`/dashboard/orders/${id}${storeQuery}`);
 
-  const handleSearch = (e) => {
-    e.preventDefault();
-    fetchOrders(1);
-  };
-
-  const openDetails = (order) => {
-    setSelectedOrder(order);
-    setIsDetailsOpen(true);
-    setStatusFeedback({ text: '', error: false });
-  };
-
-  const [updatingOrderId, setUpdatingOrderId] = useState(null);
-  const [statusFeedback, setStatusFeedback] = useState({ text: '', error: false });
-
-  const handleStatusChange = async (orderId, newStatus) => {
-    if (!isManager || !selectedStoreId) return;
-
-    const targetOrder = orders.find(o => o.id === orderId) || (selectedOrder?.id === orderId ? selectedOrder : null);
-    if (targetOrder?.status === newStatus) return;
-
-    // Cancelling needs a reason, collected by the cancel dialog
-    if (newStatus === 'CANCELLED') {
-      setCancellingOrder(targetOrder || { id: orderId });
+  const quickStatus = async (order, next) => {
+    if (order.status === next) return;
+    // Cancelling needs a reason, collected on the cancel page
+    if (next === 'CANCELLED') {
+      navigate(`/dashboard/orders/${order.id}/cancel${storeQuery}`);
       return;
     }
-
-    setUpdatingOrderId(orderId);
-    setStatusFeedback({ text: '', error: false });
-
+    setUpdatingOrderId(order.id);
+    setFeedback({ text: '', error: false });
     try {
-      const res = await api.patch(`/stores/${selectedStoreId}/orders/${orderId}/status`, {
-        status: newStatus
-      });
-
-      if (res.data?.success) {
-        const updated = res.data.data;
-        setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updated, status: newStatus } : o));
-        if (selectedOrder && selectedOrder.id === orderId) {
-          setSelectedOrder(prev => ({ ...prev, ...updated, status: newStatus }));
-        }
-        setStatusFeedback({
-          text: `Order #${orderId.slice(-6).toUpperCase()} status updated to ${newStatus.replace('_', ' ')}.`,
-          error: false
-        });
-      }
+      const res = await api.patch(`/stores/${storeId}/orders/${order.id}/status`, { status: next });
+      setOrders(prev => prev.map(o => (o.id === order.id ? { ...o, ...res.data.data, status: next } : o)));
+      setFeedback({ text: `Order #${order.id.slice(-6).toUpperCase()} changed to ${next.replace('_', ' ').toLowerCase()}.`, error: false });
     } catch (err) {
-      console.error('Failed to change order status:', err);
-      setStatusFeedback({
-        text: 'Failed to update order status: ' + (err.response?.data?.error?.message || err.message),
-        error: true
-      });
+      setFeedback({ text: 'Could not change the status: ' + (err.response?.data?.error?.message || err.message), error: true });
     } finally {
       setUpdatingOrderId(null);
     }
   };
 
-  const handlePrint = () => {
-    if (!receiptRef.current) return;
-    const printWindow = window.open('', '', 'width=400,height=600');
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Receipt</title>
-          <style>
-            body { font-family: monospace; font-size: 14px; margin: 0; padding: 20px; }
-            .flex { display: flex; }
-            .justify-between { justify-content: space-between; }
-            .text-center { text-align: center; }
-            .text-right { text-align: right; }
-            .font-bold { font-weight: bold; }
-            .text-xl { font-size: 1.25rem; }
-            .text-lg { font-size: 1.125rem; }
-            .mb-4 { margin-bottom: 1rem; }
-            .mb-2 { margin-bottom: 0.5rem; }
-            .mb-1 { margin-bottom: 0.25rem; }
-            .pb-2 { padding-bottom: 0.5rem; }
-            .pl-2 { padding-left: 0.5rem; }
-            .uppercase { text-transform: uppercase; }
-            .border-b { border-bottom: 1px dashed black; }
-            .flex-1 { flex: 1; }
-            .w-10 { width: 2.5rem; }
-            .w-16 { width: 4rem; }
-            .text-xs { font-size: 0.75rem; }
-            .pr-2 { padding-right: 0.5rem; }
-          </style>
-        </head>
-        <body>${receiptRef.current.innerHTML}</body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.focus();
-    setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
-  };
-
-  const getStatusColor = (s) => {
-    switch (s) {
-      case 'SETTLED': return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
-      case 'CANCELLED': return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-      case 'PROCESSING': 
-      case 'READY': 
-      case 'SERVED': return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
-      default: return 'bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-300';
-    }
-  };
-
   return (
     <div className="flex flex-col h-full gap-4">
-      {/* Filters Header */}
       <Card>
         <CardContent className="p-4">
-          <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-4">
+          <form
+            onSubmit={(e) => { e.preventDefault(); setFilter({ q: search.trim() }); }}
+            className="flex flex-col md:flex-row gap-4"
+          >
             <div className="relative flex-1">
               <Search01Icon size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <Input 
-                placeholder="Search by Order ID..." 
-                className="pl-10"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+              <Input placeholder="Search by Order ID..." className="pl-10" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
-            
-            <div className="flex gap-2">
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue placeholder="Status" />
-                </SelectTrigger>
+
+            <div className="flex flex-wrap gap-2">
+              {!ownStoreId && stores.length > 1 && (
+                <Select value={storeId || undefined} onValueChange={(v) => setFilter({ store: v })}>
+                  <SelectTrigger className="w-[180px]"><Store01Icon size={15} className="mr-1.5 text-zinc-400" /><SelectValue placeholder="Store" /></SelectTrigger>
+                  <SelectContent>{stores.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                </Select>
+              )}
+              <Select value={status} onValueChange={(v) => setFilter({ status: v })}>
+                <SelectTrigger className="w-[160px]"><SelectValue placeholder="Status" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Statuses</SelectItem>
                   {ORDER_STATUSES.map(s => <SelectItem key={s} value={s}>{s.replace('_', ' ')}</SelectItem>)}
                 </SelectContent>
               </Select>
-              
-              <Select value={paymentModel} onValueChange={setPaymentModel}>
-                <SelectTrigger className="w-[150px]">
-                  <SelectValue placeholder="Payment" />
-                </SelectTrigger>
+              <Select value={paymentModel} onValueChange={(v) => setFilter({ payment: v })}>
+                <SelectTrigger className="w-[150px]"><SelectValue placeholder="Payment" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Payments</SelectItem>
                   {PAYMENT_MODELS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
-              
-              <Select value={origin} onValueChange={setOrigin}>
-                <SelectTrigger className="w-[140px]">
-                  <SelectValue placeholder="Origin" />
-                </SelectTrigger>
+              <Select value={origin} onValueChange={(v) => setFilter({ origin: v })}>
+                <SelectTrigger className="w-[140px]"><SelectValue placeholder="Origin" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Origins</SelectItem>
                   {ORIGINS.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
-
-              <Button type="submit" variant="default" className="bg-indigo-600 hover:bg-indigo-700 text-white">
-                Search
-              </Button>
+              <Button type="submit">Search</Button>
             </div>
           </form>
         </CardContent>
       </Card>
 
-      {/* Status Feedback Banner */}
-      {statusFeedback.text && (
-        <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between border shadow-sm ${
-          statusFeedback.error
-            ? 'bg-red-50 text-red-800 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900/40'
-            : 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/40'
-        }`}>
+      {feedback.text && (
+        <div className={`p-3 rounded-xl text-xs font-semibold flex items-center justify-between border ${feedback.error
+          ? 'bg-red-50 text-red-800 border-red-200 dark:bg-red-950/30 dark:text-red-300 dark:border-red-900/40'
+          : 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-900/40'}`}>
           <div className="flex items-center gap-2">
-            {statusFeedback.error ? <AlertCircleIcon size={16} className="text-red-500" /> : <CheckmarkCircle02Icon size={16} className="text-emerald-500" />}
-            <span>{statusFeedback.text}</span>
+            {feedback.error ? <AlertCircleIcon size={16} className="text-red-500" /> : <CheckmarkCircle02Icon size={16} className="text-emerald-500" />}
+            <span>{feedback.text}</span>
           </div>
-          <button onClick={() => setStatusFeedback({ text: '', error: false })} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
-            Dismiss
-          </button>
+          <button type="button" onClick={() => setFeedback({ text: '', error: false })} className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">Dismiss</button>
         </div>
       )}
 
-      {/* Table */}
       <Card className="flex-1 flex flex-col overflow-hidden">
         <CardContent className="p-0 flex-1 overflow-auto">
           <Table>
@@ -272,6 +177,7 @@ export const Orders = () => {
                 <TableHead>Date & Time</TableHead>
                 <TableHead>Table / Origin</TableHead>
                 <TableHead>Payment</TableHead>
+                <TableHead>Invoice</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Total</TableHead>
               </TableRow>
@@ -280,331 +186,61 @@ export const Orders = () => {
               {loading ? (
                 Array(5).fill(0).map((_, i) => (
                   <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                    {['w-24', 'w-32', 'w-20', 'w-16', 'w-20'].map((w, j) => <TableCell key={j}><Skeleton className={`h-5 ${w}`} /></TableCell>)}
                     <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
                     <TableCell><Skeleton className="h-5 w-16 ml-auto" /></TableCell>
                   </TableRow>
                 ))
               ) : orders.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-48 text-center text-zinc-500">
-                    No orders found matching your criteria.
-                  </TableCell>
+                  <TableCell colSpan={7} className="h-48 text-center text-zinc-500">No orders found matching your criteria.</TableCell>
                 </TableRow>
               ) : (
                 orders.map((order) => (
-                  <TableRow key={order.id} className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50" onClick={() => openDetails(order)}>
+                  <TableRow key={order.id} className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-900/50" onClick={() => openOrder(order.id)}>
                     <TableCell className="font-medium text-xs font-mono">{order.id.slice(-8).toUpperCase()}</TableCell>
                     <TableCell>{new Date(order.createdAt).toLocaleString()}</TableCell>
-                    <TableCell>
-                      {order.table ? `Table ${order.table.tableNumber}` : order.origin}
-                    </TableCell>
+                    <TableCell>{order.table ? `Table ${order.table.tableNumber}` : order.origin}</TableCell>
                     <TableCell className="text-xs font-semibold">{order.paymentModel}</TableCell>
+                    <TableCell className="text-xs font-mono text-zinc-500">{order.invoice?.number || '—'}</TableCell>
                     <TableCell onClick={(e) => isManager && e.stopPropagation()}>
                       {isManager ? (
-                        <div className="relative inline-block">
-                          <select
-                            value={order.status}
-                            disabled={updatingOrderId === order.id}
-                            onChange={(e) => handleStatusChange(order.id, e.target.value)}
-                            className={`text-xs font-bold px-2.5 py-1 rounded-full border-0 cursor-pointer shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none transition-all ${getStatusColor(order.status)}`}
-                            title="Manager: Click to change order status manually"
-                          >
-                            {ORDER_STATUSES.map(s => (
-                              <option key={s} value={s} className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white font-medium">
-                                {s.replace('_', ' ')}
-                              </option>
-                            ))}
-                          </select>
-                          {updatingOrderId === order.id && (
-                            <span className="absolute -top-1 -right-1 flex h-2 w-2">
-                              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-indigo-400 opacity-75"></span>
-                              <span className="relative inline-flex rounded-full h-2 w-2 bg-indigo-500"></span>
-                            </span>
-                          )}
-                        </div>
+                        <select
+                          value={order.status}
+                          disabled={updatingOrderId === order.id}
+                          onChange={(e) => quickStatus(order, e.target.value)}
+                          className={`text-xs font-bold px-2.5 py-1 rounded-full border-0 cursor-pointer focus:ring-2 focus:ring-zinc-400 focus:outline-none ${statusTone(order.status)}`}
+                          title="Change status"
+                        >
+                          {ORDER_STATUSES.map(s => (
+                            <option key={s} value={s} className="bg-white dark:bg-zinc-900 text-zinc-900 dark:text-white font-medium">{s.replace('_', ' ')}</option>
+                          ))}
+                        </select>
                       ) : (
-                        <Badge className={`border-none ${getStatusColor(order.status)}`}>
-                          {order.status.replace('_', ' ')}
-                        </Badge>
+                        <Badge className={`border-none ${statusTone(order.status)}`}>{order.status.replace('_', ' ')}</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-bold">₹{order.totalAmount}</TableCell>
+                    <TableCell className="text-right font-bold">
+                      {(order.paymentMethod === 'DUES' || order.duesAmount > 0) && <span className="mr-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400" title={`₹${order.duesAmount} on dues`}>Dues</span>}
+                      ₹{order.totalAmount}
+                    </TableCell>
                   </TableRow>
                 ))
               )}
             </TableBody>
           </Table>
         </CardContent>
-        
-        {/* Pagination */}
+
         <div className="p-4 border-t border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-950">
           <div className="text-sm text-zinc-500">
-            Showing page {pagination.current} of {pagination.pages} ({pagination.total} total orders)
+            Page {pagination.current} of {pagination.pages || 1} ({pagination.total} orders)
           </div>
           <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm"
-              disabled={pagination.current <= 1 || loading}
-              onClick={() => fetchOrders(pagination.current - 1)}
-            >
-              Previous
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm"
-              disabled={pagination.current >= pagination.pages || loading}
-              onClick={() => fetchOrders(pagination.current + 1)}
-            >
-              Next
-            </Button>
+            <Button variant="outline" size="sm" disabled={page <= 1 || loading} onClick={() => setFilter({ page: page - 1 })}>Previous</Button>
+            <Button variant="outline" size="sm" disabled={page >= pagination.pages || loading} onClick={() => setFilter({ page: page + 1 })}>Next</Button>
           </div>
         </div>
       </Card>
-
-      {/* Details Dialog */}
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Order Details</DialogTitle>
-          </DialogHeader>
-          
-          {selectedOrder && (
-            <div className="flex flex-col gap-4">
-              {/* Hidden Receipt for Printing */}
-              <div style={{ display: 'none' }}>
-                <div ref={receiptRef}>
-                  <div className="text-center mb-4 border-b pb-2">
-                    <div className="font-bold text-xl uppercase mb-1">{currentStore?.name || 'Scan My Order'}</div>
-                    <div className="text-xs uppercase">Store: {currentStore?.name}</div>
-                    {currentStore?.tenant?.gstin && <div className="text-xs uppercase">GSTIN: {currentStore.tenant.gstin}</div>}
-                    <div className="text-xs mt-1">Date: {new Date(selectedOrder.createdAt).toLocaleString()}</div>
-                    <div className="text-xs">Order ID: #{selectedOrder.id.slice(-6).toUpperCase()}</div>
-                    <div className="text-xs font-bold mt-1 uppercase">
-                      {selectedOrder.table ? `DINE-IN - TABLE ${selectedOrder.table.tableNumber}` : selectedOrder.origin}
-                    </div>
-                  </div>
-                  
-                  <div className="mb-2 text-xs border-b pb-2">
-                    <div className="flex font-bold mb-1">
-                      <div className="flex-1">ITEM</div>
-                      <div className="w-10 text-center">QTY</div>
-                      <div className="w-16 text-right">AMT</div>
-                    </div>
-                    {selectedOrder.items.map((item, idx) => {
-                      const itemTotal = item.priceAtOrder * item.quantity;
-                      return (
-                        <div key={idx} className="mb-2">
-                          <div className="flex">
-                            <div className="flex-1 pr-2">{item.menuItem.name}</div>
-                            <div className="w-10 text-center">{item.quantity}</div>
-                            <div className="w-16 text-right">{itemTotal}</div>
-                          </div>
-                          {item.modifiers?.length > 0 && item.modifiers.map(mod => (
-                            <div key={mod.id} className="flex text-xs pl-2">
-                              <div className="flex-1">- {mod.modifierOption.name}</div>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  
-                  <div className="mb-2 text-xs border-b pb-2">
-                    <div className="flex justify-between mb-1">
-                      <div>SUBTOTAL</div>
-                      <div>{selectedOrder.subTotal}</div>
-                    </div>
-                    <div className="flex justify-between mb-1">
-                      <div>TAX</div>
-                      <div>{selectedOrder.taxAmount}</div>
-                    </div>
-                    {selectedOrder.discountAmount > 0 && (
-                      <div className="flex justify-between mb-1">
-                        <div>DISCOUNT</div>
-                        <div>-{selectedOrder.discountAmount}</div>
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="flex justify-between font-bold text-lg mb-4">
-                    <div>TOTAL</div>
-                    <div>INR {selectedOrder.totalAmount}</div>
-                  </div>
-                  
-                  <div className="text-center text-xs">
-                    <div className="mb-2">Thank you for dining with us!</div>
-                    <div className="font-bold">Powered by ScanMyOrder</div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-zinc-50 dark:bg-zinc-900 rounded-xl p-4 border border-zinc-200 dark:border-zinc-800">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-bold text-lg">
-                      {selectedOrder.table ? `Table ${selectedOrder.table.tableNumber}` : selectedOrder.origin}
-                    </h3>
-                    <p className="text-sm text-zinc-500 font-mono">#{selectedOrder.id}</p>
-                    <p className="text-xs text-zinc-500">{new Date(selectedOrder.createdAt).toLocaleString()}</p>
-                  </div>
-                  <Badge className={`border-none ${getStatusColor(selectedOrder.status)}`}>
-                    {selectedOrder.status.replace('_', ' ')}
-                  </Badge>
-                </div>
-
-                {selectedOrder.status === 'CANCELLED' && selectedOrder.cancelReason && (
-                  <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30 px-3 py-2 text-xs text-rose-800 dark:text-rose-300">
-                    <span className="font-bold">Cancelled:</span> {selectedOrder.cancelReason}
-                    {(selectedOrder.cancelledBy?.name || selectedOrder.cancelledAt) && (
-                      <span className="block text-[11px] opacity-80">
-                        {selectedOrder.cancelledBy?.name ? `by ${selectedOrder.cancelledBy.name}` : ''}
-                        {selectedOrder.cancelledAt ? ` · ${new Date(selectedOrder.cancelledAt).toLocaleString()}` : ''}
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <div className="space-y-3 mb-4 max-h-[300px] overflow-y-auto pr-2">
-                  {selectedOrder.items.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <div>
-                        <div className="font-medium flex items-center gap-1.5 flex-wrap">
-                          <span>{item.quantity}x {item.customName || item.menuItem?.name}</span>
-                          {item.isCustom && (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/15 text-amber-800 dark:text-amber-300 border border-amber-500/30">
-                              Custom Dish
-                            </span>
-                          )}
-                        </div>
-                        {item.modifiers?.length > 0 && (
-                          <div className="text-xs text-zinc-500 pl-4 mt-0.5">
-                            {item.modifiers.map(m => m.modifierOption?.name || m.name).join(', ')}
-                          </div>
-                        )}
-                        {item.customIngredients && item.customIngredients.length > 0 && (
-                          <div className="text-xs pl-4 mt-1 flex flex-wrap gap-1">
-                            {item.customIngredients.map((ing, ingIdx) => (
-                              <span key={ingIdx} className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20 px-1.5 py-0.2 rounded text-[10px] font-medium">
-                                +{ing.name} ({ing.quantity}{ing.unit})
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {item.kitchenNotes && (
-                          <p className="text-[11px] italic text-amber-700 dark:text-amber-400 pl-4 mt-0.5">
-                            “{item.kitchenNotes}”
-                          </p>
-                        )}
-                      </div>
-                      <div className="font-medium">₹{item.priceAtOrder * item.quantity}</div>
-                    </div>
-                  ))}
-                </div>
-                
-                <div className="border-t border-zinc-200 dark:border-zinc-800 pt-3 space-y-1 text-sm">
-                  <div className="flex justify-between text-zinc-500">
-                    <span>Subtotal</span>
-                    <span>₹{selectedOrder.subTotal}</span>
-                  </div>
-                  <div className="flex justify-between text-zinc-500">
-                    <span>Taxes</span>
-                    <span>₹{selectedOrder.taxAmount}</span>
-                  </div>
-                  {selectedOrder.discountAmount > 0 && (
-                    <div className="flex justify-between text-green-600">
-                      <span>Discount</span>
-                      <span>-₹{selectedOrder.discountAmount}</span>
-                    </div>
-                  )}
-                  <div className="flex justify-between font-bold text-lg pt-2 border-t border-zinc-200 dark:border-zinc-800 mt-2">
-                    <span>Total</span>
-                    <span>₹{selectedOrder.totalAmount}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Manager Manual Status Controls */}
-              {isManager && (
-                <div className="bg-indigo-50/60 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 rounded-xl p-3.5 flex flex-col gap-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-indigo-950 dark:text-indigo-200 uppercase tracking-wider flex items-center gap-1.5">
-                      <Shield01Icon size={14} className="text-indigo-600 dark:text-indigo-400" />
-                      Manual Status Override
-                    </span>
-                    <span className="text-[10px] font-semibold text-indigo-700/70 dark:text-indigo-300/70 bg-indigo-100/70 dark:bg-indigo-900/50 px-2 py-0.5 rounded-full">
-                      {user?.role.replace('_', ' ')}
-                    </span>
-                  </div>
-
-                  <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-tight">
-                    Change order lifecycle state directly. Inventory deductions or restocks will be reconciled automatically.
-                  </p>
-
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1">
-                    {ORDER_STATUSES.map(st => {
-                      const isCurrent = selectedOrder.status === st;
-                      const isThisUpdating = updatingOrderId === selectedOrder.id;
-                      return (
-                        <button
-                          key={st}
-                          type="button"
-                          disabled={isCurrent || isThisUpdating}
-                          onClick={() => handleStatusChange(selectedOrder.id, st)}
-                          className={`px-2 py-1.5 rounded-lg text-xs font-semibold transition-all border text-center relative ${
-                            isCurrent
-                              ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-white dark:text-zinc-900 dark:border-white shadow-sm'
-                              : 'bg-white dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:border-indigo-400 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/40'
-                          }`}
-                        >
-                          {st.replace('_', ' ')}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-              
-              <div className="flex flex-col gap-2">
-                {isManager && selectedOrder.status !== 'CANCELLED' && selectedOrder.status !== 'SETTLED' && (
-                  <Button
-                    variant="outline"
-                    className="w-full border-amber-400/80 text-amber-800 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-950/40 font-semibold"
-                    onClick={() => {
-                      navigate(`/dashboard/pos/orders/${selectedOrder.id}/edit?store=${selectedStoreId}&returnTo=${encodeURIComponent('/dashboard/orders')}`);
-                    }}
-                  >
-                    <Edit02Icon size={16} className="mr-2 text-amber-600" />
-                    Edit Items (Manager)
-                  </Button>
-                )}
-                <div className="flex gap-2">
-                  <Button variant="outline" className="flex-1" onClick={() => setIsDetailsOpen(false)}>Close</Button>
-                  <Button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white" onClick={handlePrint}>
-                    <PrinterIcon size={18} className="mr-2" /> Print Receipt
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      <CancelOrderDialog
-        storeId={selectedStoreId}
-        order={cancellingOrder}
-        onClose={() => setCancellingOrder(null)}
-        onCancelled={(updated, reason) => {
-          const id = cancellingOrder.id;
-          setOrders(prev => prev.map(o => (o.id === id ? { ...o, ...updated } : o)));
-          if (selectedOrder?.id === id) setSelectedOrder(prev => ({ ...prev, ...updated }));
-          setStatusFeedback({ text: `Order #${id.slice(-6).toUpperCase()} cancelled — ${reason}`, error: false });
-        }}
-      />
     </div>
   );
 };

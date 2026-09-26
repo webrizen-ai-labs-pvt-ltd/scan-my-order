@@ -20,6 +20,19 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
         {storeData.tenant?.gstin && <div>GSTIN: {storeData.tenant.gstin}</div>}
       </div>
 
+      {order.invoice && (
+        <div className="border-b border-dashed border-black pb-2 mb-2 text-center">
+          <div className="font-bold uppercase tracking-wider">{order.invoice.isTaxInvoice ? 'Tax Invoice' : 'Bill'}</div>
+          <div>{order.invoice.isTaxInvoice ? 'Invoice' : 'Bill'} No: <span className="font-bold">{order.invoice.number}</span></div>
+          {order.invoice.company && (
+            <div className="text-xs mt-1">
+              Billed to: {order.invoice.company}
+              {order.invoice.companyGstin && <div>GSTIN: {order.invoice.companyGstin}</div>}
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="border-b border-dashed border-black pb-2 mb-2">
         <div className="flex justify-between">
           <span>Order #{order.id.slice(-6).toUpperCase()}</span>
@@ -40,7 +53,7 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           <span className="w-10 text-center">Qty</span>
           <span className="w-16 text-right">Amt</span>
         </div>
-        {order.items.map((item, idx) => {
+        {order.items.filter(item => item.status !== 'REJECTED').map((item, idx) => {
            // priceAtOrder already includes modifiers and priced ingredients
            const itemTotal = item.priceAtOrder;
            return (
@@ -92,7 +105,12 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
             <span>-₹{order.discountAmount.toFixed(2)}</span>
           </div>
         )}
-        {order.taxAmount > 0 && (
+        {order.taxAmount > 0 && order.invoice?.taxes?.length > 0 ? order.invoice.taxes.map(t => (
+          <div key={t.name} className="flex justify-between">
+            <span>{t.name} @ {t.rate}%</span>
+            <span>₹{Number(t.amount).toFixed(2)}</span>
+          </div>
+        )) : order.taxAmount > 0 && (
           <div className="flex justify-between">
             <span>Taxes</span>
             <span>₹{order.taxAmount.toFixed(2)}</span>
@@ -105,13 +123,14 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
         <span>₹{order.totalAmount.toFixed(2)}</span>
       </div>
 
+
       {order.payments?.length > 0 ? (
         <div className="border-b border-dashed border-black pb-2 mb-2 text-xs">
           <div className="font-bold mb-1 uppercase tracking-wider">Paid by</div>
           {order.payments.map((p) => (
             <div key={p.id}>
               <div className="flex justify-between">
-                <span>{p.channel === 'CASH' ? 'Cash' : p.channel === 'UPI_OFFLINE' ? 'UPI' : 'Online (UPI/Card)'}</span>
+                <span>{p.channel === 'CASH' ? 'Cash' : p.channel === 'UPI_OFFLINE' ? 'UPI' : p.channel === 'DUES' ? `Dues (${p.duesAccount?.name || 'account'})` : 'Online (UPI/Card)'}</span>
                 <span>₹{p.amount.toFixed(2)}</span>
               </div>
               {p.channel === 'CASH' && p.cashTendered > p.amount && (
@@ -150,6 +169,24 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           <span className="font-semibold">Online / UPI (₹{(order.onlineAmount || order.totalAmount).toFixed(2)})</span>
         </div>
       ) : null}
+
+      {order.refunds?.length > 0 && (
+        <div className="border-b border-dashed border-black pb-2 mb-2 text-xs">
+          <div className="font-bold mb-1 uppercase tracking-wider">Refunded</div>
+          {order.refunds.map((r) => (
+            <div key={r.id} className="flex justify-between">
+              <span>{r.method === 'CASH' ? 'Cash' : r.method === 'UPI_OFFLINE' ? 'UPI' : r.method === 'DUES' ? 'Taken off dues' : 'Online (UPI/Card)'}{r.status === 'PENDING' ? ' (in progress)' : ''}</span>
+              <span>-₹{r.amount.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {order.refundDue > 0 && (
+        <div className="flex justify-between text-xs mb-2 pb-2 border-b border-dashed border-black">
+          <span>Refund due (items not served):</span>
+          <span className="font-semibold">₹{order.refundDue.toFixed(2)}</span>
+        </div>
+      )}
 
       <div className="text-center">
         <p>Thank you for visiting!</p>

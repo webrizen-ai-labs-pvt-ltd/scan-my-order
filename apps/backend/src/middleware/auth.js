@@ -31,6 +31,7 @@ async function authenticate(req, _res, next) {
 
     if (!user) {
       user = await getPrismaClient().user.findUnique({
+        relationLoadStrategy: "join",
         where: {
           id: payload.sub
         },
@@ -47,6 +48,11 @@ async function authenticate(req, _res, next) {
 
     if (!user || user.status !== userStatuses.active) {
       throw createHttpError(401, "Invalid or inactive user");
+    }
+
+    // Password changed or reset since this token was issued
+    if ((payload.tv || 0) !== (user.tokenVersion || 0)) {
+      throw createHttpError(401, "Your session has ended. Please sign in again.");
     }
 
     req.user = user;

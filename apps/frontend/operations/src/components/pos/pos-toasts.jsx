@@ -21,7 +21,8 @@ export function usePosToasts() {
   const push = useCallback((message, type = 'info', action = null) => {
     const id = ++idRef.current;
     setToasts(prev => [...prev.slice(-2), { id, message, type, action }]);
-    timers.current.set(id, setTimeout(() => dismiss(id), action ? 7000 : 3500));
+    // Errors (e.g. kitchen rejections) stay long enough to act on
+    timers.current.set(id, setTimeout(() => dismiss(id), action ? 7000 : type === 'error' ? 10000 : 3500));
   }, [dismiss]);
 
   useEffect(() => () => timers.current.forEach(clearTimeout), []);

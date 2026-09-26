@@ -241,12 +241,25 @@ export const WaiterTasks = () => {
         try {
           const data = JSON.parse(event.data);
 
-          if (['ORDER_PENDING_VERIFICATION', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_PROCESSING', 'ORDER_CANCELLED', 'ORDER_SETTLED'].includes(data.type)) {
+          if (['ORDER_PENDING_VERIFICATION', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_PROCESSING', 'ORDER_CANCELLED', 'ORDER_SETTLED', 'ORDER_ITEMS_REJECTED', 'ORDER_ITEM_READY', 'ORDER_RECALLED', 'ORDER_DELAYED'].includes(data.type)) {
             fetchOrders(selectedStoreId, true);
 
             if (data.type === 'ORDER_READY') {
               playChime();
               showToast(`Table ${data.data?.table?.tableNumber || ''}: order ready`, 'success');
+            } else if (data.type === 'ORDER_ITEM_READY' && data.data?.ready) {
+              playChime();
+              showToast(`Table ${data.data.tableNumber ?? '–'}: ${data.data.label} ready to serve`, 'success');
+            } else if (data.type === 'ORDER_RECALLED') {
+              playChime();
+              showToast(`Table ${data.data?.tableNumber ?? '–'}: kitchen recalled the order — don't serve yet`, 'error');
+            } else if (data.type === 'ORDER_DELAYED') {
+              showToast(`Table ${data.data?.tableNumber ?? '–'}: kitchen running ${data.data?.minutes} min late (guest notified)`, 'info');
+            } else if (data.type === 'ORDER_ITEMS_REJECTED') {
+              // Kitchen can't make something: the waiter must tell the guest
+              const e = data.data || {};
+              playChime();
+              showToast(`Table ${e.tableNumber ?? '–'}: kitchen can't make ${(e.items || []).join(', ')} (${e.reason}). Please inform the guest.`, 'error');
             } else if (data.type === 'ORDER_PENDING_VERIFICATION') {
               playChime();
               showToast(`Table ${data.data?.table?.tableNumber || ''}: new order`, 'info');
@@ -606,6 +619,7 @@ export const WaiterTasks = () => {
                     <div className="truncate text-sm font-bold text-zinc-900 dark:text-zinc-100">
                       T{call.table?.tableNumber || '—'} · {label}
                     </div>
+                    {call.note && <div className="truncate text-xs italic text-zinc-500" title={call.note}>“{call.note}”</div>}
                     <div className="text-xs text-zinc-400">
                       {isAcknowledged ? 'On the way' : isAssignedToMe ? `${remainingSec}s to respond` : call.assignedWaiterName || 'Unassigned'}
                     </div>

@@ -380,6 +380,7 @@ async function getStoreFloorStatus(actor, storeId) {
 
   // Fetch all tables with their active orders, unresolved waiter calls, and upcoming reservations
   const rawTables = await prisma.table.findMany({
+    relationLoadStrategy: "join",
     where: {
       storeId,
       isActive: true

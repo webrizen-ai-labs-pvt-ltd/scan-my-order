@@ -7,6 +7,7 @@ import { usePos } from './pos-layout';
 import { useAuthStore } from '../../store/authStore';
 import { usePosCartStore } from '../../store/pos-cart-store';
 import { CancelOrderDialog } from '../../components/pos/cancel-order-dialog';
+import { RefundDialog } from '../../components/pos/refund-dialog';
 import { apiErrorMessage } from '../../components/pos/pos-toasts';
 
 const STATUS_DISPLAY = {
@@ -45,7 +46,22 @@ export const PosActiveOrdersPage = () => {
     }
   }, [storeId, toast]);
 
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
+  // Paid orders the kitchen couldn't fully make — the guest is owed money
+  const [refundsDue, setRefundsDue] = useState([]);
+  const [refunding, setRefunding] = useState(null); // { id, label }
+  const canSeeRefunds = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(user?.role);
+  const fetchRefunds = useCallback(async () => {
+    if (!canSeeRefunds) return;
+    try {
+      const res = await api.get(`/stores/${storeId}/orders/refunds-due`);
+      setRefundsDue(res.data.data || []);
+    } catch { /* banner is optional */ }
+  }, [storeId, canSeeRefunds]);
+
+  useEffect(() => { fetchOrders(); fetchRefunds(); }, [fetchOrders, fetchRefunds]);
+  useEffect(() => subscribe((msg) => {
+    if (msg.type === 'ORDER_ITEMS_REJECTED' || msg.type === 'REFUND_UPDATED') fetchRefunds();
+  }), [subscribe, fetchRefunds]);
   useEffect(() => subscribe((msg) => { if (REFRESH_EVENTS.test(msg.type)) fetchOrders(); }), [subscribe, fetchOrders]);
 
   const groups = useMemo(() => {
@@ -108,6 +124,37 @@ export const PosActiveOrdersPage = () => {
 
   return (
     <div className="h-full flex flex-col overflow-hidden p-4">
+      {refundsDue.length > 0 && (
+        <div className="mb-4 shrink-0 rounded-xl border border-rose-300 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30 p-3">
+          <div className="text-sm font-black text-rose-800 dark:text-rose-200">
+            Refunds due · ₹{refundsDue.reduce((s, o) => s + o.refundDue, 0)}
+          </div>
+          <p className="text-[11px] text-rose-700/80 dark:text-rose-300/80 mb-2">
+            The kitchen couldn’t make items that were already paid for. Refund these guests.
+          </p>
+          <div className="flex flex-col gap-1">
+            {refundsDue.map(o => (
+              <div key={o.id} className="flex items-center justify-between gap-2 text-xs text-rose-900 dark:text-rose-200">
+                <span className="min-w-0 truncate">
+                  <strong>{o.table ? `Table ${o.table.tableNumber}` : 'Takeaway'}</strong> · #{o.id.slice(-6).toUpperCase()} ·{' '}
+                  {o.items.map(i => `${i.quantity}× ${i.displayName}`).join(', ')}
+                  {o.items[0]?.rejectReason ? ` (${o.items[0].rejectReason})` : ''}
+                </span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className="font-black tabular-nums">₹{o.refundDue}</span>
+                  <button
+                    type="button"
+                    onClick={() => setRefunding({ id: o.id, label: `${o.table ? `Table ${o.table.tableNumber}` : 'Takeaway'} · #${o.id.slice(-6).toUpperCase()}` })}
+                    className="h-7 px-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-[11px] font-bold"
+                  >
+                    Refund
+                  </button>
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="mb-4 shrink-0 relative">
         <Search01Icon className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" size={18} />
         <input
@@ -168,12 +215,23 @@ export const PosActiveOrdersPage = () => {
                             {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <span className="flex items-center gap-1">
+                            {order.refundDue > 0 && <span className="px-1.5 py-0.5 rounded border text-[9px] bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800">Refund due ₹{order.refundDue}</span>}
                             {order.paidAt && <span className="px-1.5 py-0.5 rounded border text-[9px] bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">Paid</span>}
                             <span className={`px-1.5 py-0.5 rounded border text-[9px] ${status.tone}`}>{status.label}</span>
                           </span>
                         </div>
-                        {order.items.map((item, i) => (
-                          <div key={i} className="flex justify-between text-sm mb-1">
+                        {order.items.map((item, i) => item.status === 'REJECTED' ? (
+                          <div key={item.id || i} className="text-sm mb-1">
+                            <div className="flex justify-between text-zinc-400 line-through">
+                              <span><span className="font-semibold w-6 inline-block">{item.quantity}×</span>{item.displayName || item.customName || item.menuItem?.name}</span>
+                              <span className="tabular-nums">₹{item.priceAtOrder * item.quantity}</span>
+                            </div>
+                            <span className="ml-6 inline-block px-1.5 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">
+                              Kitchen: {item.rejectReason}
+                            </span>
+                          </div>
+                        ) : (
+                          <div key={item.id || i} className="flex justify-between text-sm mb-1">
                             <span className="leading-tight">
                               <span className="font-semibold text-zinc-500 w-6 inline-block">{item.quantity}×</span>
                               {item.displayName || item.customName || item.menuItem?.name}
@@ -229,6 +287,18 @@ export const PosActiveOrdersPage = () => {
           })}
         </div>
       )}
+
+      <RefundDialog
+        storeId={storeId}
+        orderId={refunding?.id || null}
+        label={refunding?.label}
+        onClose={() => setRefunding(null)}
+        onChanged={(result) => {
+          if (result.refundDue === 0) toast('Guest fully refunded', 'success');
+          fetchRefunds();
+          fetchOrders();
+        }}
+      />
 
       <CancelOrderDialog
         storeId={storeId}

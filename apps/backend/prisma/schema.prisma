@@ -1,6 +1,8 @@
 generator client {
-  provider = "prisma-client-js"
-  output   = "../src/generated/prisma_v2"
+  provider        = "prisma-client-js"
+  output          = "../src/generated/prisma_v2"
+  // Lets hot queries load their relations in one SQL query (relationLoadStrategy: "join")
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -105,6 +107,7 @@ enum PaymentMethod {
   CASH
   ONLINE
   SPLIT
+  DUES // closed on credit; the money is owed by a dues account (e.g. the owner)
 }
 
 // How a single tender line was collected
@@ -112,6 +115,17 @@ enum PaymentChannel {
   RAZORPAY     // Razorpay QR code, payment link or checkout; verified with the gateway
   UPI_OFFLINE  // Store's own UPI ID, confirmed manually by staff
   CASH
+  DUES         // Bill put on dues: owed by a dues account, paid back later
+}
+
+// How money owed on dues came in
+enum DuesRepaymentMethod {
+  CASH
+  UPI
+  BANK_TRANSFER
+  CARD
+  CHEQUE
+  OTHER
 }
 
 enum PaymentStatus {
@@ -133,10 +147,23 @@ enum OrderStatus {
   CANCELLED
 }
 
+enum RefundStatus {
+  PENDING   // Razorpay accepted the refund; money is on its way
+  PROCESSED // Money returned (Razorpay confirmed, or cash/UPI handed back by staff)
+  FAILED    // Razorpay could not refund; the amount is owed again
+}
+
+enum OrderItemStatus {
+  ACTIVE
+  REJECTED // Kitchen couldn't make it; excluded from the bill and inventory
+}
+
 enum WaiterCallType {
   WATER
   BILL
   CALL_WAITER
+  CUTLERY
+  CLEAN_TABLE
 }
 
 enum WaiterCallStatus {
@@ -163,6 +190,9 @@ model Tenant {
   users            User[]
   subscription     TenantSubscription?
   paymentGateways  TenantPaymentGateway[]
+  corporateClients CorporateClient[]
+  duesAccounts     DuesAccount[]
+  duesRepayments   DuesRepayment[]
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 }
@@ -194,6 +224,12 @@ model Store {
   offlineUpiId        String?
   offlineUpiPayeeName String?
   payments            Payment[]
+  refunds             Refund[]
+  jobConfigs          StoreJobConfig[]
+  orderEvents         OrderEvent[]
+  invoices            Invoice[]
+  duesRepayments      DuesRepayment[]
+  invoiceSequences    InvoiceSequence[]
 
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
   taxRules     Json?       @default("[]")
@@ -221,6 +257,8 @@ model User {
   phone        String?
   profilePhoto String?
   passwordHash String?
+  // Bumped on password change/reset; login tokens carrying an older value stop working
+  tokenVersion Int        @default(0)
   currentChallenge String?
   role         UserRole
   status       UserStatus @default(ACTIVE)
@@ -237,6 +275,11 @@ model User {
   notifications     Notification[]
   collectedPayments Payment[] @relation("CollectedPayments")
   cancelledOrders   Order[]   @relation("CancelledOrders")
+  recordedDuesRepayments DuesRepayment[] @relation("RecordedDuesRepayments")
+  rejectedOrderItems OrderItem[] @relation("RejectedOrderItems")
+  processedRefunds  Refund[]    @relation("ProcessedRefunds")
+  orderEvents       OrderEvent[] @relation("OrderEventActor")
+  issuedInvoices    Invoice[]   @relation("IssuedInvoices")
 
   @@unique([tenantId, email])
   @@index([role])
@@ -480,6 +523,7 @@ model Order {
   paymentMethod   PaymentMethod?
   cashAmount      Int            @default(0)
   onlineAmount    Int            @default(0)
+  duesAmount      Int            @default(0) // part of the bill put on dues
   // Set once payments cover the bill; a paid order auto-settles when served
   paidAt          DateTime?
   status          OrderStatus    @default(DRAFT)
@@ -494,17 +538,31 @@ model Order {
   // Tax rules in force when the order was placed; edits keep using these rates
   taxRules        Json?
 
+  // Money owed back to the guest after the kitchen rejected paid items (cleared by refunds)
+  refundDue       Int            @default(0)
+
+  // Corporate details chosen before payment; the invoice is issued with them on settlement
+  invoiceRequest  Json?
+
+  // Kitchen timing: when the order was marked ready (enables a short "recall"), and delay minutes announced to the guest
+  readyAt         DateTime?
+  delayMinutes    Int            @default(0)
+
   // Set when staff cancel the order (reason is mandatory)
   cancelReason    String?
   cancelledAt     DateTime?
   cancelledById   String?
   cancelledBy     User?          @relation("CancelledOrders", fields: [cancelledById], references: [id], onDelete: SetNull)
+
   
   paymentLinkId   String?
   paymentLinkUrl  String?
   
   items           OrderItem[]
   payments        Payment[]
+  refunds         Refund[]
+  events          OrderEvent[]
+  invoices        Invoice[]
   feedbacks       Feedback[]
   walletTransactions CustomerWalletTransaction[]
 
@@ -540,6 +598,17 @@ model Payment {
   qrImageUrl        String?        // Hosted QR image (Razorpay QR codes)
   qrPayload         String?        // String to encode as QR (upi:// intent or link URL)
 
+  refunds           Refund[]
+
+  // Dues (channel DUES): who owes it, who ate, why, and how much has been paid back or reduced
+  duesAccountId     String?
+  duesAccount       DuesAccount?   @relation(fields: [duesAccountId], references: [id], onDelete: Restrict)
+  duesGuest         Json?          // { name, phone, whatsapp, email }
+  duesNote          String?
+  duesSettled       Int            @default(0) // paid back through dues repayments
+  duesReduced       Int            @default(0) // taken off because items weren't served
+  duesAllocations   DuesAllocation[]
+
   // Cash drawer details
   cashTendered      Int?
   changeDue         Int?
@@ -558,6 +627,34 @@ model Payment {
   @@index([status, channel])
 }
 
+// Money returned to a guest (e.g. the kitchen could not make paid items).
+model Refund {
+  id               String         @id @default(cuid())
+  storeId          String
+  store            Store          @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId          String
+  order            Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Original payment being refunded (required for Razorpay refunds)
+  paymentId        String?
+  payment          Payment?       @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  method           PaymentChannel
+  status           RefundStatus   @default(PENDING)
+  amount           Int
+  reason           String?
+  providerRefundId String?        @unique // Razorpay rfnd_xxx
+  failureReason    String?
+
+  processedById    String?
+  processedBy      User?          @relation("ProcessedRefunds", fields: [processedById], references: [id], onDelete: SetNull)
+  processedAt      DateTime?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([orderId])
+  @@index([storeId, status])
+}
+
 model OrderItem {
   id              String               @id @default(cuid())
   orderId         String
@@ -568,6 +665,14 @@ model OrderItem {
   quantity        Int                  @default(1)
   kitchenNotes    String?              
   priceAtOrder    Int                  
+
+  status          OrderItemStatus      @default(ACTIVE)
+  // Kitchen marked this line ready on its own (e.g. starters before mains)
+  readyAt         DateTime?
+  rejectReason    String?
+  rejectedAt      DateTime?
+  rejectedById    String?
+  rejectedBy      User?                @relation("RejectedOrderItems", fields: [rejectedById], references: [id], onDelete: SetNull)
   
   modifiers       OrderItemModifier[]
 
@@ -595,6 +700,8 @@ model WaiterCall {
   tableId     String
   table       Table            @relation(fields: [tableId], references: [id], onDelete: Cascade)
   type        WaiterCallType
+  // What the guest typed (optional, max 100 chars)
+  note        String?
   status      WaiterCallStatus @default(PENDING)
   resolvedById String?
   resolvedBy  User?            @relation(fields: [resolvedById], references: [id])
@@ -637,8 +744,13 @@ model TableSession {
   paymentMethod   PaymentMethod?
   cashAmount      Int?               @default(0)
   onlineAmount    Int?               @default(0)
+  duesAmount      Int                @default(0)
+  // Corporate details chosen before payment; the invoice is issued with them on settlement
+  invoiceRequest  Json?
   orders          Order[]
   payments        Payment[]
+  events          OrderEvent[]
+  invoices        Invoice[]
 
   lastOrderAt     DateTime           @default(now())
   createdAt       DateTime           @default(now())
@@ -768,5 +880,193 @@ model Notification {
   @@index([isRead])
 }
 
+// Per-store settings and last-run status for scheduled maintenance jobs (see src/jobs/registry.js).
+// Kept in the database so settings survive deploys and are shared by every backend instance.
+model StoreJobConfig {
+  id                String    @id @default(cuid())
+  storeId           String
+  store             Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  jobKey            String
 
+  // null = use the job's default from the registry
+  enabled           Boolean?
+  schedule          String?
+  params            Json?
 
+  lastRunAt         DateTime?
+  lastRunStatus     String?   // 'SUCCESS' | 'FAILED'
+  lastRunSummary    String?
+  lastRunDurationMs Int?
+  lastRunError      String?
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@unique([storeId, jobKey])
+}
+
+// Permanent, append-only audit trail for everything that happens to an order or table bill.
+// There is intentionally no API to edit or delete these rows.
+model OrderEvent {
+  id             String        @id @default(cuid())
+  storeId        String
+  store          Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  orderId        String?
+  order          Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  tableSessionId String?
+  tableSession   TableSession? @relation(fields: [tableSessionId], references: [id], onDelete: SetNull)
+
+  type           String        // e.g. ORDER_CREATED, STATUS_CHANGED, ITEMS_EDITED, PAYMENT_RECEIVED, INVOICE_ISSUED
+  source         String        // POS | KDS | WAITER | QR_MENU | SYSTEM | WEBHOOK
+  // Who did it, as they were at that moment (kept even if the user later changes or leaves)
+  actorId        String?
+  actor          User?         @relation("OrderEventActor", fields: [actorId], references: [id], onDelete: SetNull)
+  actorName      String?
+  actorRole      String?
+  reason         String?
+  amountBefore   Int?
+  amountAfter    Int?
+  data           Json?         // before/after details
+  createdAt      DateTime      @default(now())
+
+  @@index([storeId, createdAt])
+  @@index([orderId])
+  @@index([tableSessionId])
+  @@index([actorId])
+}
+
+enum InvoiceKind {
+  STANDARD    // Regular GST bill (B2C)
+  CORPORATE   // Tax invoice billed to a company (B2B), with the company's GSTIN
+  CREDIT_NOTE // Reverses all or part of an earlier invoice
+}
+
+enum InvoiceStatus {
+  ISSUED
+  CANCELLED
+}
+
+// Numbered GST documents. Contents are frozen in `snapshot` when issued and never change;
+// corrections are made with a credit note and, if needed, a new invoice.
+model Invoice {
+  id                String        @id @default(cuid())
+  storeId           String
+  store             Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  number            String        // e.g. NLCF/25-26/00012 (max 16 chars)
+  series            String        // INV | CN
+  financialYear     String        // e.g. 25-26 (April–March, IST)
+  seq               Int
+  kind              InvoiceKind
+  status            InvoiceStatus @default(ISSUED)
+
+  orderId           String?
+  order             Order?        @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  tableSessionId    String?
+  tableSession      TableSession? @relation(fields: [tableSessionId], references: [id], onDelete: SetNull)
+  // Credit notes point at the invoice they reverse; replacement invoices point at the one they replace
+  relatedInvoiceId  String?
+  relatedInvoice    Invoice?      @relation("InvoiceRelation", fields: [relatedInvoiceId], references: [id], onDelete: SetNull)
+  relatedInvoices   Invoice[]     @relation("InvoiceRelation")
+
+  totalAmount       Int
+  taxAmount         Int
+  snapshot          Json          // supplier, bill-to, lines, taxes, totals, payments at issue time
+  billTo            Json?         // corporate details (name, GSTIN, address, employee, PO…)
+
+  issuedById        String?
+  issuedBy          User?         @relation("IssuedInvoices", fields: [issuedById], references: [id], onDelete: SetNull)
+  issuedAt          DateTime      @default(now())
+  cancelledAt       DateTime?
+  cancelReason      String?
+  emailedTo         String?
+  emailedAt         DateTime?
+
+  @@unique([storeId, number])
+  @@unique([storeId, series, financialYear, seq])
+  @@index([storeId, issuedAt])
+  @@index([orderId])
+  @@index([tableSessionId])
+}
+
+// Gap-free counters for invoice numbers, per store, series and financial year
+model InvoiceSequence {
+  storeId       String
+  store         Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  series        String
+  financialYear String
+  lastSeq       Int    @default(0)
+
+  @@id([storeId, series, financialYear])
+}
+
+// Companies a brand regularly bills (saved from the corporate invoice form)
+model CorporateClient {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String   // Legal name as it should appear on the invoice
+  gstin     String?
+  address   String?
+  email     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, gstin])
+  @@index([tenantId, name])
+}
+
+// Someone who can owe the brand money for bills put on dues (the owner, a partner, a company…)
+model DuesAccount {
+  id          String          @id @default(cuid())
+  tenantId    String
+  tenant      Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  phone       String?
+  email       String?
+  note        String?
+  isOwner     Boolean         @default(false) // the brand owner's own account, created automatically
+  isActive    Boolean         @default(true)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  bills       Payment[]
+  repayments  DuesRepayment[]
+
+  @@index([tenantId, isActive])
+}
+
+// Money received against an account's dues; split across its bills oldest first
+model DuesRepayment {
+  id           String              @id @default(cuid())
+  tenantId     String
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  accountId    String
+  account      DuesAccount         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  storeId      String?             // bills of this store only; null = any store
+  store        Store?              @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  amount       Int
+  method       DuesRepaymentMethod
+  reference    String?             // UTR, cheque no., etc.
+  note         String?
+  receivedAt   DateTime            @default(now())
+  recordedById String?
+  recordedBy   User?               @relation("RecordedDuesRepayments", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime            @default(now())
+  allocations  DuesAllocation[]
+
+  @@index([tenantId, receivedAt])
+  @@index([accountId])
+}
+
+// How much of a repayment went to which dues bill
+model DuesAllocation {
+  id          String        @id @default(cuid())
+  repaymentId String
+  repayment   DuesRepayment @relation(fields: [repaymentId], references: [id], onDelete: Cascade)
+  paymentId   String
+  payment     Payment       @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  amount      Int
+  createdAt   DateTime      @default(now())
+
+  @@index([paymentId])
+}

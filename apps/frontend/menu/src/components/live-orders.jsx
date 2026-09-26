@@ -28,7 +28,12 @@ const STATUS_MAPPING = {
   CANCELLED: { label: 'Cancelled', icon: Cancel01Icon, color: 'text-rose-600', bg: 'bg-rose-100' },
 };
 
-export const LiveOrders = ({ storeId, tableNumber, activeSessionId }) => {
+/**
+ * @param {object} props
+ * @param {'aboveCart'|'besideWaiter'|'bottom'} [props.placement] where the "Live orders" pill sits:
+ *   above the cart bar, at the bottom next to the corner waiter, or at the bottom on its own
+ */
+export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 'bottom' }) => {
   const { token } = useAuthStore();
   const [orders, setOrders] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -74,6 +79,29 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId }) => {
             id: Date.now()
           });
           setTimeout(() => setToastNotification(null), 5000);
+        } else if (data.type === 'ORDER_DELAYED') {
+          playNotificationChime({ haptic: true });
+          setToastNotification({
+            title: 'Your order is running a little late',
+            body: data.data?.message || 'Your order needs a few more minutes.',
+            id: Date.now()
+          });
+          setTimeout(() => setToastNotification(null), 10000);
+          const updated = data.data?.order;
+          if (updated?.id) setOrders(prev => prev.map(o => (o.id === updated.id ? updated : o)));
+        } else if (data.type === 'ORDER_ITEMS_REJECTED') {
+          // Kitchen couldn't make something: tell the guest why and what happens next
+          playNotificationChime({ haptic: true });
+          setToastNotification({
+            title: 'Update on your order',
+            body: data.data?.message || 'The kitchen could not prepare part of your order. A staff member will help you.',
+            id: Date.now()
+          });
+          setTimeout(() => setToastNotification(null), 12000);
+          const updated = data.data?.order;
+          if (updated?.id) {
+            setOrders(prev => prev.map(o => (o.id === updated.id ? updated : o)));
+          }
         } else if (data.type.startsWith('ORDER_')) {
           playNotificationChime({ haptic: true });
           const status = data.data?.status;
@@ -154,10 +182,15 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId }) => {
       )}
 
       {activeOrders.length > 0 && (
-        <div className="fixed bottom-[88px] left-4 right-4 z-40 mx-auto max-w-md animate-in slide-in-from-bottom-5">
+        // Click-through container: only the pill takes taps, so the corner waiter beside it stays tappable
+        <div className={`pointer-events-none fixed inset-x-0 z-40 mx-auto max-w-md px-4 transition-[bottom,padding] duration-300 animate-in slide-in-from-bottom-5 ${placement === 'aboveCart'
+          ? 'bottom-[88px]'
+          : placement === 'besideWaiter'
+            ? 'bottom-[calc(14px+env(safe-area-inset-bottom))] pr-[120px]'
+            : 'bottom-[calc(14px+env(safe-area-inset-bottom))]'}`}>
           <button
             onClick={() => setIsOpen(true)}
-            className="flex w-full items-center justify-between rounded-2xl bg-zinc-900 p-3.5 px-4 text-white shadow-xl dark:bg-zinc-800"
+            className="pointer-events-auto flex w-full items-center justify-between rounded-2xl bg-zinc-900 p-3.5 px-4 text-white shadow-xl dark:bg-zinc-800"
           >
             <div className="flex items-center gap-3">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/20">

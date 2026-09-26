@@ -8,13 +8,14 @@
     "./node": "./src/node.js",
     "./audio": "./src/audio-player.js",
     "./assets/*": "./assets/*",
-    "./pricing": "./src/pricing.mjs"
+    "./pricing": "./src/pricing.mjs",
+    "./gst": "./src/gst.mjs"
   },
   "files": [
     "assets",
     "src"
   ],
   "scripts": {
-    "build": "node --check src/index.js && node --check src/node.js && node --check src/pricing.mjs"
+    "build": "node --check src/index.js && node --check src/node.js && node --check src/pricing.mjs && node --check src/gst.mjs"
   }
 }
