@@ -1635,6 +1635,9 @@ async function getKdsOrders(actor, storeId) {
     select: {
       id: true,
       type: true,
+      // For printed kitchen tickets: where it came from and who placed it
+      origin: true,
+      staff: { select: { name: true } },
       table: {
         select: { tableNumber: true }
       },
@@ -1649,7 +1652,7 @@ async function getKdsOrders(actor, storeId) {
           readyAt: true,
           quantity: true,
           kitchenNotes: true,
-          menuItem: { select: { name: true } },
+          menuItem: { select: { name: true, dietary: true } },
           modifiers: {
             select: { modifierOption: { select: { name: true } } }
           }
