@@ -98,6 +98,14 @@ export const PosTerminalPage = () => {
       toast(blockReason, 'error');
       return;
     }
+
+    // Other payment options: nothing is placed yet — checkout creates the order
+    // once the cashier picks how the guest is paying.
+    if (mode === 'CHARGE') {
+      navigate('/dashboard/pos/checkout/draft/new');
+      return;
+    }
+
     setBusy(true);
     try {
       const payload = {

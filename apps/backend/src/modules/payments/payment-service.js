@@ -522,6 +522,30 @@ async function refreshPendingForTarget(target) {
 
 // ─── Staff API ────────────────────────────────────────────────────────────────
 
+// Which ways this store can take money right now. Depends only on the store's
+// settings, so the POS can ask before a bill exists (paying for a cart being built).
+async function resolvePaymentChannels(store) {
+  const rp = await getTenantRazorpay(store.tenantId);
+  const qrStatus = rp ? await getQrCodesStatus(store.tenantId, rp) : null;
+  const offlineUpi = resolveOfflineUpi(store);
+
+  return {
+    RAZORPAY: {
+      enabled: Boolean(rp && qrStatus?.enabled),
+      reason: !rp ? 'Razorpay keys are not set up for this brand.' : qrStatus?.reason || null
+    },
+    UPI_OFFLINE: { enabled: Boolean(offlineUpi), vpa: offlineUpi?.vpa || null, payeeName: offlineUpi?.payeeName || null },
+    CASH: { enabled: true }
+  };
+}
+
+async function getPaymentChannels(actor, storeId) {
+  assertCanCollect(actor);
+  await verifyStoreAccess(actor, storeId);
+  const store = await loadStore(getPrismaClient(), storeId);
+  return { channels: await resolvePaymentChannels(store) };
+}
+
 async function getPaymentSummary(actor, storeId, ref) {
   assertCanCollect(actor);
   await verifyStoreAccess(actor, storeId);
@@ -533,20 +557,9 @@ async function getPaymentSummary(actor, storeId, ref) {
     target = await loadTarget(prisma, storeId, ref);
   }
 
-  const rp = await getTenantRazorpay(store.tenantId);
-  const qrStatus = rp ? await getQrCodesStatus(store.tenantId, rp) : null;
-  const offlineUpi = resolveOfflineUpi(store);
-
   return {
     ...summarize(target),
-    channels: {
-      RAZORPAY: {
-        enabled: Boolean(rp && qrStatus?.enabled),
-        reason: !rp ? 'Razorpay keys are not set up for this brand.' : qrStatus?.reason || null
-      },
-      UPI_OFFLINE: { enabled: Boolean(offlineUpi), vpa: offlineUpi?.vpa || null, payeeName: offlineUpi?.payeeName || null },
-      CASH: { enabled: true }
-    }
+    channels: await resolvePaymentChannels(store)
   };
 }
 
@@ -892,6 +905,7 @@ function isValidUpiId(value) {
 
 module.exports = {
   putBillOnDues,
+  getPaymentChannels,
   getPaymentSummary,
   createPayment,
   getPayment,
