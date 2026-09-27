@@ -1,10 +1,12 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../lib/api';
 import { useAuthStore } from '../store/authStore';
 import { Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
-import { Store01Icon, Clock01Icon, Tick02Icon, Cancel01Icon, Alert01Icon, CheckmarkBadge01Icon } from 'hugeicons-react';
+import { Store01Icon, Clock01Icon, Tick02Icon, Cancel01Icon, Alert01Icon, CheckmarkBadge01Icon, PrinterIcon } from 'hugeicons-react';
 import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
 import { KitchenRejectDialog } from '../components/kds/kitchen-reject-dialog';
+import { KdsPrintPanel } from '../components/kds/kds-print-panel';
+import { printKitchenTicket, wasPrinted, markPrinted, readPrintSettings, savePrintSettings } from '../lib/kitchen-ticket';
 
 /** 12m · 4h 46m · 2d 3h — compact wait time for kitchen tickets */
 function formatWait(minutes) {
@@ -71,6 +73,14 @@ export const KDS = () => {
   // Tickets this screen marked ready in the last few minutes, so an accidental tap can be recalled
   const [recentlyReady, setRecentlyReady] = useState([]); // [{ id, label, at }]
 
+  // Kitchen ticket printing (settings belong to this device, e.g. the kitchen PC)
+  const [printSettings, setPrintSettings] = useState(() => readPrintSettings(user?.store?.id || 'default'));
+  const [printPanelOpen, setPrintPanelOpen] = useState(false);
+  const [printedVersion, setPrintedVersion] = useState(0); // re-count unprinted after printing
+  const printSettingsRef = useRef(printSettings);
+  const pendingPrints = useRef(new Map()); // orderId -> time the kitchen got it
+  printSettingsRef.current = printSettings;
+
   const showToast = (message, type = 'info') => setToast({ message, type });
 
   const fetchOrders = useCallback(async (storeIdToFetch, silent = false) => {
@@ -106,6 +116,47 @@ export const KDS = () => {
   }, []);
 
   useEffect(() => {
+    if (selectedStoreId) setPrintSettings(readPrintSettings(selectedStoreId));
+  }, [selectedStoreId]);
+
+  const updatePrintSettings = (changes) => {
+    setPrintSettings(prev => {
+      const next = { ...prev, ...changes };
+      savePrintSettings(selectedStoreId, next);
+      return next;
+    });
+  };
+
+  const storeName = user?.store?.name || stores.find(s => s.id === selectedStoreId)?.name || '';
+
+  /** Prints one ticket and remembers it on this device */
+  const printTicket = useCallback((order, { reprint = false } = {}) => {
+    printKitchenTicket(order, { storeName, paper: printSettingsRef.current.paper, reprint });
+    markPrinted(selectedStoreId, order.id);
+    setPrintedVersion(v => v + 1);
+  }, [storeName, selectedStoreId]);
+
+  // New kitchen orders print once they appear on the board (with their full item details)
+  useEffect(() => {
+    if (!printSettings.autoPrint || pendingPrints.current.size === 0) return;
+    for (const [id, since] of pendingPrints.current) {
+      const order = orders.find(o => o.id === id);
+      if (order) {
+        if (!wasPrinted(selectedStoreId, id)) printTicket(order);
+        pendingPrints.current.delete(id);
+      } else if (Date.now() - since > 60000) {
+        pendingPrints.current.delete(id); // cancelled or already done before it reached this screen
+      }
+    }
+  }, [orders, printSettings.autoPrint, selectedStoreId, printTicket]);
+
+  // Tickets on the board that this device hasn't printed (e.g. came in while it was off)
+  const unprinted = useMemo(
+    () => (printSettings.autoPrint ? orders.filter(o => !wasPrinted(selectedStoreId, o.id)) : []),
+    [orders, printSettings.autoPrint, selectedStoreId, printedVersion] // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
+  useEffect(() => {
     if (selectedStoreId) {
       fetchOrders(selectedStoreId);
       
@@ -117,6 +168,9 @@ export const KDS = () => {
           const data = JSON.parse(event.data);
           if (data.type === 'ORDER_PROCESSING' || data.type === 'KITCHEN_ALERT') {
             playNotificationChime({ haptic: true });
+            if (data.type === 'ORDER_PROCESSING' && data.data?.id && printSettingsRef.current.autoPrint) {
+              pendingPrints.current.set(data.data.id, Date.now());
+            }
             fetchOrders(selectedStoreId, true);
           } else if (['ORDER_READY', 'ORDER_CANCELLED', 'ORDER_UPDATED', 'ORDER_ITEMS_REJECTED', 'ORDER_RECALLED', 'ORDER_ITEM_READY', 'ORDER_DELAYED'].includes(data.type)) {
             fetchOrders(selectedStoreId, true);
@@ -298,11 +352,22 @@ export const KDS = () => {
             </span>
           </div>
           <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => printTicket(order, { reprint: wasPrinted(selectedStoreId, order.id) })}
+            title={wasPrinted(selectedStoreId, order.id) ? 'Print this ticket again' : 'Print this ticket'}
+            aria-label="Print ticket"
+            className={`p-1 rounded-md ${isLate || isCompleting ? 'text-white/80 hover:bg-black/25' : 'text-zinc-400 hover:text-white hover:bg-zinc-700'}`}
+          >
+            <PrinterIcon size={18} />
+          </button>
           <div className={`flex flex-col items-end ${isLate ? 'animate-pulse' : ''}`}>
             <div className={`flex items-center gap-1 font-mono text-lg font-bold whitespace-nowrap ${isLate || isCompleting ? 'text-white' : 'text-zinc-300'}`}>
               <Clock01Icon size={18} className={isLate ? 'text-red-200' : 'text-zinc-500'} />
               {formatWait(waitTime)}
             </div>
+          </div>
           </div>
           <div className="relative">
             <button
@@ -468,6 +533,30 @@ export const KDS = () => {
           <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 rounded-full">
             <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)] animate-pulse" />
             <span className="text-xs font-bold text-zinc-300">LIVE</span>
+          </div>
+
+          {/* Kitchen ticket printing */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setPrintPanelOpen(v => !v)}
+              aria-expanded={printPanelOpen}
+              className={`flex items-center gap-2 h-12 px-4 rounded-xl border text-sm font-bold ${printSettings.autoPrint ? 'bg-green-950 border-green-800 text-green-200' : 'bg-zinc-950 border-zinc-700 text-zinc-300 hover:text-white'}`}
+            >
+              <PrinterIcon size={18} />
+              {printSettings.autoPrint ? 'Auto-print on' : 'Print'}
+              {unprinted.length > 0 && <span className="px-1.5 py-0.5 rounded-md bg-amber-500 text-zinc-950 text-xs font-black">{unprinted.length}</span>}
+            </button>
+            {printPanelOpen && (
+              <KdsPrintPanel
+                settings={printSettings}
+                onChange={updatePrintSettings}
+                unprinted={unprinted}
+                storeName={storeName}
+                onPrintUnprinted={() => unprinted.forEach(o => printTicket(o))}
+                onClose={() => setPrintPanelOpen(false)}
+              />
+            )}
           </div>
 
           {/* Zoom Slider */}
