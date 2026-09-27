@@ -143,10 +143,16 @@ const PendingPayment = ({ payment, channels, onConfirm, onCancel, busy }) => {
  * Collects one or more payments (online, own-UPI, cash) against an order or a table bill
  * until the bill is fully paid. All amounts and outcomes come from the server.
  *
+ * In `draft` mode there is no bill yet: the cashier is paying for a cart still being built.
+ * Only the store's channels are loaded, the totals come from the cart, and choosing a method
+ * hands back to `draft.onCollect` — which creates the order and then takes the payment.
+ *
  * @param {{ storeId: string, orderId?: string, tableSessionId?: string,
+ *           draft?: { totalAmount: number, onCollect: Function },
+ *           autoPay?: { channel: string, amount: number, cashTendered?: number },
  *           subscribe?: Function, onSettled?: Function, onChange?: Function }} props
  */
-export const PaymentCollector = ({ storeId, orderId, tableSessionId, subscribe, onSettled, onChange }) => {
+export const PaymentCollector = ({ storeId, orderId, tableSessionId, draft, autoPay, subscribe, onSettled, onChange }) => {
   const [summary, setSummary] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -158,6 +164,7 @@ export const PaymentCollector = ({ storeId, orderId, tableSessionId, subscribe, 
 
   const targetId = orderId || tableSessionId;
   const query = orderId ? { orderId } : { tableSessionId };
+  const draftTotal = draft ? draft.totalAmount : null;
 
   const applySummary = useCallback((next) => {
     if (!next) return;
@@ -171,13 +178,29 @@ export const PaymentCollector = ({ storeId, orderId, tableSessionId, subscribe, 
 
   const load = useCallback(async () => {
     try {
-      const res = await api.get(`/stores/${storeId}/payments/summary`, { params: query });
-      applySummary(res.data.data);
+      if (draftTotal !== null) {
+        // No bill on the server yet — just ask what this store can accept
+        const res = await api.get(`/stores/${storeId}/payments/channels`);
+        applySummary({
+          totalAmount: draftTotal,
+          paidAmount: 0,
+          dueAmount: draftTotal,
+          pendingAmount: 0,
+          payments: [],
+          blockers: [],
+          isSettled: false,
+          isCancelled: false,
+          channels: res.data.data.channels,
+        });
+      } else {
+        const res = await api.get(`/stores/${storeId}/payments/summary`, { params: query });
+        applySummary(res.data.data);
+      }
       setLoadError('');
     } catch (err) {
-      setLoadError(errorText(err, 'Could not load the bill'));
+      setLoadError(errorText(err, draftTotal !== null ? 'Could not load payment methods' : 'Could not load the bill'));
     }
-  }, [storeId, targetId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [storeId, targetId, draftTotal]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     settledRef.current = false;
@@ -187,7 +210,7 @@ export const PaymentCollector = ({ storeId, orderId, tableSessionId, subscribe, 
 
   // Live updates from the store stream (webhooks, other terminals)
   useEffect(() => {
-    if (!subscribe) return undefined;
+    if (!subscribe || draftTotal !== null) return undefined;
     return subscribe((msg) => {
       if (msg.type === 'PAYMENT_UPDATED' && msg.data?.id === targetId) {
         // Stream payload has no channel config; keep what we have
@@ -252,15 +275,33 @@ export const PaymentCollector = ({ storeId, orderId, tableSessionId, subscribe, 
     }
   };
 
-  const createPayment = () => run(async () => {
-    const res = await api.post(`/stores/${storeId}/payments`, {
-      ...query,
-      channel,
-      amount: amountNum,
-      cashTendered: channel === 'CASH' && tendered !== '' ? tenderedNum : undefined,
-    });
+  const collect = useCallback((opts) => run(async () => {
+    const payload = {
+      channel: opts.channel,
+      amount: opts.amount,
+      cashTendered: opts.channel === 'CASH' && opts.cashTendered ? opts.cashTendered : undefined,
+    };
+    // Draft: the order doesn't exist yet — the page creates it, then takes this payment
+    if (draft) return draft.onCollect(payload);
+    const res = await api.post(`/stores/${storeId}/payments`, { ...query, ...payload });
     applySummary({ ...res.data.data.summary, channels });
+  }), [draft, storeId, targetId, channels]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const createPayment = () => collect({
+    channel,
+    amount: amountNum,
+    cashTendered: channel === 'CASH' && tendered !== '' ? tenderedNum : undefined,
   });
+
+  // Method chosen on the draft page before the order existed: take that payment now
+  const autoPaid = useRef(false);
+  useEffect(() => {
+    if (!autoPay || autoPaid.current || draft || !summary || busy) return;
+    if (summary.isSettled || summary.isCancelled || summary.blockers?.length > 0) return;
+    if (!channels?.[autoPay.channel]?.enabled) return;
+    autoPaid.current = true;
+    collect({ ...autoPay, amount: Math.min(autoPay.amount, summary.dueAmount) });
+  }, [autoPay, draft, summary, channels, busy, collect]);
 
   const confirmOffline = (payment) => {
     if (!window.confirm(`Confirm ${rupees(payment.amount)} has been received in ${channels?.UPI_OFFLINE?.vpa || 'your UPI account'}?`)) return;

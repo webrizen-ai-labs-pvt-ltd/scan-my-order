@@ -3,6 +3,7 @@ const { createApiResponse } = require("@smo/shared");
 const { asyncHandler } = require("../../middleware/async-handler");
 const { authenticate } = require("../../middleware/auth");
 const {
+  getPaymentChannels,
   getPaymentSummary,
   createPayment,
   getPayment,
@@ -14,6 +15,13 @@ const {
 const router = express.Router({ mergeParams: true });
 
 router.use(authenticate);
+
+// GET /api/stores/:storeId/payments/channels
+// Ways this store can take money, with no bill yet (POS checkout before the order exists)
+router.get("/channels", asyncHandler(async (req, res) => {
+  const result = await getPaymentChannels(req.user, req.params.storeId);
+  res.json(createApiResponse(result));
+}));
 
 // GET /api/stores/:storeId/payments/summary?orderId=… | ?tableSessionId=…
 router.get("/summary", asyncHandler(async (req, res) => {

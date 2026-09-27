@@ -244,14 +244,14 @@ export const CartPanel = ({
 
         {orderType === 'DINE_IN' ? (
           <>
-            <Button size="lg" disabled={disabled} onClick={onSendToKitchen} title="Kitchen ticket now, bill paid later from Tables">
-              {busy ? 'Placing…' : isOccupied ? `Add to Table Tab · ₹${totals.totalAmount}` : `Send to Kitchen · Postpaid `}
+            <Button size="lg" disabled={disabled} onClick={onCharge} title="Collect payment for these items now">
+              {busy ? 'Placing…' : `Other Payment Options · ₹${totals.totalAmount}`}
             </Button>
             <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" size="lg" disabled={disabled} onClick={onCharge} title="Collect payment for these items now" className="rounded-none rounded-l-full">
-                Online
+              <Button variant="outline" size="lg" disabled={disabled} onClick={onSendToKitchen} title="Send to kitchen · Postpaid — kitchen ticket now, bill paid later from Tables" className="rounded-none rounded-l-full px-4">
+                {isOccupied ? 'Update Kitchen' : 'Send to kitchen'}
               </Button>
-              <Button variant="outline" size="lg" disabled={disabled} onClick={onQuickCash} title="Exact cash received, settle immediately" className="rounded-none rounded-r-full">
+              <Button variant="outline" size="lg" disabled={disabled} onClick={onQuickCash} title="Exact cash received, settle immediately" className="rounded-none rounded-r-full px-4">
                 Quick Cash
               </Button>
             </div>

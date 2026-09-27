@@ -1,34 +1,52 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Button } from '@smo/ui';
 import { ArrowLeft01Icon, Loading03Icon } from 'hugeicons-react';
+import { computeCartSubTotal, computeOrderTotals } from '@smo/shared/pricing';
 import api from '../../lib/api';
 import { usePos } from './pos-layout';
+import { usePosCartStore } from '../../store/pos-cart-store';
 import { apiErrorMessage } from '../../components/pos/pos-toasts';
 import { CorporateForm, InvoiceDialog } from '../../components/invoices/invoice-dialog';
 
-/** Loads the order or table bill behind /dashboard/pos/checkout/:kind/:id/... */
+/**
+ * Loads the order or table bill behind /dashboard/pos/checkout/:kind/:id/...
+ * In `draft` checkout there is no saved bill yet, so the cart stands in for it.
+ */
 export function useCheckoutBill() {
   const { kind, id } = useParams();
-  const { storeId } = usePos();
+  const { storeId, store: storeData } = usePos();
   const location = useLocation();
   const navigate = useNavigate();
   const isTable = kind === 'table';
+  const isDraft = kind === 'draft';
+  const cart = usePosCartStore();
   const [bill, setBill] = useState(null);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId || isDraft) return;
     const url = isTable ? `/stores/${storeId}/orders/sessions/${id}` : `/stores/${storeId}/orders/${id}`;
     api.get(url)
       .then(res => { setBill(res.data.data); setError(''); })
       .catch(err => setError(apiErrorMessage(err, 'Could not load this bill')));
-  }, [storeId, id, isTable]);
+  }, [storeId, id, isTable, isDraft]);
+
+  // The cart as a bill, so pages that only need totals and the invoice request work unchanged
+  const draftBill = useMemo(() => {
+    if (!isDraft) return null;
+    const totals = computeOrderTotals({
+      subTotal: computeCartSubTotal(cart.lines),
+      promo: cart.promo,
+      taxRules: storeData?.taxRules,
+    });
+    return { ...totals, invoiceRequest: cart.invoiceRequest, items: [] };
+  }, [isDraft, cart.lines, cart.promo, cart.invoiceRequest, storeData?.taxRules]);
 
   const store = new URLSearchParams(location.search).get('store');
   const checkoutPath = `/dashboard/pos/checkout/${kind}/${id}${store ? `?store=${store}` : ''}`;
   const back = () => (location.key !== 'default' ? navigate(-1) : navigate(checkoutPath));
-  return { kind, id, isTable, storeId, bill, error, back, navigate, checkoutPath };
+  return { kind, id, isTable, isDraft, storeId, bill: isDraft ? draftBill : bill, error, back, navigate, checkoutPath, cart };
 }
 
 const PageHeader = ({ title, subtitle, onBack }) => (
@@ -46,11 +64,18 @@ const PageHeader = ({ title, subtitle, onBack }) => (
  * The corporate invoice is issued with them the moment the bill is paid.
  */
 export const PosCorporateDetailsPage = () => {
-  const { isTable, id, storeId, bill, error, back } = useCheckoutBill();
+  const { isTable, isDraft, id, storeId, bill, error, back, cart } = useCheckoutBill();
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
 
   const save = async ({ billTo, saveClient, sendEmail }) => {
+    // Draft: no order to attach to yet — hold it with the cart and save it the moment
+    // the order is placed, so the corporate invoice is still issued on payment.
+    if (isDraft) {
+      cart.setInvoiceRequest({ billTo, saveClient, sendEmail });
+      back();
+      return;
+    }
     setBusy(true);
     setFormError('');
     try {
@@ -67,7 +92,7 @@ export const PosCorporateDetailsPage = () => {
     }
   };
 
-  const label = isTable ? `Table ${bill?.session?.tableNumber ?? ''}` : `Order #${id.slice(-6).toUpperCase()}`;
+  const label = isDraft ? 'New order' : isTable ? `Table ${bill?.session?.tableNumber ?? ''}` : `Order #${id.slice(-6).toUpperCase()}`;
 
   return (
     <div className="h-full overflow-y-auto">

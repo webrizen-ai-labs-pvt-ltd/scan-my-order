@@ -12,6 +12,9 @@ const emptyCart = {
   tableId: '',
   customerName: '',
   promo: null,
+  // Corporate billing chosen at checkout before the order exists:
+  // { billTo, saveClient, sendEmail }. Saved onto the order the moment it is placed.
+  invoiceRequest: null,
 };
 
 /**
@@ -90,11 +93,12 @@ export const usePosCartStore = create(
       setTableId: (tableId) => set({ tableId, orderType: tableId ? 'DINE_IN' : get().orderType }),
       setCustomerName: (customerName) => set({ customerName }),
       setPromo: (promo) => set({ promo }),
+      setInvoiceRequest: (invoiceRequest) => set({ invoiceRequest }),
 
       clear: () => set({ ...emptyCart }),
       snapshot: () => {
-        const { lines, notes, orderType, tableId, customerName, promo } = get();
-        return { lines, notes, orderType, tableId, customerName, promo };
+        const { lines, notes, orderType, tableId, customerName, promo, invoiceRequest } = get();
+        return { lines, notes, orderType, tableId, customerName, promo, invoiceRequest };
       },
       restore: (snap) => set({ ...snap }),
     }),

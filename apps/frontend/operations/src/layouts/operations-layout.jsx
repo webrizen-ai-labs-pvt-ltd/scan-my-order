@@ -104,7 +104,7 @@ export const OperationsLayout = () => {
         icon: RestaurantIcon,
         collapsible: true,
         items: [
-          { name: 'KOT', path: '/dashboard/kds', icon: Pot02Icon, show: isKitchen },
+          { name: 'KDS & KOT', path: '/dashboard/kds', icon: Pot02Icon, show: isKitchen },
           { name: 'Waiter Panel', path: '/dashboard/waiter', icon: Dish01Icon, show: isWaiter },
           { name: 'Inventory', path: '/dashboard/inventory', icon: DeliveryTruck01Icon, show: isManager },
         ],
@@ -168,7 +168,7 @@ export const OperationsLayout = () => {
     "table-analytics": { label: "Table Analytics", icon: Analytics01Icon },
     "pos": { label: "POS", icon: Store01Icon },
     "reservations": { label: "Table Reservations", icon: Calendar01Icon },
-    "kds": { label: "KOT", icon: Pot02Icon },
+    "kds": { label: "KDS & KOT", icon: Pot02Icon },
     "waiter": { label: "Waiter View", icon: Dish01Icon },
     "orders": { label: "Order History", icon: Invoice01Icon },
     "inventory": { label: "Inventory Management", icon: DeliveryTruck01Icon },
