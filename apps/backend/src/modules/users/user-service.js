@@ -338,22 +338,23 @@ async function createUser(actor, input) {
     include: userInclude
   });
 
-  // Send Welcome Email if it's a Tenant Admin or Staff account
+  // Send Welcome Email if it's a Tenant Admin or Staff account (non-blocking)
   if (role === userRoles.tenantAdmin || storeScopedRoles.includes(role)) {
-    try {
-      const portalUrl = storeScopedRoles.includes(role) 
-        ? (env.apps.operationsUrl || 'http://localhost:5176') 
-        : (env.apps.adminUrl || 'http://localhost:5173');
-      const html = getWelcomeEmailTemplate(input.name, email, input.password, role, portalUrl);
-      await sendMail({
-        to: email,
-        subject: "Welcome to Scan My Order",
-        html
-      });
-    } catch (err) {
-      console.error("Failed to send welcome email:", err);
-      // We don't fail the user creation if email fails
-    }
+    (async () => {
+      try {
+        const portalUrl = storeScopedRoles.includes(role) 
+          ? (env.apps.operationsUrl || 'http://localhost:5176') 
+          : (env.apps.adminUrl || 'http://localhost:5173');
+        const html = getWelcomeEmailTemplate(input.name, email, input.password, role, portalUrl);
+        await sendMail({
+          to: email,
+          subject: "Welcome to Scan My Order",
+          html
+        });
+      } catch (err) {
+        console.error("Failed to send welcome email:", err.message || err);
+      }
+    })();
   }
 
   return serializeUser(user);
@@ -433,34 +434,35 @@ async function updateUser(actor, id, input) {
 
   const roleChanged = data.role && data.role !== existingUser.role;
 
-  if (roleChanged) {
-    try {
-      const portalUrl = storeScopedRoles.includes(user.role)
-        ? (env.apps.operationsUrl || 'http://localhost:5176')
-        : (env.apps.adminUrl || 'http://localhost:5173');
+  if (roleChanged && user.email) {
+    (async () => {
+      try {
+        const portalUrl = storeScopedRoles.includes(user.role)
+          ? (env.apps.operationsUrl || 'http://localhost:5176')
+          : (env.apps.adminUrl || 'http://localhost:5173');
 
-      const html = getRoleChangeEmailTemplate({
-        employeeName: user.name,
-        employeeEmail: user.email,
-        oldRole: existingUser.role,
-        newRole: user.role,
-        storeName: user.store?.name || null,
-        tenantName: user.tenant?.name || null,
-        actorName: actor.name,
-        actorRole: actor.role,
-        portalUrl,
-        employeeId: user.id
-      });
+        const html = getRoleChangeEmailTemplate({
+          employeeName: user.name,
+          employeeEmail: user.email,
+          oldRole: existingUser.role,
+          newRole: user.role,
+          storeName: user.store?.name || null,
+          tenantName: user.tenant?.name || null,
+          actorName: actor.name,
+          actorRole: actor.role,
+          portalUrl,
+          employeeId: user.id
+        });
 
-      await sendMail({
-        to: user.email,
-        subject: `Official Notification: Designation & Operational Role Reassignment - ${user.tenant?.name || 'Scan My Order'}`,
-        html
-      });
-    } catch (err) {
-      console.error("Failed to send role change email:", err);
-      // Don't fail the role update if email delivery fails
-    }
+        await sendMail({
+          to: user.email,
+          subject: `Official Notification: Designation & Operational Role Reassignment - ${user.tenant?.name || 'Scan My Order'}`,
+          html
+        });
+      } catch (err) {
+        console.error("Failed to send role change email:", err.message || err);
+      }
+    })();
   }
 
   return serializeUser(user);

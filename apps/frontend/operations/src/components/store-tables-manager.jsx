@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
+import { menuUrlFor } from '../lib/menu-url';
 import { useAuthStore } from '../store/authStore';
 import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
@@ -185,13 +186,7 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
   /* ─────────────────────────────────────────────────────────────
      QR / PDF (unchanged logic, kept intact)
   ───────────────────────────────────────────────────────────── */
-  const getQRUrl = (tableNumber) => {
-    const domain =
-      window.location.hostname === 'localhost'
-        ? 'http://localhost:5173'
-        : 'https://menu.scanmyorder.com';
-    return `${domain}/${brandSlug}/${storeSlug}?table=${tableNumber}`;
-  };
+  const getQRUrl = (tableNumber) => `${menuUrlFor(brandSlug, storeSlug)}?table=${tableNumber}`;
 
   const getCanvasForTable = (tableNumber) => {
     return new Promise((resolve) => {

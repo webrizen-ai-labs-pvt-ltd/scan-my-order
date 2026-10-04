@@ -2,7 +2,7 @@ const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { userRoles } = require("../../constants/roles");
 const { DEFAULT_IMAGES } = require("@smo/shared");
-const { storeMetadataCache, invalidateStoreCache } = require("../../lib/cache");
+const { storeMetadataCache, invalidateStoreCache, authUserCache } = require("../../lib/cache");
 
 // Helper to format store and provide default images
 function serializeStore(store) {
@@ -107,22 +107,6 @@ async function createStore(actor, input) {
           status: "ACTIVE"
         }
       });
-      
-      // Send email
-      try {
-        const { getWelcomeEmailTemplate } = require("../../lib/templates/welcome-email");
-        const { sendMail } = require("../../lib/mailer");
-        const { env } = require("../../config/env");
-        
-        const html = getWelcomeEmailTemplate(adminUser.name, adminUser.email, adminUser.password, userRoles.storeManager, env.apps.adminUrl || 'http://localhost:5173');
-        await sendMail({
-          to: adminUser.email,
-          subject: "Welcome to Scan My Order",
-          html
-        });
-      } catch (err) {
-        console.error("Failed to send welcome email:", err);
-      }
     } else if (adminUserId) {
       const existingUser = await tx.user.findUnique({ where: { id: adminUserId } });
       if (!existingUser || existingUser.tenantId !== tenantId) {
@@ -139,6 +123,32 @@ async function createStore(actor, input) {
 
     return newStore;
   });
+
+  // Send welcome email asynchronously AFTER transaction commits successfully
+  if (adminUser?.email) {
+    (async () => {
+      try {
+        const { getWelcomeEmailTemplate } = require("../../lib/templates/welcome-email");
+        const { sendMail } = require("../../lib/mailer");
+        const { env } = require("../../config/env");
+        
+        const html = getWelcomeEmailTemplate(
+          adminUser.name, 
+          adminUser.email, 
+          adminUser.password, 
+          userRoles.storeManager, 
+          env.apps.operationsUrl || 'http://localhost:5176'
+        );
+        await sendMail({
+          to: adminUser.email,
+          subject: "Welcome to Scan My Order",
+          html
+        });
+      } catch (err) {
+        console.error("Failed to send welcome email:", err.message || err);
+      }
+    })();
+  }
 
   return serializeStore(store);
 }
@@ -220,6 +230,11 @@ async function updateStore(actor, storeId, input) {
 
   const { name, banner, status, adminUser, adminUserId, address, contactPhone, contactEmail, operatingHours, tenantId, taxRules } = input;
 
+  // Who manages a store is the brand owner's call, not the store's own manager
+  if ((adminUser || adminUserId) && actor.role !== userRoles.superAdmin && actor.role !== userRoles.tenantAdmin) {
+    throw createHttpError(403, "Only the brand owner can add store managers");
+  }
+
   // Per-store UPI override: only brand owners decide where money is paid
   const upiOverride = {};
   if (input.offlineUpiId !== undefined) {
@@ -270,38 +285,53 @@ async function updateStore(actor, storeId, input) {
           status: "ACTIVE"
         }
       });
-      
-      // Send email
+    } else if (adminUserId) {
+      const existingUser = await tx.user.findUnique({ where: { id: adminUserId } });
+      if (!existingUser || existingUser.tenantId !== updatedStore.tenantId) {
+        throw createHttpError(404, "User not found in this tenant");
+      }
+      // Owners stay brand-wide; tying one to a single store would cut off their other stores
+      if (existingUser.role === userRoles.tenantAdmin || existingUser.role === userRoles.superAdmin) {
+        throw createHttpError(409, "Brand owners already manage every store and can't be assigned to one");
+      }
+      if (existingUser.role === userRoles.customer) {
+        throw createHttpError(409, "Customers can't be made store managers");
+      }
+      await tx.user.update({
+        where: { id: adminUserId },
+        data: { storeId: updatedStore.id, role: userRoles.storeManager }
+      });
+      authUserCache.del(adminUserId);
+    }
+
+    return updatedStore;
+  });
+
+  // Send welcome email asynchronously AFTER transaction commits successfully
+  if (adminUser?.email) {
+    (async () => {
       try {
         const { getWelcomeEmailTemplate } = require("../../lib/templates/welcome-email");
         const { sendMail } = require("../../lib/mailer");
         const { env } = require("../../config/env");
         
-        const html = getWelcomeEmailTemplate(adminUser.name, adminUser.email, adminUser.password, userRoles.storeManager, env.apps.adminUrl || 'http://localhost:5173');
+        const html = getWelcomeEmailTemplate(
+          adminUser.name, 
+          adminUser.email, 
+          adminUser.password, 
+          userRoles.storeManager, 
+          env.apps.operationsUrl || 'http://localhost:5176'
+        );
         await sendMail({
           to: adminUser.email,
           subject: "Welcome to Scan My Order",
           html
         });
       } catch (err) {
-        console.error("Failed to send welcome email:", err);
+        console.error("Failed to send welcome email:", err.message || err);
       }
-    } else if (adminUserId) {
-      const existingUser = await tx.user.findUnique({ where: { id: adminUserId } });
-      if (!existingUser || existingUser.tenantId !== updatedStore.tenantId) {
-        throw createHttpError(404, "User not found in this tenant");
-      }
-      await tx.user.update({
-        where: { id: adminUserId },
-        data: {
-          storeId: updatedStore.id,
-          role: existingUser.role === userRoles.tenantAdmin ? existingUser.role : userRoles.storeManager
-        }
-      });
-    }
-
-    return updatedStore;
-  });
+    })();
+  }
 
   invalidateStoreCache(storeId);
   return serializeStore(store);

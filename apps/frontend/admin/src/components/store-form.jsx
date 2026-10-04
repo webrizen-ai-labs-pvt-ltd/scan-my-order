@@ -209,12 +209,15 @@ export const StoreForm = ({ initialData, isEdit }) => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="slug">Slug (URL Friendly)</Label>
-                  <Input 
-                    id="slug" 
+                  <Input
+                    id="slug"
                     value={formData.slug}
                     onChange={(e) => handleChange('slug', e.target.value)}
                     placeholder="downtown-cafe"
                     required
+                    // The slug is in every printed table QR code, so it can't change after creation
+                    disabled={isEdit}
+                    title={isEdit ? 'Fixed after creation: printed table QR codes use it' : undefined}
                   />
                 </div>
                 <div className="space-y-2 md:col-span-2">

@@ -420,6 +420,10 @@ async function createOrder(storeId, actor, origin, input) {
 
   const { items, totalAmount: subTotal } = await buildCartItems(prisma, storeId, itemsInput, { allowCustom: isStaff });
   const store = await prisma.store.findUnique({ where: { id: storeId } });
+  // Guests can't order from a suspended or disabled store (staff at the counter still can)
+  if (origin === 'QR_MENU' && store?.status !== 'ACTIVE') {
+    throw createHttpError(403, "This store isn't taking orders right now. Please ask the staff.");
+  }
 
   let promo = null;
   if (promoCode) {

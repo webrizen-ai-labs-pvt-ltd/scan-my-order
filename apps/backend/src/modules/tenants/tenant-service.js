@@ -173,26 +173,36 @@ async function createTenant(actor, input) {
           status: "ACTIVE"
         }
       });
+    }
 
-      // Send email
+    return newTenant;
+  });
+
+  // Send welcome email asynchronously AFTER transaction commits successfully
+  if (!adminUserId && adminUser?.email) {
+    (async () => {
       try {
         const { getWelcomeEmailTemplate } = require("../../lib/templates/welcome-email");
         const { sendMail } = require("../../lib/mailer");
         const { env } = require("../../config/env");
         
-        const html = getWelcomeEmailTemplate(adminUser.name, adminUser.email, adminUser.password, userRoles.tenantAdmin, env.apps.adminUrl || 'http://localhost:5173');
+        const html = getWelcomeEmailTemplate(
+          adminUser.name,
+          adminUser.email,
+          adminUser.password,
+          userRoles.tenantAdmin,
+          env.apps.adminUrl || 'http://localhost:5173'
+        );
         await sendMail({
           to: adminUser.email,
           subject: "Welcome to Scan My Order",
           html
         });
       } catch (err) {
-        console.error("Failed to send welcome email:", err);
+        console.error("Failed to send welcome email:", err.message || err);
       }
-    }
-
-    return newTenant;
-  });
+    })();
+  }
 
   return getTenantById(actor, tenant.id);
 }

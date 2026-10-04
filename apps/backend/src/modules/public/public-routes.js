@@ -79,6 +79,10 @@ router.get("/resolve/:brandSlug/:storeSlug", asyncHandler(async (req, res) => {
   });
 
   if (!store) return res.status(404).json(createApiResponse(null, "Store not found"));
+  // Suspended or disabled stores show "not taking orders" instead of their menu
+  if (store.status !== "ACTIVE") {
+    return res.status(403).json(createApiResponse(null, `${store.name} isn't taking orders right now. Please ask the staff.`));
+  }
 
   const razorpayGateway = store.tenant.paymentGateways?.[0];
   const responseData = {
