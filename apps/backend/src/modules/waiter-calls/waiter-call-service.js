@@ -10,6 +10,22 @@ function mapToDbCallType(type) {
   return Object.prototype.hasOwnProperty.call(CALL_TYPE_LABELS, type) ? type : 'CALL_WAITER';
 }
 
+/** Dispatch details stored on the call (include `assignedWaiter` and `resolvedBy` names) */
+function dispatchView(call) {
+  return {
+    assignedWaiterId: call.assignedWaiterId || call.resolvedById || null,
+    assignedWaiterName: call.assignedWaiter?.name || call.resolvedBy?.name || null,
+    escalationLevel: call.escalationLevel || 0,
+    assignedAt: call.assignedAt || call.createdAt,
+    status: call.status
+  };
+}
+
+const DISPATCH_INCLUDE = {
+  assignedWaiter: { select: { id: true, name: true } },
+  resolvedBy: { select: { id: true, name: true } }
+};
+
 // --- Public (QR Menu) ---
 
 async function createWaiterCall(storeId, input) {
@@ -44,25 +60,21 @@ async function createWaiterCall(storeId, input) {
       status: { in: ['PENDING', 'ACKNOWLEDGED'] }
     },
     include: {
-      table: { select: { tableNumber: true } }
+      table: { select: { tableNumber: true } },
+      ...DISPATCH_INCLUDE
     },
     orderBy: { createdAt: 'desc' }
   });
 
   if (existingCall) {
-    const dispatch = dispatchEngine.getActiveDispatch(existingCall.id);
+    const { assignedWaiterName, status, escalationLevel, assignedAt } = dispatchView(existingCall);
     return {
       success: true,
       message: existingCall.status === 'ACKNOWLEDGED'
         ? "A waiter has acknowledged and is on the way."
         : "A waiter is already being paged for your table.",
       call: existingCall,
-      dispatch: dispatch ? {
-        assignedWaiterName: dispatch.assignedWaiterName,
-        status: dispatch.status,
-        escalationLevel: dispatch.escalationLevel,
-        assignedAt: dispatch.assignedAt
-      } : null
+      dispatch: { assignedWaiterName, status, escalationLevel, assignedAt }
     };
   }
 
@@ -154,15 +166,13 @@ async function getTableCallStatus(storeId, tableIdentifier) {
       tableId: table.id,
       status: { in: ['PENDING', 'ACKNOWLEDGED'] }
     },
-    include: {
-      resolvedBy: { select: { name: true } }
-    },
+    include: DISPATCH_INCLUDE,
     orderBy: { createdAt: 'desc' }
   });
 
   if (!activeCall) return { hasActiveCall: false, tableNumber: table.tableNumber };
 
-  const dispatch = dispatchEngine.getActiveDispatch(activeCall.id);
+  const dispatch = dispatchView(activeCall);
 
   return {
     hasActiveCall: true,
@@ -172,8 +182,8 @@ async function getTableCallStatus(storeId, tableIdentifier) {
     type: activeCall.type,
     status: activeCall.status,
     createdAt: activeCall.createdAt,
-    assignedWaiterName: dispatch?.assignedWaiterName || activeCall.resolvedBy?.name || null,
-    escalationLevel: dispatch?.escalationLevel || 0,
+    assignedWaiterName: dispatch.assignedWaiterName,
+    escalationLevel: dispatch.escalationLevel,
     note: activeCall.note || ''
   };
 }
@@ -185,19 +195,24 @@ async function cancelWaiterCall(storeId, callId) {
   const prisma = getPrismaClient();
 
   const call = await prisma.waiterCall.findUnique({
-    where: { id: callId }
+    where: { id: callId },
+    include: { table: { select: { tableNumber: true } } }
   });
 
   if (!call || call.storeId !== storeId) {
     throw createHttpError(404, "Waiter call not found");
   }
 
-  // Delete or mark resolved
-  await prisma.waiterCall.delete({
-    where: { id: callId }
-  });
-
-  dispatchEngine.cancelDispatch(callId);
+  // Cancelled calls aren't kept (deleteMany: a second cancel is harmless)
+  const removed = await prisma.waiterCall.deleteMany({ where: { id: callId, storeId } });
+  if (removed.count > 0) {
+    broadcastToStore(storeId, "WAITER_CALL_CANCELLED", {
+      callId,
+      tableId: call.tableId,
+      tableNumber: call.table?.tableNumber,
+      status: 'CANCELLED'
+    });
+  }
 
   return { success: true, message: "Call request cancelled" };
 }
@@ -213,25 +228,21 @@ async function getActiveCalls(storeId) {
     },
     include: {
       table: { select: { id: true, tableNumber: true, capacity: true } },
-      resolvedBy: { select: { id: true, name: true } }
+      ...DISPATCH_INCLUDE
     },
     orderBy: { createdAt: 'desc' }
   });
 
-  // Augment with active dispatch engine state
   return calls.map(c => {
-    const dispatch = dispatchEngine.getActiveDispatch(c.id);
-    let remainingSeconds = 60;
-    if (dispatch?.assignedAt) {
-      const elapsed = Math.floor((Date.now() - new Date(dispatch.assignedAt).getTime()) / 1000);
-      remainingSeconds = Math.max(0, 60 - elapsed);
-    }
-
+    const dispatch = dispatchView(c);
+    // Seconds the paged waiter has left before it moves on
+    const remainingSeconds = c.escalateAt ? Math.max(0, Math.ceil((new Date(c.escalateAt).getTime() - Date.now()) / 1000)) : 0;
     return {
       ...c,
-      assignedWaiterId: dispatch?.assignedWaiterId || c.resolvedById || null,
-      assignedWaiterName: dispatch?.assignedWaiterName || c.resolvedBy?.name || null,
-      escalationLevel: dispatch?.escalationLevel || 0,
+      assignedWaiterId: dispatch.assignedWaiterId,
+      assignedWaiterName: dispatch.assignedWaiterName,
+      escalationLevel: dispatch.escalationLevel,
+      assignedAt: dispatch.assignedAt,
       note: c.note || '',
       remainingSeconds
     };
@@ -254,20 +265,22 @@ async function acknowledgeCall(storeId, callId, actor) {
     return { success: true, message: "Call is already acknowledged or resolved", call };
   }
 
-  const updatedCall = await prisma.waiterCall.update({
+  // Only the first waiter to tap gets it; this also stops the escalation countdown
+  const claim = await prisma.waiterCall.updateMany({
+    where: { id: callId, status: 'PENDING' },
+    data: { status: 'ACKNOWLEDGED', resolvedById: actor.id, assignedWaiterId: actor.id, escalateAt: null }
+  });
+  if (claim.count === 0) {
+    return { success: true, message: "Call is already acknowledged or resolved", call };
+  }
+
+  const updatedCall = await prisma.waiterCall.findUnique({
     where: { id: callId },
-    data: {
-      status: 'ACKNOWLEDGED',
-      resolvedById: actor.id
-    },
     include: {
       table: { select: { tableNumber: true } },
       resolvedBy: { select: { name: true } }
     }
   });
-
-  // Stop 60s timer and record acknowledgment in dispatch engine
-  dispatchEngine.acknowledgeDispatch(callId, actor.id, actor.name);
 
   // Broadcast acknowledgment to store
   broadcastToStore(storeId, "WAITER_CALL_ACKNOWLEDGED", {
@@ -293,22 +306,31 @@ async function resolveCall(storeId, callId, actorId) {
     throw createHttpError(404, "Waiter call not found");
   }
 
-  const updatedCall = await prisma.waiterCall.update({
-    where: { id: callId },
-    data: {
-      status: 'RESOLVED',
-      resolvedById: actorId || call.resolvedById
-    }
+  if (call.status === 'RESOLVED') return call;
+
+  const resolverId = actorId || call.resolvedById;
+  const claim = await prisma.waiterCall.updateMany({
+    where: { id: callId, status: { in: ['PENDING', 'ACKNOWLEDGED'] } },
+    data: { status: 'RESOLVED', resolvedById: resolverId, escalateAt: null }
   });
+  const updatedCall = await prisma.waiterCall.findUnique({
+    where: { id: callId },
+    include: { table: { select: { tableNumber: true } } }
+  });
+  if (claim.count === 0) return updatedCall;
 
-  // Clear dispatch tracking and record waiter idle start
-  dispatchEngine.resolveDispatch(callId, actorId || call.resolvedById);
+  // Their idle time starts now (idle waiters are paged first)
+  if (resolverId) {
+    await dispatchEngine.recordWaiterCompleted(storeId, resolverId).catch(err => console.error('[Waiter calls] presence update failed:', err.message));
+  }
 
-  // Always broadcast resolved event to store screens (live floor, dashboard, waiter tasks)
+  // Store screens (live floor, dashboard, waiter tasks)
   broadcastToStore(storeId, "WAITER_CALL_RESOLVED", {
     callId,
     tableId: call.tableId,
-    resolvedById: actorId || call.resolvedById,
+    tableNumber: updatedCall?.table?.tableNumber,
+    resolverId,
+    resolvedById: resolverId,
     status: 'RESOLVED'
   });
 

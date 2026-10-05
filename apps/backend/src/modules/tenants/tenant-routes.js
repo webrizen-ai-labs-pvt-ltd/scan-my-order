@@ -40,15 +40,16 @@ router.delete("/:id", asyncHandler(async (req, res) => {
 }));
 
 router.post("/:id/cleanup", asyncHandler(async (req, res) => {
-  const { runCleanup } = require("../../jobs/cleanup");
+  const { runRetentionCleanupJob } = require("../../jobs/tasks/retention-cleanup");
   // Security check: Only Tenant Admin of this tenant or Super Admin can do this
   if (req.user.role !== 'SUPER_ADMIN' && (req.user.role !== 'TENANT_ADMIN' || req.user.tenantId !== req.params.id)) {
     const { createHttpError } = require("@smo/shared");
     throw createHttpError(403, "You do not have permission to run cleanup for this tenant");
   }
   
-  const count = await runCleanup(req.params.id);
-  res.json(createApiResponse({ deletedCount: count, message: `Cleaned up ${count} cancelled orders.` }));
+  // Archives (never deletes) cancelled orders older than 30 days
+  const result = await runRetentionCleanupJob({ tenantId: req.params.id, params: { retentionDays: 30 } });
+  res.json(createApiResponse({ archivedCount: result.archivedCount, message: result.summary }));
 }));
 
 module.exports = router;

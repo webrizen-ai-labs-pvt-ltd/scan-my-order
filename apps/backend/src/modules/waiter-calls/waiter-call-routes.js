@@ -2,6 +2,7 @@ const express = require("express");
 const { createApiResponse } = require("@smo/shared");
 const { asyncHandler } = require("../../middleware/async-handler");
 const { authenticate } = require("../../middleware/auth");
+const { verifyStoreAccess } = require("../menu/menu-service");
 const {
   getActiveCalls,
   acknowledgeCall,
@@ -14,6 +15,12 @@ const {
 const router = express.Router({ mergeParams: true });
 
 router.use(authenticate);
+
+// Staff of this store only (customers and other restaurants' staff get 403)
+router.use(asyncHandler(async (req, _res, next) => {
+  await verifyStoreAccess(req.user, req.params.storeId);
+  next();
+}));
 
 // GET /api/stores/:storeId/calls - Get active table calls for staff
 router.get("/", asyncHandler(async (req, res) => {
@@ -41,13 +48,13 @@ router.delete("/:id", asyncHandler(async (req, res) => {
 
 // POST /api/stores/:storeId/calls/availability - Waiter sets AVAILABLE or BUSY
 router.post("/availability", asyncHandler(async (req, res) => {
-  const result = setWaiterAvailability(req.params.storeId, req.user.id, req.body.status);
+  const result = await setWaiterAvailability(req.params.storeId, req.user.id, req.body.status);
   res.json(createApiResponse(result));
 }));
 
 // GET /api/stores/:storeId/calls/availability - Get current waiter availability
 router.get("/availability", asyncHandler(async (req, res) => {
-  const result = getWaiterAvailability(req.params.storeId, req.user.id);
+  const result = await getWaiterAvailability(req.params.storeId, req.user.id);
   res.json(createApiResponse(result));
 }));
 

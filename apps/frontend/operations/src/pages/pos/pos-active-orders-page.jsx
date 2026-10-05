@@ -18,7 +18,8 @@ const STATUS_DISPLAY = {
   SERVED: { label: 'Served', tone: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800' },
 };
 
-const REFRESH_EVENTS = /^(ORDER_|PAYMENT_UPDATED|TABLE_SESSION_SETTLED)/;
+// STREAM_RECONNECTED: catch up after a dropped connection
+const REFRESH_EVENTS = /^(ORDER_|PAYMENT_UPDATED|TABLE_SESSION_SETTLED|STREAM_RECONNECTED)/;
 
 export const PosActiveOrdersPage = () => {
   const { storeId, subscribe, toast, data } = usePos();

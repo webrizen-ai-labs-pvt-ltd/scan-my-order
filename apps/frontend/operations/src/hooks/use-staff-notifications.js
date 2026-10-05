@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../lib/api';
+import { subscribeStore } from '../lib/live-stream';
 import { useAuthStore } from '../store/authStore';
 import { 
   initAudioUnlock, 
@@ -36,8 +37,6 @@ export function useStaffNotifications(overrideStoreId = null) {
   const [pushPermission, setPushPermission] = useState('default');
   const [isSendingTest, setIsSendingTest] = useState(false);
 
-  const sseRef = useRef(null);
-  const reconnectTimeoutRef = useRef(null);
 
   // Keep activeStoreId in sync if override or user changes
   useEffect(() => {
@@ -169,62 +168,18 @@ export function useStaffNotifications(overrideStoreId = null) {
   useEffect(() => {
     if (!storeId || !token) return;
 
-    let isMounted = true;
-    const baseUrl = api.defaults.baseURL || import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-    const streamUrl = `${baseUrl}/stores/${storeId}/orders/stream?token=${encodeURIComponent(token)}`;
-
-    function connectSSE() {
-      if (!isMounted) return;
-
-      if (sseRef.current) {
-        sseRef.current.close();
+    // Shared live connection for this store (see lib/live-stream)
+    return subscribeStore(storeId, (data) => {
+      if (data.type === 'NOTIFICATION') {
+        // Chime only for real notifications, not for every order or payment update
+        playNotificationChime({ haptic: true });
+        setNotifications(prev => [data.data, ...prev.slice(0, 49)]);
+        setUnreadCount(prev => prev + 1);
+      } else if (data.type === 'STREAM_RECONNECTED') {
+        // Catch up on anything sent while the connection was down
+        fetchNotifications();
       }
-
-      const sse = new EventSource(streamUrl);
-      sseRef.current = sse;
-
-      sse.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'CONNECTED') return;
-
-          // Play chime on incoming alerts
-          playNotificationChime({ haptic: true });
-
-          if (data.type === 'NOTIFICATION') {
-            setNotifications(prev => [data.data, ...prev.slice(0, 49)]);
-            setUnreadCount(prev => prev + 1);
-          } else {
-            // Re-fetch notification list to keep in sync
-            fetchNotifications();
-          }
-        } catch (err) {
-          console.error('[StaffNotifications] SSE message error:', err);
-        }
-      };
-
-      sse.onerror = () => {
-        if (sseRef.current) {
-          sseRef.current.close();
-        }
-        // Attempt reconnect after 5 seconds
-        if (isMounted) {
-          reconnectTimeoutRef.current = setTimeout(connectSSE, 5000);
-        }
-      };
-    }
-
-    connectSSE();
-
-    return () => {
-      isMounted = false;
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-      }
-      if (sseRef.current) {
-        sseRef.current.close();
-      }
-    };
+    });
   }, [storeId, token, fetchNotifications]);
 
   const toggleMute = () => {

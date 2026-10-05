@@ -4,401 +4,261 @@ const { sendNotification } = require("../notifications/notification-service");
 const { callTypeLabel } = require("./call-types");
 
 /**
- * In-memory active dispatch tracking for waiter calls
- * key: callId -> {
- *   callId,
- *   storeId,
- *   tableId,
- *   tableNumber,
- *   type,
- *   note,
- *   assignedWaiterId: string | null,
- *   assignedWaiterName: string | null,
- *   escalationLevel: number, // 0 = primary, 1 = escalated, 2 = manager
- *   attemptedWaiterIds: string[],
- *   assignedAt: Date,
- *   timeoutTimerRef: NodeJS.Timeout | null,
- *   status: 'PENDING' | 'ACKNOWLEDGED' | 'RESOLVED' | 'CANCELLED'
- * }
- */
-const activeDispatches = new Map();
-
-/**
- * Waiter availability state per store
- * key: `${storeId}:${waiterId}` -> { status: 'AVAILABLE' | 'BUSY', lastResolvedAt: Date }
- */
-const waiterAvailabilityMap = new Map();
-
-// Helper to get waiter key
-const getWaiterKey = (storeId, waiterId) => `${storeId}:${waiterId}`;
-
-/**
- * Set a waiter's current availability
- */
-function setWaiterAvailability(storeId, waiterId, status) {
-  const key = getWaiterKey(storeId, waiterId);
-  const existing = waiterAvailabilityMap.get(key) || { lastResolvedAt: new Date() };
-  waiterAvailabilityMap.set(key, {
-    ...existing,
-    status: status === 'BUSY' ? 'BUSY' : 'AVAILABLE'
-  });
-
-  broadcastToStore(storeId, "WAITER_AVAILABILITY_CHANGED", {
-    waiterId,
-    status: waiterAvailabilityMap.get(key).status
-  });
-
-  return waiterAvailabilityMap.get(key);
-}
-
-/**
- * Get a waiter's current availability (defaults to AVAILABLE if logged in / not marked BUSY)
- */
-function getWaiterAvailability(storeId, waiterId) {
-  const key = getWaiterKey(storeId, waiterId);
-  return waiterAvailabilityMap.get(key) || { status: 'AVAILABLE', lastResolvedAt: new Date(0) };
-}
-
-/**
- * Record that a waiter finished a service task to update idle time
- */
-function recordWaiterCompleted(storeId, waiterId) {
-  const key = getWaiterKey(storeId, waiterId);
-  const existing = waiterAvailabilityMap.get(key) || { status: 'AVAILABLE' };
-  waiterAvailabilityMap.set(key, {
-    ...existing,
-    lastResolvedAt: new Date()
-  });
-}
-
-/**
- * Score and find the best available waiter for a table call
+ * Waiter call dispatch. Everything lives on the WaiterCall row (assigned waiter, who was already
+ * tried, escalation level, when it moves on), and waiter availability in WaiterPresence, so a
+ * restart or a deploy never drops a call.
  *
- * Scoring Formula:
- * Score = (PendingCalls * 40) + (ActiveOrders * 20) - (TableAffinityBonus 30) - (IdleMinutes * 2)
- * The waiter with the lowest score is chosen!
+ * Escalation: a sweeper looks for calls whose 60 s ran out every few seconds. Each escalation is
+ * claimed with a conditional update, so it happens once even if two servers run during a deploy.
+ */
+
+const ANSWER_WITHIN_MS = 60 * 1000;
+const SWEEP_EVERY_MS = 5 * 1000;
+const MANAGER_LEVEL = 2;
+
+/* ---------- waiter availability ---------- */
+
+function presenceView(row) {
+  return { status: row?.status || 'AVAILABLE', lastResolvedAt: row?.lastResolvedAt || new Date(0) };
+}
+
+/** Set a waiter's availability (Busy waiters aren't paged) */
+async function setWaiterAvailability(storeId, waiterId, status) {
+  const value = status === 'BUSY' ? 'BUSY' : 'AVAILABLE';
+  const row = await getPrismaClient().waiterPresence.upsert({
+    where: { storeId_userId: { storeId, userId: waiterId } },
+    create: { storeId, userId: waiterId, status: value },
+    update: { status: value }
+  });
+  broadcastToStore(storeId, "WAITER_AVAILABILITY_CHANGED", { waiterId, status: row.status });
+  return presenceView(row);
+}
+
+/** A waiter's availability (Available unless they marked themselves Busy) */
+async function getWaiterAvailability(storeId, waiterId) {
+  const row = await getPrismaClient().waiterPresence.findUnique({
+    where: { storeId_userId: { storeId, userId: waiterId } }
+  });
+  return presenceView(row);
+}
+
+/** A waiter finished a call: they've been idle since now */
+async function recordWaiterCompleted(storeId, waiterId) {
+  const now = new Date();
+  await getPrismaClient().waiterPresence.upsert({
+    where: { storeId_userId: { storeId, userId: waiterId } },
+    create: { storeId, userId: waiterId, lastResolvedAt: now },
+    update: { lastResolvedAt: now }
+  });
+}
+
+/* ---------- choosing a waiter ---------- */
+
+/**
+ * The best available waiter for a table call (lowest score wins):
+ * Score = (PendingCalls * 40) + (ActiveOrders * 20) - (TableAffinity 30) - (IdleMinutes * 2)
  */
 async function findBestWaiter(storeId, tableId, excludedWaiterIds = []) {
   const prisma = getPrismaClient();
 
-  // 1. Fetch all active waiters in this store
-  const activeWaiters = await prisma.user.findMany({
-    where: {
-      storeId,
-      role: 'WAITER',
-      status: 'ACTIVE'
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      lastLoginAt: true
-    }
-  });
+  const [activeWaiters, presence] = await Promise.all([
+    prisma.user.findMany({
+      where: { storeId, role: 'WAITER', status: 'ACTIVE' },
+      select: { id: true, name: true, lastLoginAt: true }
+    }),
+    prisma.waiterPresence.findMany({ where: { storeId } })
+  ]);
+  const presenceByWaiter = new Map(presence.map(p => [p.userId, p]));
 
-  if (!activeWaiters || activeWaiters.length === 0) {
-    return null;
-  }
+  const candidates = activeWaiters.filter(w =>
+    !excludedWaiterIds.includes(w.id) && presenceByWaiter.get(w.id)?.status !== 'BUSY'
+  );
+  if (candidates.length === 0) return null;
+  const candidateIds = candidates.map(w => w.id);
 
-  // 2. Filter out excluded waiters (already timed out on this call) and busy waiters
-  const candidates = activeWaiters.filter(w => {
-    if (excludedWaiterIds.includes(w.id)) return false;
-    const avail = getWaiterAvailability(storeId, w.id);
-    return avail.status === 'AVAILABLE';
-  });
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  // 3. Find if there is a waiter who previously served / verified an order at this table (Table Affinity)
-  let affinityWaiterId = null;
-  try {
-    const recentTableOrder = await prisma.order.findFirst({
-      where: {
-        storeId,
-        tableId,
-        status: { in: ['PROCESSING', 'READY', 'SERVED'] }
-      },
+  const [recentTableOrder, pendingCalls, activeOrders] = await Promise.all([
+    // Table affinity: whoever is already serving this table
+    prisma.order.findFirst({
+      where: { storeId, tableId, status: { in: ['PROCESSING', 'READY', 'SERVED'] } },
       orderBy: { createdAt: 'desc' },
       select: { staffId: true }
-    });
-    if (recentTableOrder && recentTableOrder.staffId) {
-      affinityWaiterId = recentTableOrder.staffId;
-    }
-  } catch (err) {
-    // Ignore affinity lookup failure
-  }
+    }).catch(() => null),
+    prisma.waiterCall.groupBy({
+      by: ['assignedWaiterId'],
+      where: { storeId, status: 'PENDING', assignedWaiterId: { in: candidateIds } },
+      _count: { _all: true }
+    }),
+    prisma.order.groupBy({
+      by: ['staffId'],
+      where: { storeId, staffId: { in: candidateIds }, status: { in: ['PROCESSING', 'READY'] } },
+      _count: { _all: true }
+    })
+  ]);
+  const pendingByWaiter = new Map(pendingCalls.map(r => [r.assignedWaiterId, r._count._all]));
+  const ordersByWaiter = new Map(activeOrders.map(r => [r.staffId, r._count._all]));
+  const affinityWaiterId = recentTableOrder?.staffId || null;
 
-  // 4. Count active pending calls currently assigned to each waiter
-  const pendingCallsPerWaiter = new Map();
-  for (const [_, dispatch] of activeDispatches.entries()) {
-    if (dispatch.storeId === storeId && dispatch.status === 'PENDING' && dispatch.assignedWaiterId) {
-      const current = pendingCallsPerWaiter.get(dispatch.assignedWaiterId) || 0;
-      pendingCallsPerWaiter.set(dispatch.assignedWaiterId, current + 1);
-    }
-  }
-
-  // 5. Score candidates
-  const scoredWaiters = await Promise.all(candidates.map(async (waiter) => {
-    // Active orders assigned to this waiter
-    const activeOrdersCount = await prisma.order.count({
-      where: {
-        storeId,
-        staffId: waiter.id,
-        status: { in: ['PROCESSING', 'READY'] }
-      }
-    });
-
-    const pendingCalls = pendingCallsPerWaiter.get(waiter.id) || 0;
-    const isAffinity = affinityWaiterId === waiter.id;
-
-    // Idle minutes calculation
-    const avail = getWaiterAvailability(storeId, waiter.id);
-    const lastActive = avail.lastResolvedAt > new Date(0) ? avail.lastResolvedAt : (waiter.lastLoginAt || new Date(0));
+  const scored = candidates.map((waiter) => {
+    const lastActive = presenceByWaiter.get(waiter.id)?.lastResolvedAt || waiter.lastLoginAt || new Date(0);
     const idleMinutes = Math.min(Math.max(Math.floor((Date.now() - new Date(lastActive).getTime()) / 60000), 0), 120);
-
-    // Scoring formula: Lower is better
-    const score = (pendingCalls * 40) + (activeOrdersCount * 20) - (isAffinity ? 30 : 0) - (idleMinutes * 2);
-
-    return {
-      waiter,
-      score,
-      pendingCalls,
-      activeOrdersCount,
-      isAffinity,
-      idleMinutes
-    };
-  }));
-
-  // Sort ascending by score
-  scoredWaiters.sort((a, b) => a.score - b.score);
-
-  return scoredWaiters[0]?.waiter || null;
+    const score = ((pendingByWaiter.get(waiter.id) || 0) * 40)
+      + ((ordersByWaiter.get(waiter.id) || 0) * 20)
+      - (affinityWaiterId === waiter.id ? 30 : 0)
+      - (idleMinutes * 2);
+    return { waiter, score };
+  });
+  scored.sort((a, b) => a.score - b.score);
+  return scored[0]?.waiter || null;
 }
 
+/* ---------- dispatch and escalation ---------- */
+
 /**
- * Dispatch a waiter call with automatic 60-second escalation timer
+ * Page the best waiter for a new call (they have 60 s to answer), or put it straight in the
+ * manager queue when nobody is available.
  */
 async function dispatchCall(call, tableNumber, note = '') {
-  const storeId = call.storeId;
-  const tableId = call.tableId;
+  const prisma = getPrismaClient();
+  const best = await findBestWaiter(call.storeId, call.tableId, []);
+  const now = new Date();
 
-  // Clear any old dispatch for this call
-  if (activeDispatches.has(call.id)) {
-    const old = activeDispatches.get(call.id);
-    if (old.timeoutTimerRef) clearTimeout(old.timeoutTimerRef);
-  }
+  const data = best
+    ? { assignedWaiterId: best.id, assignedAt: now, escalationLevel: 0, attemptedWaiterIds: [best.id], escalateAt: new Date(now.getTime() + ANSWER_WITHIN_MS) }
+    : { assignedWaiterId: null, assignedAt: now, escalationLevel: MANAGER_LEVEL, attemptedWaiterIds: [], escalateAt: null };
+  await prisma.waiterCall.updateMany({ where: { id: call.id, status: 'PENDING' }, data });
 
-  const bestWaiter = await findBestWaiter(storeId, tableId, []);
-
-  const dispatchState = {
-    callId: call.id,
-    storeId,
-    tableId,
-    tableNumber,
-    type: call.type,
+  const state = {
+    assignedWaiterId: data.assignedWaiterId,
+    assignedWaiterName: best ? best.name : null,
+    escalationLevel: data.escalationLevel,
     note: note || '',
-    assignedWaiterId: bestWaiter ? bestWaiter.id : null,
-    assignedWaiterName: bestWaiter ? bestWaiter.name : null,
-    escalationLevel: 0,
-    attemptedWaiterIds: bestWaiter ? [bestWaiter.id] : [],
-    assignedAt: new Date(),
-    timeoutTimerRef: null,
+    assignedAt: now,
     status: 'PENDING'
   };
 
-  // Schedule 60s escalation timer if a waiter was assigned
-  if (bestWaiter) {
-    dispatchState.timeoutTimerRef = setTimeout(() => {
-      handleCallTimeout(call.id);
-    }, 60000); // 60 seconds
-  } else {
-    // No waiter available immediately -> Escalate to Store Manager / Lead Staff right away
-    dispatchState.escalationLevel = 2; // Floor Manager queue
-  }
-
-  activeDispatches.set(call.id, dispatchState);
-
-  // Broadcast assignment via SSE to store tablets
-  broadcastToStore(storeId, "WAITER_CALL_DISPATCHED", {
+  broadcastToStore(call.storeId, "WAITER_CALL_DISPATCHED", {
     callId: call.id,
-    tableId,
+    tableId: call.tableId,
     tableNumber,
     type: call.type,
     note,
-    assignedWaiterId: dispatchState.assignedWaiterId,
-    assignedWaiterName: dispatchState.assignedWaiterName,
-    escalationLevel: dispatchState.escalationLevel,
-    isManagerEscalation: !bestWaiter,
-    assignedAt: dispatchState.assignedAt
+    assignedWaiterId: state.assignedWaiterId,
+    assignedWaiterName: state.assignedWaiterName,
+    escalationLevel: state.escalationLevel,
+    isManagerEscalation: !best,
+    assignedAt: now
   });
 
-  return dispatchState;
+  return state;
 }
 
-/**
- * Handle 60s timeout without acknowledgment: Escalate to next waiter or manager
- */
-async function handleCallTimeout(callId) {
-  const dispatch = activeDispatches.get(callId);
-  if (!dispatch || dispatch.status !== 'PENDING') return;
+/** Nobody answered in time: page the next waiter, or the manager once everyone was tried */
+async function escalateCall(call) {
+  const prisma = getPrismaClient();
+  const { id: callId, storeId, tableId, type } = call;
+  const tableNumber = call.table?.tableNumber;
+  const note = call.note || '';
+  const attempted = call.attemptedWaiterIds || [];
 
-  const { storeId, tableId, tableNumber, type, note, attemptedWaiterIds } = dispatch;
+  const next = await findBestWaiter(storeId, tableId, attempted);
+  const now = new Date();
+  const data = next
+    ? { assignedWaiterId: next.id, assignedAt: now, escalationLevel: call.escalationLevel + 1, attemptedWaiterIds: [...attempted, next.id], escalateAt: new Date(now.getTime() + ANSWER_WITHIN_MS) }
+    : { assignedWaiterId: null, escalationLevel: MANAGER_LEVEL, escalateAt: null };
 
-  // Find next best waiter excluding previously attempted non-responsive waiters
-  const nextWaiter = await findBestWaiter(storeId, tableId, attemptedWaiterIds);
+  // Only if nobody acknowledged it, and no other server escalated it, since we read it
+  const claim = await prisma.waiterCall.updateMany({
+    where: { id: callId, status: 'PENDING', escalateAt: call.escalateAt },
+    data
+  });
+  if (claim.count === 0) return;
 
-  if (nextWaiter) {
-    // Escalate to next waiter
-    dispatch.assignedWaiterId = nextWaiter.id;
-    dispatch.assignedWaiterName = nextWaiter.name;
-    dispatch.attemptedWaiterIds.push(nextWaiter.id);
-    dispatch.escalationLevel += 1;
-    dispatch.assignedAt = new Date();
-
-    // Reset 60s timer for the new waiter
-    dispatch.timeoutTimerRef = setTimeout(() => {
-      handleCallTimeout(callId);
-    }, 60000);
-
+  if (next) {
     broadcastToStore(storeId, "WAITER_CALL_ESCALATED", {
       callId,
       tableId,
       tableNumber,
       type,
       note,
-      previousWaiterId: attemptedWaiterIds[attemptedWaiterIds.length - 2],
-      assignedWaiterId: nextWaiter.id,
-      assignedWaiterName: nextWaiter.name,
-      escalationLevel: dispatch.escalationLevel,
-      assignedAt: dispatch.assignedAt
+      previousWaiterId: call.assignedWaiterId,
+      assignedWaiterId: next.id,
+      assignedWaiterName: next.name,
+      escalationLevel: data.escalationLevel,
+      assignedAt: now
     });
-  } else {
-    // All waiters tried or none available -> Escalate to Store Manager / Floor Supervisor
-    dispatch.assignedWaiterId = null;
-    dispatch.assignedWaiterName = null;
-    dispatch.escalationLevel = 2; // Manager Alert
-
-    broadcastToStore(storeId, "WAITER_CALL_ESCALATED_MANAGER", {
-      callId,
-      tableId,
-      tableNumber,
-      type,
-      note,
-      escalationLevel: 2,
-      message: `Urgent: Table ${tableNumber} has called for ${callTypeLabel(type)} with no waiter response. Manager attention required.`
-    });
-
     sendNotification({
       storeId,
-      type: 'WAITER_CALL_ESCALATED_MANAGER',
-      title: `Urgent: Table ${tableNumber} Unanswered`,
-      body: `Table ${tableNumber} has been waiting for ${callTypeLabel(type)} without response. Immediate manager intervention needed.`,
+      type: 'WAITER_CALL',
+      title: `Table ${tableNumber} Request`,
+      body: `Customer requested: ${callTypeLabel(type)}${note ? ` (${note})` : ''}`,
       data: { callId, tableId, tableNumber, sound: 'notification.mp3', url: '/waiter' },
-      target: { role: 'STORE_MANAGER', storeId }
+      target: { userId: next.id, role: 'WAITER', storeId }
     }).catch(() => {});
+    return;
   }
+
+  broadcastToStore(storeId, "WAITER_CALL_ESCALATED_MANAGER", {
+    callId,
+    tableId,
+    tableNumber,
+    type,
+    note,
+    escalationLevel: MANAGER_LEVEL,
+    message: `Urgent: Table ${tableNumber} has called for ${callTypeLabel(type)} with no waiter response. Manager attention required.`
+  });
+  sendNotification({
+    storeId,
+    type: 'WAITER_CALL_ESCALATED_MANAGER',
+    title: `Urgent: Table ${tableNumber} Unanswered`,
+    body: `Table ${tableNumber} has been waiting for ${callTypeLabel(type)} without response. Immediate manager intervention needed.`,
+    data: { callId, tableId, tableNumber, sound: 'notification.mp3', url: '/waiter' },
+    target: { role: 'STORE_MANAGER', storeId }
+  }).catch(() => {});
 }
 
-/**
- * Acknowledge a call by the assigned (or responding) waiter
- */
-function acknowledgeDispatch(callId, waiterId, waiterName) {
-  const dispatch = activeDispatches.get(callId);
-  if (dispatch) {
-    if (dispatch.timeoutTimerRef) {
-      clearTimeout(dispatch.timeoutTimerRef);
-      dispatch.timeoutTimerRef = null;
-    }
-    dispatch.status = 'ACKNOWLEDGED';
-    dispatch.assignedWaiterId = waiterId;
-    dispatch.assignedWaiterName = waiterName;
+let sweepTimer = null;
+let sweeping = false;
 
-    broadcastToStore(dispatch.storeId, "WAITER_CALL_ACKNOWLEDGED", {
-      callId,
-      tableNumber: dispatch.tableNumber,
-      assignedWaiterId: waiterId,
-      assignedWaiterName: waiterName,
-      status: 'ACKNOWLEDGED'
+/** Escalates every call whose waiter didn't answer in time */
+async function sweepDueEscalations() {
+  if (sweeping) return;
+  sweeping = true;
+  try {
+    const due = await getPrismaClient().waiterCall.findMany({
+      where: { status: 'PENDING', escalateAt: { lte: new Date() } },
+      include: { table: { select: { tableNumber: true } } },
+      orderBy: { escalateAt: 'asc' },
+      take: 50
     });
+    for (const call of due) {
+      await escalateCall(call).catch(err => console.error(`[Waiter calls] escalation failed for ${call.id}:`, err.message));
+    }
+  } catch (err) {
+    console.error('[Waiter calls] escalation sweep failed:', err.message);
+  } finally {
+    sweeping = false;
   }
-  return dispatch;
 }
 
-/**
- * Resolve a call (waiter finished assisting table)
- */
-function resolveDispatch(callId, resolverId) {
-  const dispatch = activeDispatches.get(callId);
-  if (dispatch) {
-    if (dispatch.timeoutTimerRef) {
-      clearTimeout(dispatch.timeoutTimerRef);
-    }
-    dispatch.status = 'RESOLVED';
-    if (resolverId) {
-      recordWaiterCompleted(dispatch.storeId, resolverId);
-    }
-    activeDispatches.delete(callId);
-
-    broadcastToStore(dispatch.storeId, "WAITER_CALL_RESOLVED", {
-      callId,
-      tableId: dispatch.tableId,
-      tableNumber: dispatch.tableNumber,
-      resolverId,
-      status: 'RESOLVED'
-    });
-  }
-  return dispatch;
+function startDispatchSweeper() {
+  if (sweepTimer) return;
+  sweepTimer = setInterval(sweepDueEscalations, SWEEP_EVERY_MS);
+  sweepTimer.unref?.();
 }
 
-/**
- * Cancel a dispatch (customer or staff cancelled)
- */
-function cancelDispatch(callId) {
-  const dispatch = activeDispatches.get(callId);
-  if (dispatch) {
-    if (dispatch.timeoutTimerRef) {
-      clearTimeout(dispatch.timeoutTimerRef);
-    }
-    dispatch.status = 'CANCELLED';
-    activeDispatches.delete(callId);
-
-    broadcastToStore(dispatch.storeId, "WAITER_CALL_CANCELLED", {
-      callId,
-      tableId: dispatch.tableId,
-      tableNumber: dispatch.tableNumber,
-      status: 'CANCELLED'
-    });
-  }
-  return dispatch;
-}
-
-/**
- * Get active dispatch state for a call or table
- */
-function getActiveDispatch(callId) {
-  return activeDispatches.get(callId) || null;
-}
-
-function getActiveDispatchForTable(storeId, tableId) {
-  for (const [_, dispatch] of activeDispatches.entries()) {
-    if (dispatch.storeId === storeId && dispatch.tableId === tableId && (dispatch.status === 'PENDING' || dispatch.status === 'ACKNOWLEDGED')) {
-      return dispatch;
-    }
-  }
-  return null;
+function stopDispatchSweeper() {
+  clearInterval(sweepTimer);
+  sweepTimer = null;
 }
 
 module.exports = {
   findBestWaiter,
   dispatchCall,
-  handleCallTimeout,
-  acknowledgeDispatch,
-  resolveDispatch,
-  cancelDispatch,
-  getActiveDispatch,
-  getActiveDispatchForTable,
+  escalateCall,
+  sweepDueEscalations,
+  startDispatchSweeper,
+  stopDispatchSweeper,
+  recordWaiterCompleted,
   setWaiterAvailability,
   getWaiterAvailability
 };

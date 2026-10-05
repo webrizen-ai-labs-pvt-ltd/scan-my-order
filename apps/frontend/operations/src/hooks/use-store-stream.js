@@ -1,34 +1,30 @@
-import { useCallback, useEffect, useRef } from 'react';
-
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { subscribeStore } from '../lib/live-stream';
 
 /**
- * One live SSE connection per store, shared by every POS page through `subscribe`.
- * Browsers cap concurrent connections per origin, so pages must not open their own.
+ * Live updates for the POS: one shared connection per store (see lib/live-stream), handed to
+ * every POS page through `subscribe`. Listeners also receive `{ type: 'STREAM_RECONNECTED' }`
+ * after a dropped connection comes back, so they can re-fetch.
+ *
+ * @returns {{ subscribe: Function, status: string }} subscribe(fn) → unsubscribe; status is the connection state
  */
 export function useStoreStream(storeId, token) {
   const listeners = useRef(new Set());
+  const [status, setStatus] = useState('connecting');
 
   useEffect(() => {
     if (!storeId || !token) return undefined;
-    const source = new EventSource(`${API_BASE}/stores/${storeId}/orders/stream?token=${encodeURIComponent(token)}`);
-    source.onmessage = (event) => {
-      let message;
-      try {
-        message = JSON.parse(event.data);
-      } catch {
-        return;
-      }
+    return subscribeStore(storeId, (message) => {
       listeners.current.forEach((fn) => {
         try { fn(message); } catch (err) { console.error('Stream listener failed:', err); }
       });
-    };
-    return () => source.close();
+    }, setStatus);
   }, [storeId, token]);
 
   /** Register a listener; returns an unsubscribe function (use inside useEffect). */
-  return useCallback((fn) => {
+  const subscribe = useCallback((fn) => {
     listeners.current.add(fn);
     return () => listeners.current.delete(fn);
   }, []);
+  return { subscribe, status };
 }

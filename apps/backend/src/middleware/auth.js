@@ -55,6 +55,11 @@ async function authenticate(req, _res, next) {
       throw createHttpError(401, "Your session has ended. Please sign in again.");
     }
 
+    // A stream ticket only opens a live-updates stream; it can't call the rest of the API
+    if (payload.purpose === "stream" && !req.path.endsWith("/stream")) {
+      throw createHttpError(401, "Invalid or expired token");
+    }
+
     req.user = user;
     req.auth = payload;
     next();

@@ -13,6 +13,8 @@ import { apiErrorMessage } from '../../components/pos/pos-toasts';
 import { sessionBillToReceipt } from '../../lib/session-receipt';
 import { CancelOrderDialog } from '../../components/pos/cancel-order-dialog';
 import { useAuthStore } from '../../store/authStore';
+import { PromoChoice } from '../../components/payments/promo-choice';
+import { PROMO_ROLES, promoStateOf } from '../../lib/promo';
 
 const BillLines = ({ items }) => (
   <div className="flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
@@ -94,6 +96,16 @@ export const PosCheckoutPage = () => {
   const cart = usePosCartStore();
   const [draftBusy, setDraftBusy] = useState(false);
 
+  // A payment chosen on the draft page is taken once: we lift it out of the browser history so
+  // Back/Forward or a refresh can't start a second QR for the same bill
+  const [autoPay, setAutoPay] = useState(null);
+  useEffect(() => {
+    const pending = location.state?.autoPay;
+    if (!pending) return;
+    setAutoPay({ ...pending, forPath: location.pathname });
+    navigate(location.pathname + location.search, { replace: true, state: null });
+  }, [location.state, location.pathname, location.search, navigate]);
+
   // The cart as a bill: same shape the order/table bills use, so it renders identically
   const draftBill = useMemo(() => {
     if (!isDraft) return null;
@@ -123,7 +135,8 @@ export const PosCheckoutPage = () => {
   const [requestBusy, setRequestBusy] = useState(false);
   const [requestError, setRequestError] = useState('');
   const [paySummary, setPaySummary] = useState(null);
-  const canPutOnDues = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(useAuthStore(state => state.user?.role));
+  const role = useAuthStore(state => state.user?.role);
+  const canPutOnDues = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(role);
   // Bills that were already paid when opened (e.g. back from the invoice page) shouldn't toast again
   const paidOnOpen = useRef(null);
   const receiptRef = useRef(null);
@@ -189,6 +202,55 @@ export const PosCheckoutPage = () => {
     }
   };
 
+  /* ---------- promo code ---------- */
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoError, setPromoError] = useState('');
+  // Remounts the payment panel after the total changes, so it never shows the old amount
+  const [billVersion, setBillVersion] = useState(0);
+  const billRef = isTable ? { tableSessionId: id } : { orderId: id };
+
+  const applyPromo = async (code) => {
+    setPromoError('');
+    if (isDraft) {
+      // Nothing is placed yet: the code goes on the cart and is checked again when the order is placed
+      const found = data.promos.find(p => p.code === code && p.isActive && (!p.validUntil || new Date(p.validUntil) > new Date()));
+      if (!found) { setPromoError('Invalid or expired promo code'); return false; }
+      if (draftBill.subTotal < (found.minOrderValue || 0)) { setPromoError(`This code needs a minimum order of ₹${found.minOrderValue}`); return false; }
+      cart.setPromo(found);
+      toast(`Promo ${found.code} applied`, 'success');
+      return true;
+    }
+    setPromoBusy(true);
+    try {
+      const res = await api.post(`/stores/${storeId}/orders/promo`, { ...billRef, code });
+      await loadBill();
+      setBillVersion(v => v + 1);
+      toast(`Promo ${res.data.data.code} applied · saves ₹${res.data.data.discountAmount}`, 'success');
+      return true;
+    } catch (err) {
+      setPromoError(apiErrorMessage(err, 'Could not apply this code'));
+      return false;
+    } finally {
+      setPromoBusy(false);
+    }
+  };
+
+  const removePromo = async () => {
+    setPromoError('');
+    if (isDraft) { cart.setPromo(null); return; }
+    setPromoBusy(true);
+    try {
+      await api.post(`/stores/${storeId}/orders/promo/remove`, billRef);
+      await loadBill();
+      setBillVersion(v => v + 1);
+      toast('Promo removed', 'info');
+    } catch (err) {
+      setPromoError(apiErrorMessage(err, 'Could not remove the code'));
+    } finally {
+      setPromoBusy(false);
+    }
+  };
+
   const removeCorporate = async () => {
     setRequestBusy(true);
     setRequestError('');
@@ -231,6 +293,13 @@ export const PosCheckoutPage = () => {
   const canCancelOrder = !isTable && !isDraft && bill && !bill.paidAt && ['PENDING_PAYMENT', 'DRAFT', 'PROCESSING', 'READY'].includes(bill.status);
   // A draft with nothing in it (opened directly, or the cart was cleared in another tab)
   const draftEmpty = isDraft && cart.lines.length === 0;
+
+  // Which promo is on this bill, and whether the cashier can change it here
+  const promoState = isDraft
+    ? { applied: cart.promo?.code || null, discount: draftBill?.discountAmount }
+    : promoStateOf(bill, isTable);
+  const paymentStarted = !isDraft && Boolean(paySummary && (paySummary.paidAmount > 0 || paySummary.pendingAmount > 0));
+  const canChangePromo = PROMO_ROLES.includes(role);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -325,6 +394,17 @@ export const PosCheckoutPage = () => {
             </section>
 
             <section aria-label="Payment" className="flex flex-col gap-3">
+              {!receipt && billOpen && (canChangePromo || promoState.applied) && (
+                <PromoChoice
+                  {...promoState}
+                  locked={promoState.locked || (!canChangePromo ? "Your role can't change promo codes." : null)}
+                  paymentStarted={paymentStarted}
+                  busy={promoBusy}
+                  error={promoError}
+                  onApply={applyPromo}
+                  onRemove={removePromo}
+                />
+              )}
               {!receipt && billOpen && (
                 <InvoiceChoice
                   request={shownBill.invoiceRequest}
@@ -335,6 +415,7 @@ export const PosCheckoutPage = () => {
                 />
               )}
               <PaymentCollector
+                key={billVersion}
                 storeId={storeId}
                 orderId={isTable || isDraft ? undefined : id}
                 tableSessionId={isTable ? id : undefined}
@@ -342,7 +423,7 @@ export const PosCheckoutPage = () => {
                   totalAmount: draftBill.totalAmount,
                   onCollect: (payment) => createDraftOrder({ autoPay: payment }),
                 } : undefined}
-                autoPay={location.state?.autoPay}
+                autoPay={autoPay?.forPath === location.pathname ? autoPay : undefined}
                 subscribe={subscribe}
                 onSettled={handleSettled}
                 onChange={setPaySummary}

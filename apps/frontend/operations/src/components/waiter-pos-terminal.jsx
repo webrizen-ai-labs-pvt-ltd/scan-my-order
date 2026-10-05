@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import api from '../lib/api';
+import { subscribeStore } from '../lib/live-stream';
 import { Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
 import { Add01Icon, Remove01Icon, ShoppingCart01Icon, Tick02Icon, Cancel01Icon, Tag01Icon, PrinterIcon, Loading02Icon, ArrowLeft01Icon, DiningTableIcon } from 'hugeicons-react';
 import { computeCartSubTotal, computeOrderTotals } from '@smo/shared/pricing';
@@ -85,16 +86,10 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
 
   useEffect(() => {
     if (!selectedStoreId || !token) return;
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-    const eventSource = new EventSource(`${baseUrl}/stores/${selectedStoreId}/orders/stream?token=${encodeURIComponent(token)}`);
-    const tableEvents = /^(ORDER_|TABLE_|RESERVATION_|PAYMENT_UPDATED)/;
-    eventSource.onmessage = (event) => {
-      try {
-        const message = JSON.parse(event.data);
-        if (tableEvents.test(message.type)) fetchTables();
-      } catch { /* ignore malformed events */ }
-    };
-    return () => eventSource.close();
+    const tableEvents = /^(ORDER_|TABLE_|RESERVATION_|PAYMENT_UPDATED|STREAM_RECONNECTED)/;
+    return subscribeStore(selectedStoreId, (message) => {
+      if (tableEvents.test(message.type)) fetchTables();
+    });
   }, [selectedStoreId, token]);
 
   const applyPromo = () => {

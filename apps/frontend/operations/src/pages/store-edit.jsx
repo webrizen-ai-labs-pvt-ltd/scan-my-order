@@ -124,7 +124,7 @@ export const StoreEdit = () => {
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden min-h-[480px]">
           {active === 'menu' && <StoreMenuManager storeId={store.id} />}
           {active === 'smart' && <div className="p-6"><StoreMenuBuilder storeId={store.id} /></div>}
-          {active === 'tables' && <StoreTablesManager storeId={store.id} storeSlug={store.slug} brandSlug={store.tenant?.slug} />}
+          {active === 'tables' && <StoreTablesManager storeId={store.id} storeSlug={store.slug} brandSlug={store.tenant?.slug} storeName={store.name} />}
           {active === 'promos' && <StorePromoManager storeId={store.id} />}
           {active === 'rewards' && <StoreLoyaltyManager storeId={store.id} />}
         </div>

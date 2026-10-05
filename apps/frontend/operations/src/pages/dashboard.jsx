@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import api from '../lib/api';
+import { subscribeStore } from '../lib/live-stream';
 import {
   FloorMap,
   LiveTableFloorPlan,
@@ -123,69 +124,28 @@ export const Dashboard = () => {
       fetchFloorStatus(selectedStoreId, true);
     }, 30000);
 
-    // Live Server-Sent Events (SSE) stream for zero-latency instant updates
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-    let eventSource;
+    // Live updates over the shared connection (reconnects by itself, see lib/live-stream)
+    const relevantEvents = new Set([
+      'STREAM_RECONNECTED',
+      'ORDER_PENDING_PAYMENT', 'ORDER_UPDATED', 'ORDER_ITEMS_REJECTED',
+      'TABLE_SESSION_SETTLED', 'TABLE_UPDATED',
+      'RESERVATION_CREATED', 'RESERVATION_UPDATED', 'RESERVATION_DELETED',
+      'ORDER_PENDING_VERIFICATION', 'ORDER_PROCESSING', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_SETTLED', 'ORDER_CANCELLED',
+      'WAITER_CALL_CREATED', 'WAITER_CALL_DISPATCHED', 'WAITER_CALL_ESCALATED', 'WAITER_CALL_ESCALATED_MANAGER',
+      'WAITER_CALL_ACKNOWLEDGED', 'WAITER_CALL_RESOLVED', 'WAITER_CALL_CANCELLED',
+    ]);
     let refreshTimer;
-
-    try {
-      eventSource = new EventSource(`${baseUrl}/stores/${selectedStoreId}/orders/stream?token=${token}`);
-
-      eventSource.onopen = () => {
-        setConnectionStatus('connected');
-      };
-
-      eventSource.onerror = () => {
-        setConnectionStatus('disconnected');
-      };
-
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          const relevantEvents = [
-            'ORDER_PENDING_PAYMENT',
-            'ORDER_UPDATED',
-            'ORDER_ITEMS_REJECTED',
-            'TABLE_SESSION_SETTLED',
-            'TABLE_UPDATED',
-            'RESERVATION_CREATED',
-            'RESERVATION_UPDATED',
-            'RESERVATION_DELETED',
-            'ORDER_PENDING_VERIFICATION',
-            'ORDER_PROCESSING',
-            'ORDER_READY',
-            'ORDER_SERVED',
-            'ORDER_SETTLED',
-            'ORDER_CANCELLED',
-            'WAITER_CALL_CREATED',
-            'WAITER_CALL_DISPATCHED',
-            'WAITER_CALL_ESCALATED',
-            'WAITER_CALL_ESCALATED_MANAGER',
-            'WAITER_CALL_ACKNOWLEDGED',
-            'WAITER_CALL_RESOLVED',
-            'WAITER_CALL_CANCELLED'
-          ];
-
-          if (relevantEvents.includes(data.type)) {
-            // One refresh per burst of events (e.g. a bill settling several orders at once)
-            clearTimeout(refreshTimer);
-            refreshTimer = setTimeout(() => fetchFloorStatus(selectedStoreId, true), 400);
-          }
-        } catch (err) {
-          console.error('Error parsing SSE event:', err);
-        }
-      };
-    } catch (sseErr) {
-      console.error('SSE initialization error:', sseErr);
-      setConnectionStatus('disconnected');
-    }
+    const unsubscribe = subscribeStore(selectedStoreId, (data) => {
+      if (!relevantEvents.has(data.type)) return;
+      // One refresh per burst of events (e.g. a bill settling several orders at once)
+      clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(() => fetchFloorStatus(selectedStoreId, true), 400);
+    }, (status) => setConnectionStatus(status === 'live' ? 'connected' : 'disconnected'));
 
     return () => {
       clearInterval(intervalId);
       clearTimeout(refreshTimer);
-      if (eventSource) {
-        eventSource.close();
-      }
+      unsubscribe();
     };
   }, [selectedStoreId, token, fetchFloorStatus]);
 

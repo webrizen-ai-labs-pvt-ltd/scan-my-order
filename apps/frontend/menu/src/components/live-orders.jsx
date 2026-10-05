@@ -14,6 +14,7 @@ import {
 } from 'hugeicons-react';
 import api from '../lib/api';
 import { getSessionId } from '../lib/session';
+import { openCustomerStream } from '../lib/customer-stream';
 import { initAudioUnlock, playNotificationChime, getAudioMuted, setAudioMuted } from '@smo/shared/audio';
 import { usePushNotifications } from '../hooks/use-push-notifications';
 
@@ -65,13 +66,12 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
     };
     fetchOrders();
 
-    const sseUrl = `${import.meta.env.VITE_API_URL || 'http://localhost:8000/api'}/public/customer/stream?${token ? `token=${token}` : `sessionId=${sessionId}`}`;
-    const eventSource = new EventSource(sseUrl);
-
-    eventSource.onmessage = (event) => {
+    // Reconnects by itself; after a drop we reload the orders so no status change is missed
+    return openCustomerStream({ signedIn: !!token, sessionId }, (data) => {
       try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'NOTIFICATION') {
+        if (data.type === 'STREAM_RECONNECTED') {
+          fetchOrders();
+        } else if (data.type === 'NOTIFICATION') {
           playNotificationChime({ haptic: true });
           setToastNotification({
             title: data.title,
@@ -102,7 +102,7 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
           if (updated?.id) {
             setOrders(prev => prev.map(o => (o.id === updated.id ? updated : o)));
           }
-        } else if (data.type.startsWith('ORDER_')) {
+        } else if (data.type?.startsWith('ORDER_') && data.data?.id) {
           playNotificationChime({ haptic: true });
           const status = data.data?.status;
           const statusLabel = STATUS_MAPPING[status]?.label || 'Order Update';
@@ -124,11 +124,9 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
           });
         }
       } catch (err) {
-        console.error("SSE parse error", err);
+        console.error('Live order update failed', err);
       }
-    };
-
-    return () => eventSource.close();
+    });
   }, [token, storeId]);
 
   const activeOrders = orders.filter(o => ['PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED'].includes(o.status));

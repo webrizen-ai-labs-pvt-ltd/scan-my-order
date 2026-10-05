@@ -273,11 +273,23 @@ async function markOrderPaid(storeId, order, tender) {
 async function applySettlement(storeId, ref) {
   const prisma = getPrismaClient();
   const target = await loadTarget(prisma, storeId, ref);
-  if (target.isSettled || target.isCancelled) return summarize(target);
+  if (target.isSettled) {
+    // A payment that lands after the bill was settled (e.g. a QR paid at the last second)
+    await flagOverpayment(storeId, ref);
+    return summarize(target);
+  }
+  if (target.isCancelled) return summarize(target);
 
   const paid = target.payments.filter(p => p.status === "PAID");
   const paidAmount = paid.reduce((s, p) => s + p.amount, 0);
   if (paidAmount < target.totalAmount) return summarize(target);
+
+  // Claim the settlement first: if two payments complete together, only one caller settles the
+  // bill (one invoice number, one cashback credit, one "bill settled" entry)
+  const claimed = target.kind === "ORDER"
+    ? await prisma.order.updateMany({ where: { id: target.id, paidAt: null, status: { not: "CANCELLED" } }, data: { paidAt: new Date() } })
+    : await prisma.tableSession.updateMany({ where: { id: target.id, status: "ACTIVE" }, data: { status: "SETTLED" } });
+  if (claimed.count === 0) return broadcastSummary(storeId, ref);
 
   // Bill is covered: withdraw any QR still waiting so the guest can't pay twice
   const stillPending = target.payments.filter(p => p.status === "PENDING");
@@ -335,7 +347,60 @@ async function applySettlement(storeId, ref) {
   const { issueStandardInvoice } = require("../invoices/invoice-service");
   await issueStandardInvoice(storeId, ref).catch(err => console.error("[Invoices] could not issue invoice:", err.message));
 
+  await flagOverpayment(storeId, ref);
   return broadcastSummary(storeId, ref);
+}
+
+/**
+ * Money received beyond what the bill (and refunds already owed) explain becomes a refund due on the
+ * order, so staff see it in the refund banners instead of it going unnoticed.
+ * Safe to call repeatedly: only the unexplained part is added each time.
+ */
+async function flagOverpayment(storeId, ref) {
+  const prisma = getPrismaClient();
+  try {
+    const paymentWhere = ref.orderId ? { orderId: ref.orderId } : { tableSessionId: ref.tableSessionId };
+    const paid = await prisma.payment.aggregate({ where: { ...paymentWhere, status: "PAID" }, _sum: { amount: true } });
+    const received = paid._sum.amount || 0;
+    if (received <= 0) return;
+
+    // The orders this money was for: the order itself, or the table's orders not paid on their own
+    let orders;
+    if (ref.orderId) {
+      orders = await prisma.order.findMany({ where: { id: ref.orderId }, select: { id: true, totalAmount: true, refundDue: true, status: true, createdAt: true } });
+    } else {
+      const all = await prisma.order.findMany({
+        where: { tableSessionId: ref.tableSessionId },
+        select: { id: true, totalAmount: true, refundDue: true, status: true, createdAt: true, payments: { where: { status: "PAID" }, select: { id: true } } }
+      });
+      orders = all.filter(o => o.payments.length === 0);
+    }
+    if (orders.length === 0) return;
+
+    const ids = orders.map(o => o.id);
+    const billed = orders.filter(o => o.status !== "CANCELLED").reduce((s, o) => s + o.totalAmount, 0);
+    const owedBack = orders.reduce((s, o) => s + (o.refundDue || 0), 0);
+    const refunded = await prisma.refund.aggregate({ where: { orderId: { in: ids }, status: { in: ["PENDING", "PROCESSED"] } }, _sum: { amount: true } });
+    const extra = received - billed - owedBack - (refunded._sum.amount || 0);
+    if (extra <= 0) return;
+
+    // Put it on the latest order of the bill, where the refund screens will show it
+    const target = [...orders].sort((a, b) => b.createdAt - a.createdAt)[0];
+    await prisma.order.update({ where: { id: target.id }, data: { refundDue: { increment: extra } } });
+    await logOrderEvent({
+      storeId,
+      orderId: target.id,
+      tableSessionId: ref.tableSessionId || null,
+      type: "OVERPAID",
+      source: "SYSTEM",
+      amountAfter: extra,
+      data: { received, billed }
+    });
+    broadcastToStore(storeId, "ORDER_UPDATED", { id: target.id, refundDue: (target.refundDue || 0) + extra });
+    console.warn(`[Payments] Overpaid by ₹${extra} on ${ref.orderId ? "order " + ref.orderId : "table bill " + ref.tableSessionId}`);
+  } catch (error) {
+    console.error("[Payments] overpayment check failed:", error.message);
+  }
 }
 
 // Cashiers and managers can put a bill on dues (a note and the guest's details are required)
@@ -896,7 +961,12 @@ async function cancelPendingPaymentsFor(storeId, ref) {
   const prisma = getPrismaClient();
   const where = { status: "PENDING", ...(ref.orderId ? { orderId: ref.orderId } : { tableSessionId: ref.tableSessionId }) };
   const pending = await prisma.payment.findMany({ where });
-  for (const p of pending) await withdrawPayment(storeId, p);
+  let paidLate = false;
+  for (const p of pending) {
+    if ((await withdrawPayment(storeId, p)) === "PAID") paidLate = true;
+  }
+  // The guest paid just before the QR was withdrawn: that money is owed back on a cancelled bill
+  if (paidLate) await flagOverpayment(storeId, ref);
 }
 
 function isValidUpiId(value) {
@@ -907,6 +977,7 @@ module.exports = {
   putBillOnDues,
   getPaymentChannels,
   getPaymentSummary,
+  broadcastSummary,
   createPayment,
   getPayment,
   confirmOfflinePayment,

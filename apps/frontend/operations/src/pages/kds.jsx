@@ -6,6 +6,7 @@ import { Store01Icon, Clock01Icon, Tick02Icon, Cancel01Icon, Alert01Icon, Checkm
 import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
 import { KitchenRejectDialog } from '../components/kds/kitchen-reject-dialog';
 import { KdsPrintPanel } from '../components/kds/kds-print-panel';
+import { subscribeStore } from '../lib/live-stream';
 import { printKitchenTicket, wasPrinted, markPrinted, readPrintSettings, savePrintSettings } from '../lib/kitchen-ticket';
 
 /** 12m · 4h 46m · 2d 3h — compact wait time for kitchen tickets */
@@ -72,6 +73,8 @@ export const KDS = () => {
   const [delayMenuFor, setDelayMenuFor] = useState(null);
   // Tickets this screen marked ready in the last few minutes, so an accidental tap can be recalled
   const [recentlyReady, setRecentlyReady] = useState([]); // [{ id, label, at }]
+  const [streamStatus, setStreamStatus] = useState('connecting');
+  const ordersRef = useRef([]);
 
   // Kitchen ticket printing (settings belong to this device, e.g. the kitchen PC)
   const [printSettings, setPrintSettings] = useState(() => readPrintSettings(user?.store?.id || 'default'));
@@ -92,6 +95,7 @@ export const KDS = () => {
       const res = await api.get(`/stores/${storeIdToFetch}/orders/kds`);
       if (res.data.success) {
         setOrders(res.data.data);
+        return res.data.data;
       }
     } catch (err) {
       setError('Failed to connect to KDS server');
@@ -156,30 +160,37 @@ export const KDS = () => {
     [orders, printSettings.autoPrint, selectedStoreId, printedVersion] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  useEffect(() => {
-    if (selectedStoreId) {
-      fetchOrders(selectedStoreId);
-      
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-      const eventSource = new EventSource(`${baseUrl}/stores/${selectedStoreId}/orders/stream?token=${token}`);
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'ORDER_PROCESSING' || data.type === 'KITCHEN_ALERT') {
-            playNotificationChime({ haptic: true });
-            if (data.type === 'ORDER_PROCESSING' && data.data?.id && printSettingsRef.current.autoPrint) {
-              pendingPrints.current.set(data.data.id, Date.now());
-            }
-            fetchOrders(selectedStoreId, true);
-          } else if (['ORDER_READY', 'ORDER_CANCELLED', 'ORDER_UPDATED', 'ORDER_ITEMS_REJECTED', 'ORDER_RECALLED', 'ORDER_ITEM_READY', 'ORDER_DELAYED'].includes(data.type)) {
-            fetchOrders(selectedStoreId, true);
-          }
-        } catch(e) {}
-      };
+  useEffect(() => { ordersRef.current = orders; }, [orders]);
 
-      return () => eventSource.close();
-    }
+  useEffect(() => {
+    if (!selectedStoreId) return undefined;
+    fetchOrders(selectedStoreId);
+
+    // Shared live connection (reconnects by itself, see lib/live-stream)
+    const unsubscribe = subscribeStore(selectedStoreId, async (data) => {
+      if (data.type === 'ORDER_PROCESSING' || data.type === 'KITCHEN_ALERT') {
+        playNotificationChime({ haptic: true });
+        if (data.type === 'ORDER_PROCESSING' && data.data?.id && printSettingsRef.current.autoPrint) {
+          pendingPrints.current.set(data.data.id, Date.now());
+        }
+        fetchOrders(selectedStoreId, true);
+      } else if (data.type === 'STREAM_RECONNECTED') {
+        // Back after a drop: reload the board and treat orders that arrived meanwhile as new
+        const before = new Set(ordersRef.current.map(o => o.id));
+        const fresh = await fetchOrders(selectedStoreId, true);
+        const arrived = (fresh || []).filter(o => !before.has(o.id));
+        if (arrived.length > 0) {
+          playNotificationChime({ haptic: true });
+          if (printSettingsRef.current.autoPrint) arrived.forEach(o => pendingPrints.current.set(o.id, Date.now()));
+        }
+      } else if (['ORDER_READY', 'ORDER_CANCELLED', 'ORDER_UPDATED', 'ORDER_ITEMS_REJECTED', 'ORDER_RECALLED', 'ORDER_ITEM_READY', 'ORDER_DELAYED'].includes(data.type)) {
+        fetchOrders(selectedStoreId, true);
+      }
+    }, setStreamStatus);
+
+    // Last line of defence: refresh the board quietly every 90 s
+    const safety = setInterval(() => fetchOrders(selectedStoreId, true), 90000);
+    return () => { unsubscribe(); clearInterval(safety); };
   }, [selectedStoreId, token, fetchOrders]);
 
   const markAsReady = async (orderId) => {
@@ -530,9 +541,14 @@ export const KDS = () => {
         </div>
         
         <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-zinc-800 rounded-full">
-            <span className="w-2.5 h-2.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)] animate-pulse" />
-            <span className="text-xs font-bold text-zinc-300">LIVE</span>
+          <div
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${streamStatus === 'live' ? 'bg-zinc-800' : 'bg-amber-500/20 ring-1 ring-amber-500/50'}`}
+            title={streamStatus === 'live' ? 'Receiving orders live' : 'Connection lost. Reconnecting; the board refreshes when it’s back.'}
+          >
+            <span className={`w-2.5 h-2.5 rounded-full ${streamStatus === 'live' ? 'bg-green-500 animate-pulse' : 'bg-amber-400'}`} />
+            <span className={`text-xs font-bold ${streamStatus === 'live' ? 'text-zinc-300' : 'text-amber-300'}`}>
+              {streamStatus === 'live' ? 'LIVE' : streamStatus === 'revoked' ? 'SIGN IN AGAIN' : 'RECONNECTING…'}
+            </span>
           </div>
 
           {/* Kitchen ticket printing */}

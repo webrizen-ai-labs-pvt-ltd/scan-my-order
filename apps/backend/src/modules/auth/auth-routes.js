@@ -48,6 +48,14 @@ const passwordLimiter = rateLimit({
   message: "Too many password attempts. Try again in a few minutes."
 });
 
+// POST /api/auth/stream-ticket -> { ticket }
+// Short-lived token for opening a live-updates stream, so the real login token never goes in a URL
+router.post("/stream-ticket", authenticate, (req, res) => {
+  const { signJwt } = require("../../lib/jwt");
+  const ticket = signJwt({ sub: req.user.id, tv: req.user.tokenVersion || 0, purpose: "stream" }, { expiresIn: "2m" });
+  res.json(createApiResponse({ ticket }));
+});
+
 // GET /api/auth/password -> { canChange, hasPassword }
 router.get("/password", authenticate, asyncHandler(async (req, res) => {
   res.json(createApiResponse(await getOwnPasswordStatus(req.user)));

@@ -6,6 +6,7 @@ import {
   ArrowRight01Icon, Delete02Icon, UserGroupIcon, AlertCircleIcon,
 } from 'hugeicons-react';
 import api from '../lib/api';
+import { subscribeStore } from '../lib/live-stream';
 import { useAuthStore } from '../store/authStore';
 import { STATUSES, localDateStr, shiftDate, formatDay, formatTime, useReservationStore } from './reservations/reservation-utils';
 
@@ -78,19 +79,9 @@ export const Reservations = () => {
   // Live updates from other devices
   useEffect(() => {
     if (!storeId || !token) return undefined;
-    let source;
-    try {
-      source = new EventSource(`${api.defaults.baseURL}/stores/${storeId}/orders/stream?token=${encodeURIComponent(token)}`);
-      source.onmessage = (event) => {
-        try {
-          const { type } = JSON.parse(event.data);
-          if (type === 'RESERVATION_CREATED' || type === 'RESERVATION_UPDATED' || type === 'RESERVATION_DELETED') load(true);
-        } catch { /* keep-alive pings */ }
-      };
-    } catch (err) {
-      console.error('Reservation stream failed:', err);
-    }
-    return () => source?.close();
+    return subscribeStore(storeId, ({ type }) => {
+      if (type === 'RESERVATION_CREATED' || type === 'RESERVATION_UPDATED' || type === 'RESERVATION_DELETED' || type === 'STREAM_RECONNECTED') load(true);
+    });
   }, [storeId, token, load]);
 
   // Search is applied as you type; the URL is updated after a pause

@@ -18,6 +18,9 @@ const TONE = {
   PAYMENT_CONFIRMED: 'bg-emerald-500',
   BILL_SETTLED: 'bg-emerald-500',
   BILL_ON_DUES: 'bg-amber-500',
+  OVERPAID: 'bg-rose-500',
+  PROMO_APPLIED: 'bg-amber-500',
+  PROMO_REMOVED: 'bg-amber-500',
   DUES_REPAID: 'bg-emerald-500',
 };
 
@@ -46,6 +49,12 @@ function describe(e) {
     case 'PAYMENT_CONFIRMED':
     case 'PAYMENT_WITHDRAWN':
       return `${d.label || d.channel} ${money(e.amountAfter)}${d.changeDue ? ` · change ${money(d.changeDue)}` : ''}`;
+    case 'OVERPAID':
+      return `${money(e.amountAfter)} extra received (bill ${money(d.billed)}, received ${money(d.received)}) · refund due`;
+    case 'PROMO_APPLIED':
+    case 'PROMO_REMOVED':
+      if (e.amountBefore == null) return d.code || '';
+      return `${d.code || 'Code'} · total ${money(e.amountBefore)} → ${money(e.amountAfter)}`;
     case 'BILL_ON_DUES':
       return `${money(e.amountAfter)} owed by ${d.account}${d.guest ? ` · guest ${d.guest}` : ''}`;
     case 'DUES_REPAID':

@@ -218,6 +218,7 @@ model Store {
   reservations TableReservation[]
   orders       Order[]
   waiterCalls  WaiterCall[]
+  waiterPresence WaiterPresence[]
   feedbacks    Feedback[]
   googleReviewUrl String?
   // Overrides Tenant.offlineUpiId for this location when set
@@ -269,7 +270,9 @@ model User {
   staffOrders    Order[] @relation("StaffOrders")
   customerOrders Order[] @relation("CustomerOrders")
   customerWallets CustomerStoreWallet[] @relation("CustomerWallets")
-  resolvedCalls WaiterCall[]
+  resolvedCalls WaiterCall[] @relation("ResolvedCalls")
+  assignedCalls WaiterCall[] @relation("AssignedCalls")
+  waiterPresence WaiterPresence[]
   reservations TableReservation[]
   pushSubscriptions PushSubscription[]
   notifications     Notification[]
@@ -495,6 +498,7 @@ model PromoCode {
   validUntil    DateTime?
   
   orders        Order[]
+  tableSessions TableSession[]
 
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -554,7 +558,14 @@ model Order {
   cancelledById   String?
   cancelledBy     User?          @relation("CancelledOrders", fields: [cancelledById], references: [id], onDelete: SetNull)
 
-  
+  // Set while this order's ingredients are taken from stock; cleared when they're returned.
+  // Stock only moves when this flips, so it can never be taken or returned twice.
+  stockDeductedAt DateTime?
+
+  // Old cancelled orders are archived (hidden from Order History), never deleted: they're financial records
+  archivedAt      DateTime?
+
+
   paymentLinkId   String?
   paymentLinkUrl  String?
   
@@ -704,11 +715,41 @@ model WaiterCall {
   note        String?
   status      WaiterCallStatus @default(PENDING)
   resolvedById String?
-  resolvedBy  User?            @relation(fields: [resolvedById], references: [id])
+  resolvedBy  User?            @relation("ResolvedCalls", fields: [resolvedById], references: [id])
+
+  // Dispatch: who is paged now, who was already tried, and when it moves on if nobody answers.
+  // Kept here (not in server memory) so a restart or deploy never drops a call.
+  assignedWaiterId   String?
+  assignedWaiter     User?     @relation("AssignedCalls", fields: [assignedWaiterId], references: [id], onDelete: SetNull)
+  assignedAt         DateTime?
+  escalationLevel    Int       @default(0) // 0 first waiter, 1+ passed on, 2 = manager
+  attemptedWaiterIds String[]  @default([])
+  escalateAt         DateTime? // set while a waiter has 60 s to answer
+
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
 
   @@index([storeId, status])
+  @@index([status, escalateAt])
+}
+
+enum WaiterAvailability {
+  AVAILABLE
+  BUSY
+}
+
+// A waiter's on-shift state for call dispatch (Busy waiters aren't paged)
+model WaiterPresence {
+  storeId        String
+  store          Store              @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status         WaiterAvailability @default(AVAILABLE)
+  // Last time they finished a call: longer idle waiters are paged first
+  lastResolvedAt DateTime?
+  updatedAt      DateTime           @updatedAt
+
+  @@id([storeId, userId])
 }
 
 model Feedback {
@@ -747,6 +788,9 @@ model TableSession {
   duesAmount      Int                @default(0)
   // Corporate details chosen before payment; the invoice is issued with them on settlement
   invoiceRequest  Json?
+  // Promo applied to the whole table bill at checkout; its discount is split across the unpaid orders
+  promoCodeId     String?
+  promoCode       PromoCode?         @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
   orders          Order[]
   payments        Payment[]
   events          OrderEvent[]

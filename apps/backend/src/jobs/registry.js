@@ -163,10 +163,10 @@ const JOB_REGISTRY = {
 
   RETENTION_CLEANUP: {
     key: 'RETENTION_CLEANUP',
-    title: 'Old Cancelled Orders Storage Pruner',
+    title: 'Archive Old Cancelled Orders',
     category: 'Data Hygiene',
-    icon: 'trash',
-    description: 'Permanently deletes cancelled orders older than the retention threshold to keep the database optimized and lightweight.',
+    icon: 'archive',
+    description: 'Hides cancelled orders older than the retention window from Order History. Nothing is deleted: they stay on record with their payments, refunds and invoices.',
     defaultSchedule: '0 3 * * 0',
     defaultScheduleLabel: 'Weekly on Sunday at 3:00 AM',
     scheduleOptions: [
@@ -185,10 +185,10 @@ const JOB_REGISTRY = {
         default: 30,
         min: 7,
         max: 365,
-        helper: 'Cancelled orders older than this number of days will be permanently purged from the database.'
+        helper: 'Cancelled orders older than this many days are archived. You can still find them by filtering Order History by Cancelled.'
       }
     ],
-    isDestructive: true,
+    isDestructive: false,
     runner: runRetentionCleanupJob
   }
 };

@@ -212,6 +212,11 @@ export const PaymentCollector = ({ storeId, orderId, tableSessionId, draft, auto
   useEffect(() => {
     if (!subscribe || draftTotal !== null) return undefined;
     return subscribe((msg) => {
+      // Back after a dropped connection: a payment may have completed meanwhile
+      if (msg.type === 'STREAM_RECONNECTED') {
+        load();
+        return;
+      }
       if (msg.type === 'PAYMENT_UPDATED' && msg.data?.id === targetId) {
         // Stream payload has no channel config; keep what we have
         setSummary(prev => {
@@ -225,7 +230,7 @@ export const PaymentCollector = ({ storeId, orderId, tableSessionId, draft, auto
         });
       }
     });
-  }, [subscribe, targetId, onChange, onSettled]);
+  }, [subscribe, targetId, onChange, onSettled, load, draftTotal]);
 
   const pending = useMemo(() => (summary?.payments || []).filter(p => p.status === 'PENDING'), [summary]);
   const pendingOnline = pending.filter(p => p.channel === 'RAZORPAY');
@@ -298,9 +303,12 @@ export const PaymentCollector = ({ storeId, orderId, tableSessionId, draft, auto
   useEffect(() => {
     if (!autoPay || autoPaid.current || draft || !summary || busy) return;
     if (summary.isSettled || summary.isCancelled || summary.blockers?.length > 0) return;
+    // A payment is already in progress (e.g. this page was opened twice): never start another
+    if ((summary.pendingAmount || 0) > 0 || (summary.payments || []).some(p => p.status === 'PENDING')) { autoPaid.current = true; return; }
     if (!channels?.[autoPay.channel]?.enabled) return;
     autoPaid.current = true;
-    collect({ ...autoPay, amount: Math.min(autoPay.amount, summary.dueAmount) });
+    const { forPath: _forPath, ...payment } = autoPay;
+    collect({ ...payment, amount: Math.min(payment.amount, summary.dueAmount) });
   }, [autoPay, draft, summary, channels, busy, collect]);
 
   const confirmOffline = (payment) => {

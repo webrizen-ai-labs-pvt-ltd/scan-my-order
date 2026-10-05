@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
-import { menuUrlFor } from '../lib/menu-url';
+import { menuUrlFor, menuUrlIsLocalOnly } from '../lib/menu-url';
+import { renderTableQrCard, CARD_WIDTH, CARD_HEIGHT } from '../lib/table-qr-card';
 import { useAuthStore } from '../store/authStore';
 import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
@@ -20,7 +21,12 @@ import {
 
 const sortByNumber = (a, b) => a.tableNumber - b.tableNumber;
 
-export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
+// Preview QR: error correction "H" (survives ~30% damage) so the logo in the middle can't stop it scanning
+const QR_PREVIEW_SIZE = 140;
+const QR_LOGO_WIDTH = 30; // about 21% of the code's width
+const QR_LOGO_HEIGHT = QR_LOGO_WIDTH * (500 / 512); // logo.png is 512×500
+
+export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName }) => {
   const { user } = useAuthStore();
   const isSuperOrTenantAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'TENANT_ADMIN';
   // `tables === null` means "never loaded" → only then do we show skeletons.
@@ -184,58 +190,12 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
   };
 
   /* ─────────────────────────────────────────────────────────────
-     QR / PDF (unchanged logic, kept intact)
+     QR / PDF — cards are drawn at print size (see lib/table-qr-card)
   ───────────────────────────────────────────────────────────── */
   const getQRUrl = (tableNumber) => `${menuUrlFor(brandSlug, storeSlug)}?table=${tableNumber}`;
 
-  const getCanvasForTable = (tableNumber) => {
-    return new Promise((resolve) => {
-      const svg = document.getElementById(`qr-${tableNumber}`);
-      if (!svg) return resolve(null);
-      const svgData = new XMLSerializer().serializeToString(svg);
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      const img = new Image();
-
-      const logo = new Image();
-      logo.crossOrigin = 'anonymous';
-
-      img.onload = () => {
-        canvas.width = img.width + 80;
-        canvas.height = img.height + 140;
-        ctx.fillStyle = 'white';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.fillStyle = 'black';
-        ctx.font = 'bold 24px Arial';
-        ctx.textAlign = 'center';
-        ctx.fillText('Scan to Order', canvas.width / 2, 40);
-        ctx.font = 'bold 28px Arial';
-        ctx.fillText(`Table ${tableNumber}`, canvas.width / 2, 80);
-
-        ctx.drawImage(img, 40, 100);
-
-        logo.onload = () => {
-          const logoSize = 40;
-          const qrX = 40;
-          const qrY = 100;
-          const qrSize = img.width;
-          const logoX = qrX + qrSize / 2 - logoSize / 2;
-          const logoY = qrY + qrSize / 2 - logoSize / 2;
-
-          ctx.fillStyle = 'white';
-          ctx.fillRect(logoX - 2, logoY - 2, logoSize + 4, logoSize + 4);
-
-          ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
-          resolve(canvas.toDataURL('image/png'));
-        };
-        logo.onerror = () => resolve(canvas.toDataURL('image/png'));
-        logo.src = '/logo.svg';
-      };
-
-      img.src = `data:image/svg+xml;base64,${btoa(svgData)}`;
-    });
-  };
+  const getCanvasForTable = (tableNumber) =>
+    renderTableQrCard(document.getElementById(`qr-${tableNumber}`), { tableNumber, storeName });
 
   const downloadAllQRsAsPDF = async () => {
     setIsGeneratingPDF(true);
@@ -244,11 +204,12 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
       const pdf = new jsPDF('p', 'mm', 'a4');
       const pageWidth = pdf.internal.pageSize.getWidth();
 
+      // Four 80 × 100 mm cards per A4 page, with room to cut between them
       const qrWidth = 80;
-      const qrHeight = 100;
+      const qrHeight = qrWidth * (CARD_HEIGHT / CARD_WIDTH);
       const cols = 2;
       const margin = (pageWidth - qrWidth * cols) / (cols + 1);
-      const topMargin = 20;
+      const topMargin = 25;
 
       let x = margin;
       let y = topMargin;
@@ -259,7 +220,7 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
         const dataUrl = await getCanvasForTable(table.tableNumber);
 
         if (dataUrl) {
-          pdf.addImage(dataUrl, 'PNG', x, y, qrWidth, qrHeight);
+          pdf.addImage(dataUrl, 'PNG', x, y, qrWidth, qrHeight, undefined, 'FAST');
           qrsOnPage++;
 
           if (qrsOnPage % 2 === 0) {
@@ -394,6 +355,17 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
         </div>
       </div>
 
+      {/* QR codes pointing at "localhost" only open on this computer */}
+      {menuUrlIsLocalOnly() && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300">
+          <AlertCircleIcon size={16} className="mt-0.5 shrink-0" />
+          <span>
+            These QR codes point to <b>localhost</b>, so phones can't open them. Open this panel with your
+            computer's network address instead (e.g. <code>http://192.168.x.x:5176</code>) before printing.
+          </span>
+        </div>
+      )}
+
       {/* ── Error banner (dismissible) ── */}
       {error && (
         <div
@@ -515,16 +487,13 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug }) => {
                     <QRCodeSVG
                       id={`qr-${table.tableNumber}`}
                       value={getQRUrl(table.tableNumber)}
-                      size={140}
-                      level="L"
-                      includeMargin={false}
+                      size={QR_PREVIEW_SIZE}
+                      level="H"
+                      marginSize={0}
                       imageSettings={{
                         src: '/logo.png',
-                        x: undefined,
-                        y: undefined,
-                        height: 20,
-                        width: 20,
-                        opacity: 1,
+                        height: QR_LOGO_HEIGHT,
+                        width: QR_LOGO_WIDTH,
                         excavate: true,
                       }}
                     />

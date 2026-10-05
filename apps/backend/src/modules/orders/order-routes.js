@@ -24,6 +24,7 @@ const { getRefundOptions, createRefund } = require("../payments/refund-service")
 const { getOrderAudit } = require("../audit/audit-service");
 const { getInvoiceForOrder } = require("../invoices/invoice-service");
 const { subscribeToStore } = require("./sse-service");
+const { applyBillPromo, removeBillPromo } = require("./bill-promo-service");
 
 const router = express.Router({ mergeParams: true });
 
@@ -34,7 +35,7 @@ router.use(authenticate);
 router.get("/stream", asyncHandler(async (req, res) => {
   // Customers fall through to 403 inside verifyStoreAccess
   await verifyStoreAccess(req.user, req.params.storeId);
-  subscribeToStore(req.params.storeId, req, res);
+  subscribeToStore(req.params.storeId, req, res, { userId: req.user.id, tokenVersion: req.user.tokenVersion || 0 });
 }));
 
 // === STAFF ROUTES ===
@@ -143,6 +144,18 @@ router.get("/:id/refunds", asyncHandler(async (req, res) => {
 router.post("/:id/refunds", asyncHandler(async (req, res) => {
   const result = await createRefund(req.user, req.params.storeId, req.params.id, req.body || {});
   res.status(201).json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/promo  { orderId | tableSessionId, code } — add a code at checkout
+router.post("/promo", asyncHandler(async (req, res) => {
+  const result = await applyBillPromo(req.user, req.params.storeId, req.body || {});
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/promo/remove  { orderId | tableSessionId }
+router.post("/promo/remove", asyncHandler(async (req, res) => {
+  const result = await removeBillPromo(req.user, req.params.storeId, req.body || {});
+  res.json(createApiResponse(result));
 }));
 
 // PUT /api/stores/:storeId/orders/:id/items (Manager Update Order Items)

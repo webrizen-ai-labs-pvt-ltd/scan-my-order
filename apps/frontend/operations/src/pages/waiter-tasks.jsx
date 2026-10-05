@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import api from '../lib/api';
+import { subscribeStore } from '../lib/live-stream';
 import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
 import {
@@ -229,81 +230,73 @@ export const WaiterTasks = () => {
       .then((res) => { if (res.data.success) setStoreData(res.data.data); })
       .catch((err) => console.error('Failed to fetch store data', err));
 
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-    let eventSource;
+    // Shared live connection (reconnects by itself, see lib/live-stream)
+    const unsubscribe = subscribeStore(selectedStoreId, (data) => {
+      if (data.type === 'STREAM_RECONNECTED') {
+        // Catch up on anything missed while the connection was down
+        fetchOrders(selectedStoreId, true);
+        fetchWaiterCalls(selectedStoreId);
+        fetchWaiterAvailability(selectedStoreId);
+        return;
+      }
 
-    try {
-      eventSource = new EventSource(`${baseUrl}/stores/${selectedStoreId}/orders/stream?token=${token}`);
-      eventSource.onopen = () => setConnectionStatus('connected');
-      eventSource.onerror = () => setConnectionStatus('disconnected');
+      if (['ORDER_PENDING_VERIFICATION', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_PROCESSING', 'ORDER_CANCELLED', 'ORDER_SETTLED', 'ORDER_ITEMS_REJECTED', 'ORDER_ITEM_READY', 'ORDER_RECALLED', 'ORDER_DELAYED'].includes(data.type)) {
+        fetchOrders(selectedStoreId, true);
 
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
+        if (data.type === 'ORDER_READY') {
+          playChime();
+          showToast(`Table ${data.data?.table?.tableNumber || ''}: order ready`, 'success');
+        } else if (data.type === 'ORDER_ITEM_READY' && data.data?.ready) {
+          playChime();
+          showToast(`Table ${data.data.tableNumber ?? '–'}: ${data.data.label} ready to serve`, 'success');
+        } else if (data.type === 'ORDER_RECALLED') {
+          playChime();
+          showToast(`Table ${data.data?.tableNumber ?? '–'}: kitchen recalled the order — don't serve yet`, 'error');
+        } else if (data.type === 'ORDER_DELAYED') {
+          showToast(`Table ${data.data?.tableNumber ?? '–'}: kitchen running ${data.data?.minutes} min late (guest notified)`, 'info');
+        } else if (data.type === 'ORDER_ITEMS_REJECTED') {
+          // Kitchen can't make something: the waiter must tell the guest
+          const e = data.data || {};
+          playChime();
+          showToast(`Table ${e.tableNumber ?? '–'}: kitchen can't make ${(e.items || []).join(', ')} (${e.reason}). Please inform the guest.`, 'error');
+        } else if (data.type === 'ORDER_PENDING_VERIFICATION') {
+          playChime();
+          showToast(`Table ${data.data?.table?.tableNumber || ''}: new order`, 'info');
+        }
 
-          if (['ORDER_PENDING_VERIFICATION', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_PROCESSING', 'ORDER_CANCELLED', 'ORDER_SETTLED', 'ORDER_ITEMS_REJECTED', 'ORDER_ITEM_READY', 'ORDER_RECALLED', 'ORDER_DELAYED'].includes(data.type)) {
-            fetchOrders(selectedStoreId, true);
+      }
 
-            if (data.type === 'ORDER_READY') {
-              playChime();
-              showToast(`Table ${data.data?.table?.tableNumber || ''}: order ready`, 'success');
-            } else if (data.type === 'ORDER_ITEM_READY' && data.data?.ready) {
-              playChime();
-              showToast(`Table ${data.data.tableNumber ?? '–'}: ${data.data.label} ready to serve`, 'success');
-            } else if (data.type === 'ORDER_RECALLED') {
-              playChime();
-              showToast(`Table ${data.data?.tableNumber ?? '–'}: kitchen recalled the order — don't serve yet`, 'error');
-            } else if (data.type === 'ORDER_DELAYED') {
-              showToast(`Table ${data.data?.tableNumber ?? '–'}: kitchen running ${data.data?.minutes} min late (guest notified)`, 'info');
-            } else if (data.type === 'ORDER_ITEMS_REJECTED') {
-              // Kitchen can't make something: the waiter must tell the guest
-              const e = data.data || {};
-              playChime();
-              showToast(`Table ${e.tableNumber ?? '–'}: kitchen can't make ${(e.items || []).join(', ')} (${e.reason}). Please inform the guest.`, 'error');
-            } else if (data.type === 'ORDER_PENDING_VERIFICATION') {
-              playChime();
-              showToast(`Table ${data.data?.table?.tableNumber || ''}: new order`, 'info');
-            }
+      if ([
+        'WAITER_CALL_CREATED',
+        'WAITER_CALL_DISPATCHED',
+        'WAITER_CALL_ESCALATED',
+        'WAITER_CALL_ESCALATED_MANAGER',
+        'WAITER_CALL_ACKNOWLEDGED',
+        'WAITER_CALL_RESOLVED',
+        'WAITER_CALL_CANCELLED',
+      ].includes(data.type)) {
+        fetchWaiterCalls(selectedStoreId);
 
+        if (['WAITER_CALL_CREATED', 'WAITER_CALL_DISPATCHED', 'WAITER_CALL_ESCALATED'].includes(data.type)) {
+          const assignedId = data.data?.assignedWaiterId || data.data?.dispatch?.assignedWaiterId;
+          if (assignedId === user?.id) {
+            playChime();
+            showToast(`Table ${data.data?.tableNumber || ''} needs you`, 'info');
           }
-
-          if ([
-            'WAITER_CALL_CREATED',
-            'WAITER_CALL_DISPATCHED',
-            'WAITER_CALL_ESCALATED',
-            'WAITER_CALL_ESCALATED_MANAGER',
-            'WAITER_CALL_ACKNOWLEDGED',
-            'WAITER_CALL_RESOLVED',
-            'WAITER_CALL_CANCELLED',
-          ].includes(data.type)) {
-            fetchWaiterCalls(selectedStoreId);
-
-            if (['WAITER_CALL_CREATED', 'WAITER_CALL_DISPATCHED', 'WAITER_CALL_ESCALATED'].includes(data.type)) {
-              const assignedId = data.data?.assignedWaiterId || data.data?.dispatch?.assignedWaiterId;
-              if (assignedId === user?.id) {
-                playChime();
-                showToast(`Table ${data.data?.tableNumber || ''} needs you`, 'info');
-              }
-            } else if (data.type === 'WAITER_CALL_ESCALATED_MANAGER') {
-              if (['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role)) {
-                playChime();
-                showToast(data.data?.message || 'Urgent call escalated to manager', 'error');
-              }
-            }
+        } else if (data.type === 'WAITER_CALL_ESCALATED_MANAGER') {
+          if (['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role)) {
+            playChime();
+            showToast(data.data?.message || 'Urgent call escalated to manager', 'error');
           }
+        }
+      }
 
-          if (data.type === 'WAITER_AVAILABILITY_CHANGED' && data.data?.waiterId === user?.id) {
-            setWaiterAvailability(data.data.status);
-          }
-        } catch (e) { }
-      };
-    } catch (err) {
-      setConnectionStatus('disconnected');
-    }
+      if (data.type === 'WAITER_AVAILABILITY_CHANGED' && data.data?.waiterId === user?.id) {
+        setWaiterAvailability(data.data.status);
+      }
+    }, (status) => setConnectionStatus(status === 'live' ? 'connected' : status === 'connecting' ? 'connecting' : 'disconnected'));
 
-    return () => {
-      if (eventSource) eventSource.close();
-    };
+    return unsubscribe;
   }, [selectedStoreId, token, fetchOrders, fetchWaiterCalls, fetchWaiterAvailability, user]);
 
   const updateStatus = async (orderId, status) => {

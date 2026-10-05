@@ -7,6 +7,7 @@ const { logOrderEvent, describeItems, sourceFor } = require("../audit/audit-serv
 const { broadcastToStore, broadcastToCustomer } = require("./sse-service");
 const { sendNotification } = require("../notifications/notification-service");
 const { evaluateMenuItemAvailability } = require("../inventory/inventory-service");
+const { syncTablePromo } = require("./bill-promo-service");
 const { 
   openItemRecordCache, 
   invalidateMaterialsCache, 
@@ -475,6 +476,9 @@ async function createOrder(storeId, actor, origin, input) {
   }
 
   const tableSession = tableId ? await resolveTableSession(prisma, storeId, tableId, origin, input) : null;
+  if (promo && tableSession?.promoCodeId) {
+    throw createHttpError(400, "This table's bill already has a promo code, and it covers new orders too. Please order without a code.");
+  }
 
   const order = await prisma.order.create({
     data: {
@@ -557,7 +561,7 @@ async function createOrder(storeId, actor, origin, input) {
       target: { roles: ['WAITER', 'STORE_MANAGER'], storeId }
     }).catch(() => {});
   } else if (status === 'PROCESSING') {
-    await deductInventory(prisma, order);
+    await prisma.$transaction((tx) => deductInventory(tx, order), { timeout: 20000 });
     broadcastToStore(storeId, 'ORDER_PROCESSING', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PROCESSING', order);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_PROCESSING', order);
@@ -617,7 +621,10 @@ async function createOrder(storeId, actor, origin, input) {
     }
   }
 
-  const finalOrder = payNowSummary ? await getOrderById(storeId, order.id) : serializeOrder(order);
+  // Joining a table whose bill has a promo: re-split the discount to include this order
+  if (tableSession?.promoCodeId) await syncTablePromo(tableSession.id);
+
+  const finalOrder = payNowSummary || tableSession?.promoCodeId ? await getOrderById(storeId, order.id) : serializeOrder(order);
 
   return {
     order: finalOrder,
@@ -631,7 +638,14 @@ async function createOrder(storeId, actor, origin, input) {
 
 
 // 3. LIFECYCLE MANAGEMENT
+/**
+ * Takes the order's ingredients from stock, once: the order's stockDeductedAt marker is claimed
+ * first, so a repeated call (double tap, retried request) does nothing. Run it in a transaction.
+ */
 async function deductInventory(prisma, order) {
+  const claim = await prisma.order.updateMany({ where: { id: order.id, stockDeductedAt: null }, data: { stockDeductedAt: new Date() } });
+  if (claim.count === 0) return;
+
   const items = await prisma.orderItem.findMany({
     where: { orderId: order.id, status: 'ACTIVE' },
     include: {
@@ -726,7 +740,17 @@ async function deductInventory(prisma, order) {
 
 // Helper: Revert inventory deductions when items are updated, rejected or cancelled.
 // Rejected items were already restocked when they were rejected, so they're skipped.
+// Only returns stock that was taken (see stockDeductedAt): a whole-order revert releases the marker,
+// so it runs once; returning a few items needs the marker to be set.
 async function revertInventoryDeduction(prisma, orderId, { itemIds = null } = {}) {
+  if (itemIds) {
+    const marker = await prisma.order.findUnique({ where: { id: orderId }, select: { stockDeductedAt: true } });
+    if (!marker?.stockDeductedAt) return;
+  } else {
+    const claim = await prisma.order.updateMany({ where: { id: orderId, stockDeductedAt: { not: null } }, data: { stockDeductedAt: null } });
+    if (claim.count === 0) return;
+  }
+
   const [order, items] = await Promise.all([
     prisma.order.findUnique({ where: { id: orderId }, select: { storeId: true } }),
     prisma.orderItem.findMany({
@@ -916,10 +940,10 @@ async function updateOrderItems(actor, storeId, orderId, input) {
   const { totals, promo, taxRules, walletRefund } = recalculateOrderTotals(order, store, newSubTotal);
   const { discountAmount, taxAmount, totalAmount: newTotalAmount } = totals;
 
-  // Inventory reconciliation:
-  const wasDeducted = ['PROCESSING', 'READY', 'SERVED'].includes(order.status);
+  // Inventory reconciliation: return the old items' stock, then take the new items' (below)
+  const wasDeducted = Boolean(order.stockDeductedAt);
   if (wasDeducted) {
-    await revertInventoryDeduction(prisma, order.id);
+    await prisma.$transaction((tx) => revertInventoryDeduction(tx, order.id), { timeout: 20000 });
   }
 
   // Replace order items atomically in transaction
@@ -961,7 +985,7 @@ async function updateOrderItems(actor, storeId, orderId, input) {
 
   // Re-deduct inventory with updated items if order was already in processing
   if (wasDeducted) {
-    await deductInventory(prisma, { id: order.id });
+    await prisma.$transaction((tx) => deductInventory(tx, { id: order.id }), { timeout: 20000 });
   }
 
   if (walletRefund > 0 && order.customerId) {
@@ -996,6 +1020,8 @@ async function updateOrderItems(actor, storeId, orderId, input) {
 
   // Broadcast real-time SSE updates to POS, KDS, Waiter, and Customer
   broadcastToStore(storeId, 'ORDER_UPDATED', updatedOrder);
+  // A table-wide promo is re-split over the new amounts
+  await syncTablePromo(order.tableSessionId);
   if (order.customerId) {
     broadcastToCustomer(order.customerId, 'ORDER_UPDATED', updatedOrder);
   }
@@ -1082,20 +1108,14 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
     }
   }
 
-  // Inventory reconciliation on status change:
-  const wasDeducted = ['PROCESSING', 'READY', 'SERVED', 'SETTLED'].includes(order.status);
-  const willBeDeducted = ['PROCESSING', 'READY', 'SERVED', 'SETTLED'].includes(newStatus);
-
-  if (newStatus === 'CANCELLED' && wasDeducted) {
-    await revertInventoryDeduction(prisma, order.id);
-  } else if (willBeDeducted && !wasDeducted) {
-    await deductInventory(prisma, order);
-  }
-
   // A paid order is finished once it has been served
   if (newStatus === 'SERVED' && order.paidAt) {
     newStatus = 'SETTLED';
   }
+
+  // Stock is taken when an order reaches the kitchen and returned if it's cancelled from there
+  const STOCK_TAKEN = ['PROCESSING', 'READY', 'SERVED', 'SETTLED'];
+  const willBeDeducted = STOCK_TAKEN.includes(newStatus);
 
   const updateData = { status: newStatus };
   if (newStatus === 'READY') updateData.readyAt = new Date();
@@ -1105,13 +1125,36 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
     updateData.cancelReason = cancelReason || 'Cancelled by system';
     updateData.cancelledAt = new Date();
     updateData.cancelledById = !isSystem && actor ? actor.id : null;
+  }
+
+  // Only change the order if nobody else changed it since it was read, and move stock in the same
+  // transaction: a double tap can't deduct twice, and "Ready" can't overwrite a cancel.
+  const changed = await prisma.$transaction(async (tx) => {
+    const claim = await tx.order.updateMany({ where: { id: orderId, status: order.status }, data: updateData });
+    if (claim.count === 0) return false;
+    // Both only act if the stock marker allows it (see deductInventory)
+    if (newStatus === 'CANCELLED') {
+      await revertInventoryDeduction(tx, order.id);
+    } else if (willBeDeducted) {
+      await deductInventory(tx, order);
+    }
+    return true;
+  }, { timeout: 20000 });
+
+  if (!changed) {
+    const current = await prisma.order.findUnique({ where: { id: orderId }, select: { status: true } });
+    // Someone already made the same change (e.g. two waiters accepting at once): nothing to do
+    if (current?.status === newStatus) return getOrderById(storeId, orderId);
+    throw createHttpError(409, `This order was just changed by someone else (it's now ${String(current?.status || 'gone').replace('_', ' ').toLowerCase()}). Refresh and try again.`);
+  }
+
+  if (newStatus === 'CANCELLED') {
     const { cancelPendingPaymentsFor } = require("../payments/payment-service");
     await cancelPendingPaymentsFor(storeId, { orderId }).catch(err => console.warn("[Cancel] pending payments:", err.message));
   }
 
-  const updatedOrder = await prisma.order.update({
+  const updatedOrder = await prisma.order.findUnique({
     where: { id: orderId },
-    data: updateData,
     include: {
       table: true,
       items: {
@@ -1137,6 +1180,8 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
     amountAfter: updatedOrder.totalAmount,
     data: { from: order.status, to: newStatus }
   });
+  // A cancelled order leaves the table bill: re-split (or drop) a table-wide promo
+  if (newStatus === 'CANCELLED') await syncTablePromo(order.tableSessionId);
 
   // Award cashback if transitioning to SETTLED, or refund wallet credits if cancelled
   if (newStatus === 'SETTLED') {
@@ -1342,7 +1387,7 @@ async function rejectOrderItems(actor, storeId, orderId, input = {}) {
       prisma.order.update({ where: { id: orderId }, data: { cancelledById: actor.id, refundDue } })
     ]);
   } else {
-    await revertInventoryDeduction(prisma, orderId, { itemIds: targetIds });
+    await prisma.$transaction((tx) => revertInventoryDeduction(tx, orderId, { itemIds: targetIds }), { timeout: 20000 });
 
     const store = await prisma.store.findUnique({ where: { id: storeId } });
     const newSubTotal = remaining.reduce((s, i) => s + i.priceAtOrder * i.quantity, 0);
@@ -1427,6 +1472,7 @@ async function rejectOrderItems(actor, storeId, orderId, input = {}) {
 
   broadcastToStore(storeId, 'ORDER_ITEMS_REJECTED', event);
   broadcastToStore(storeId, 'ORDER_UPDATED', updatedOrder);
+  if (!wholeOrder) await syncTablePromo(order.tableSessionId);
   sendNotification({
     storeId,
     type: 'KITCHEN_REJECTED',
@@ -1718,7 +1764,12 @@ async function getOrderHistory(actor, storeId, filters = {}) {
   if (status) {
     where.status = status;
   }
-  
+
+  // Archived (old cancelled) orders only show when looking for cancelled orders or a specific order
+  if (status !== 'CANCELLED' && !search) {
+    where.archivedAt = null;
+  }
+
   if (paymentModel) {
     where.paymentModel = paymentModel;
   }
@@ -1777,6 +1828,8 @@ async function getOrderById(storeId, orderId) {
     where: { id: orderId },
     include: {
       table: true,
+      promoCode: { select: { code: true } },
+      tableSession: { select: { promoCodeId: true } },
       cancelledBy: { select: { name: true } },
       refunds: {
         where: { status: { in: ['PENDING', 'PROCESSED'] } },
@@ -1823,6 +1876,7 @@ async function getTableSessionBill(storeId, tableSessionId, { includePin = false
     where: { id: tableSessionId },
     include: {
       table: true,
+      promoCode: { select: { code: true } },
       store: {
         include: {
           tenant: true
@@ -1830,6 +1884,7 @@ async function getTableSessionBill(storeId, tableSessionId, { includePin = false
       },
       orders: {
         include: {
+          promoCode: { select: { code: true } },
           items: {
             include: {
               menuItem: true,
@@ -1918,6 +1973,10 @@ async function getTableSessionBill(storeId, tableSessionId, { includePin = false
       createdAt: o.createdAt
     })),
     aggregatedItems: Array.from(itemsMap.values()),
+    // A code on the whole table bill, or codes guests used on their own orders
+    tablePromo: session.promoCode ? { code: session.promoCode.code } : null,
+    orderPromoCodes: [...new Set(validOrders.filter(o => o.promoCode).map(o => o.promoCode.code))],
+    promoDiscount: validOrders.reduce((sum, o) => sum + (o.discountAmount || 0), 0),
     subTotal,
     discountAmount: totalDiscount,
     taxAmount: totalTax,

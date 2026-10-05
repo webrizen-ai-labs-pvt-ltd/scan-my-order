@@ -77,7 +77,7 @@ export const PosLayout = () => {
 
   const { toasts, push: toast, dismiss } = usePosToasts();
   const data = usePosStoreData(selectedStoreId);
-  const subscribe = useStoreStream(selectedStoreId, token);
+  const { subscribe, status: streamStatus } = useStoreStream(selectedStoreId, token);
 
   useEffect(() => { if (selectedStoreId) bindStore(selectedStoreId); }, [selectedStoreId, bindStore]);
 
@@ -107,7 +107,7 @@ export const PosLayout = () => {
       .catch(() => {});
     fetchStats();
     const interval = setInterval(fetchStats, 30000);
-    const unsubscribe = subscribe((msg) => { if (msg.type?.startsWith('ORDER_')) fetchStats(); });
+    const unsubscribe = subscribe((msg) => { if (msg.type?.startsWith('ORDER_') || msg.type === 'STREAM_RECONNECTED') fetchStats(); });
     return () => { cancelled = true; clearInterval(interval); unsubscribe(); };
   }, [selectedStoreId, subscribe]);
 
@@ -132,7 +132,8 @@ export const PosLayout = () => {
   /* Keep table occupancy live for every child page */
   const { refreshTables } = data;
   useEffect(() => subscribe((msg) => {
-    if (TABLE_EVENTS.has(msg.type)) refreshTables();
+    // After a dropped connection, re-read tables in case updates were missed
+    if (TABLE_EVENTS.has(msg.type) || msg.type === 'STREAM_RECONNECTED') refreshTables();
   }), [subscribe, refreshTables]);
 
   const formattedDate = useMemo(
@@ -237,6 +238,11 @@ export const PosLayout = () => {
           )}
         </div>
       </header>
+      {(streamStatus === 'reconnecting' || streamStatus === 'revoked') && (
+        <div role="status" className="shrink-0 px-4 py-1.5 bg-amber-100 dark:bg-amber-950/60 border-b border-amber-300 dark:border-amber-900 text-xs font-semibold text-amber-900 dark:text-amber-200 text-center">
+          {streamStatus === 'revoked' ? 'Live updates stopped: please sign in again.' : 'Connection lost — reconnecting. Orders and tables will refresh when it’s back.'}
+        </div>
+      )}
 
       <main className="flex-1 min-h-0 overflow-hidden relative">{renderContent()}</main>
       <PosToasts toasts={toasts} dismiss={dismiss} />
