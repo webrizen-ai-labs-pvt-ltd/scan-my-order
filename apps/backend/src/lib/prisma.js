@@ -21,8 +21,11 @@ function getPrismaClient() {
     if (url && !url.includes("connection_limit")) {
       url += (url.includes("?") ? "&" : "?") + `connection_limit=${env.database.connectionLimit}`;
     }
-    if (url && url.includes("pgbouncer=true")) {
-      console.warn("[DB] DATABASE_URL uses the transaction pooler (pgbouncer=true): every query costs extra round trips. Use the session pooler (port 5432) for a long-running server.");
+    // Supabase's session pooler (port 5432) gives the whole project only ~15 connections, shared by
+    // every server and script using this database; the transaction pooler (6543, pgbouncer=true)
+    // shares connections and doesn't run out. Migrations use DIRECT_URL instead.
+    if (url && /pooler\.supabase\.com:5432/.test(url)) {
+      console.warn("[DB] DATABASE_URL uses Supabase's session pooler (port 5432), limited to ~15 connections for the whole project. Use the transaction pooler (port 6543 with pgbouncer=true) for servers.");
     }
 
     prisma = new PrismaClient({

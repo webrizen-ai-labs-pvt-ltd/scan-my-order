@@ -3,6 +3,47 @@ import api from '../lib/api';
 import { Card, CardContent, Button, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
 import { PlusSignIcon, Edit02Icon, Delete02Icon, AlertCircleIcon, Tick02Icon, Cancel01Icon, Loading03Icon } from 'hugeicons-react';
 
+const isTracked = (item) => (item.recipe?.length || 0) > 0;
+
+// Which dishes to list: stock tracking is opt-in per dish (a dish with no recipe is never sold out by Inventory)
+const ITEM_FILTERS = [
+  { key: 'all', label: 'All dishes', test: () => true },
+  { key: 'untracked', label: 'Not tracked', test: (i) => !isTracked(i) },
+  { key: 'tracked', label: 'Stock tracked', test: isTracked },
+  { key: 'soldout', label: 'Sold out', test: (i) => i.isManuallyDisabled || i.isSystemDisabled },
+];
+
+/** Whether stock is tracked for a dish (it has a recipe) */
+const TrackingTag = ({ item }) => (isTracked(item) ? (
+  <span className="text-xs text-sky-700 bg-sky-50 border border-sky-200 dark:text-sky-300 dark:bg-sky-500/10 dark:border-sky-500/30 px-2 py-0.5 rounded-full" title="Ordering this dish takes its ingredients from Inventory; it sells out by itself when they run short.">
+    Stock tracked · {item.recipe.length} ingredient{item.recipe.length === 1 ? '' : 's'}
+  </span>
+) : (
+  <span className="text-xs text-zinc-500 bg-zinc-50 border border-zinc-200 dark:bg-zinc-900 dark:border-zinc-700 px-2 py-0.5 rounded-full" title="No recipe: Inventory isn't used, so it stays available until someone marks it sold out.">
+    Not tracked
+  </span>
+));
+
+/** "Available" / "Sold out" pill; tap to switch */
+const AvailabilityToggle = ({ item, busy, onToggle }) => {
+  const soldOut = item.isManuallyDisabled;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      disabled={busy}
+      title={soldOut ? 'Sold out: tap to put it back on sale' : 'On sale: tap to mark it sold out'}
+      aria-pressed={!soldOut}
+      className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full border transition-colors disabled:opacity-60 ${soldOut
+        ? 'bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-500/10 dark:text-red-300 dark:border-red-500/30'
+        : 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:text-emerald-300 dark:border-emerald-500/30'}`}
+    >
+      {busy ? <Loading03Icon size={11} className="animate-spin" /> : <span className={`size-1.5 rounded-full ${soldOut ? 'bg-red-500' : 'bg-emerald-500'}`} />}
+      {soldOut ? 'Sold out' : 'Available'}
+    </button>
+  );
+};
+
 export const StoreMenuManager = ({ storeId }) => {
   const [categories, setCategories] = useState([]);
   const [materials, setMaterials] = useState([]);
@@ -10,6 +51,7 @@ export const StoreMenuManager = ({ storeId }) => {
   const [error, setError] = useState('');
 
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [itemFilter, setItemFilter] = useState('all');
 
   // Forms state
   const [isAddingCategory, setIsAddingCategory] = useState(false);
@@ -146,6 +188,21 @@ export const StoreMenuManager = ({ storeId }) => {
     }
   };
 
+  // Sold out ↔ available (the kitchen's "Mark as sold out" sets the same switch)
+  const [togglingId, setTogglingId] = useState(null);
+  const handleToggleAvailability = async (item) => {
+    setTogglingId(item.id);
+    try {
+      await api.patch(`/stores/${storeId}/menu/items/${item.id}/availability`, { available: item.isManuallyDisabled });
+      setError('');
+      await fetchMenu();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Could not change availability');
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
   // Changing how much of an ingredient the dish uses (each ingredient is listed once)
   const [qtyEdit, setQtyEdit] = useState(null); // { id, value }
   const [isSavingQty, setIsSavingQty] = useState(false);
@@ -184,12 +241,51 @@ export const StoreMenuManager = ({ storeId }) => {
     }
   };
 
+  // Stock-tracking overview across the whole menu
+  const allItems = categories.flatMap(c => c.items || []);
+  const trackedCount = allItems.filter(isTracked).length;
+  const activeFilter = ITEM_FILTERS.find(f => f.key === itemFilter) || ITEM_FILTERS[0];
+  const filterCount = (filter) => allItems.filter(filter.test).length;
+  const shownItems = (selectedCategory?.items || []).filter(activeFilter.test);
+
   // Each ingredient is listed once per dish: only offer the ones not in its recipe yet
   const recipeMaterialIds = new Set((editingItem?.recipe || []).map(r => r.rawMaterialId));
   const availableMaterials = materials.filter(m => !recipeMaterialIds.has(m.id));
 
   return (
-    <div className="flex flex-col md:flex-row h-full min-h-[600px]">
+    <div className="flex flex-col h-full">
+      {/* Stock tracking overview */}
+      {allItems.length > 0 && (
+        <div className="px-4 py-3 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-zinc-900 dark:text-zinc-100">
+              <span className="font-semibold">{trackedCount} of {allItems.length}</span> dishes track stock
+              <span className="text-zinc-500"> · {materials.length} ingredient{materials.length === 1 ? '' : 's'} in Inventory</span>
+            </p>
+            <div className="mt-1.5 h-1.5 w-full max-w-xs rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden" aria-hidden="true">
+              <div className="h-full rounded-full bg-sky-500" style={{ width: `${Math.round((trackedCount / allItems.length) * 100)}%` }} />
+            </div>
+            <p className="mt-1 text-xs text-zinc-500">Dishes without a recipe stay available until someone marks them sold out.</p>
+          </div>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Show dishes">
+            {ITEM_FILTERS.map(f => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setItemFilter(f.key)}
+                aria-pressed={itemFilter === f.key}
+                className={`text-xs font-medium px-2.5 py-1 rounded-full border transition-colors ${itemFilter === f.key
+                  ? 'bg-zinc-900 text-white border-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 dark:border-zinc-100'
+                  : 'bg-white text-zinc-600 border-zinc-200 hover:border-zinc-400 dark:bg-zinc-950 dark:text-zinc-300 dark:border-zinc-700'}`}
+              >
+                {f.label} <span className="tabular-nums opacity-70">{filterCount(f)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+    <div className="flex flex-col md:flex-row flex-1 min-h-[600px]">
       {/* Left Pane: Categories */}
       <div className="w-full md:w-1/3 border-r border-zinc-200 dark:border-zinc-800 flex flex-col bg-zinc-50 dark:bg-zinc-950/50">
         <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center bg-white dark:bg-zinc-950">
@@ -233,6 +329,9 @@ export const StoreMenuManager = ({ storeId }) => {
               >
                 <span className={`font-medium ${selectedCategory?.id === cat.id ? 'text-yellow-700 dark:text-yellow-300' : 'text-zinc-700 dark:text-zinc-300'}`}>
                   {cat.name}
+                  {itemFilter !== 'all' && (
+                    <span className="ml-2 text-xs font-normal text-zinc-500 tabular-nums">{(cat.items || []).filter(activeFilter.test).length}</span>
+                  )}
                 </span>
                 <button
                   onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat.id); }}
@@ -253,7 +352,9 @@ export const StoreMenuManager = ({ storeId }) => {
             <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 flex justify-between items-center">
               <div>
                 <h3 className="font-semibold text-lg text-zinc-900 dark:text-zinc-100">{selectedCategory.name} Items</h3>
-                <p className="text-sm text-zinc-500">{selectedCategory.items?.length || 0} items</p>
+                <p className="text-sm text-zinc-500">
+                  {itemFilter === 'all' ? `${selectedCategory.items?.length || 0} items` : `${shownItems.length} of ${selectedCategory.items?.length || 0} items · ${activeFilter.label.toLowerCase()}`}
+                </p>
               </div>
               <Button onClick={() => {
                 setEditingItem({});
@@ -312,6 +413,18 @@ export const StoreMenuManager = ({ storeId }) => {
                         <Label>Description</Label>
                         <Input value={itemForm.description || ''} onChange={e => setItemForm(p => ({ ...p, description: e.target.value }))} />
                       </div>
+                      <label className="col-span-2 flex items-center justify-between gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2.5 cursor-pointer">
+                        <span>
+                          <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">Available to order</span>
+                          <span className="block text-xs text-zinc-500">Turn off to show it as sold out on the menu and POS.</span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={!itemForm.isManuallyDisabled}
+                          onChange={e => setItemForm(p => ({ ...p, isManuallyDisabled: !e.target.checked }))}
+                          className="size-5 accent-emerald-600"
+                        />
+                      </label>
                       <div className="space-y-1.5 col-span-2">
                         <Label>Image URL (Optional)</Label>
                         <Input
@@ -471,7 +584,7 @@ export const StoreMenuManager = ({ storeId }) => {
                 </Card>
               ) : (
                 <div className="grid gap-4">
-                  {selectedCategory.items?.map(item => (
+                  {shownItems.map(item => (
                     <div key={item.id} className="flex justify-between items-center p-4 border border-zinc-200 dark:border-zinc-800 rounded-lg hover:border-zinc-300 transition-colors">
                       <div className="flex items-center gap-4">
                         {item.image ? (
@@ -485,9 +598,17 @@ export const StoreMenuManager = ({ storeId }) => {
                                 item.dietary === 'EGG' ? 'border-yellow-600 bg-yellow-100' : 'border-red-600 bg-red-100'
                               }`} title={item.dietary} />
                             <h4 className="font-semibold text-zinc-900 dark:text-zinc-100">{item.name}</h4>
-                            {item.isManuallyDisabled && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">Disabled</span>}
                           </div>
-                          <p className="text-sm text-zinc-500 mt-1">₹{item.price}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <p className="text-sm text-zinc-500">₹{item.price}</p>
+                            <AvailabilityToggle item={item} busy={togglingId === item.id} onToggle={() => handleToggleAvailability(item)} />
+                            <TrackingTag item={item} />
+                            {item.isSystemDisabled && (
+                              <span className="text-xs bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30 px-2 py-0.5 rounded-full" title="An ingredient in its recipe ran out in Inventory. It comes back automatically when restocked.">
+                                Out of stock in Inventory
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
                       <div className="flex gap-2">
@@ -503,9 +624,13 @@ export const StoreMenuManager = ({ storeId }) => {
                       </div>
                     </div>
                   ))}
-                  {(!selectedCategory.items || selectedCategory.items.length === 0) && (
+                  {(!selectedCategory.items || selectedCategory.items.length === 0) ? (
                     <div className="text-center py-12 text-zinc-500">
                       No items in this category yet.
+                    </div>
+                  ) : shownItems.length === 0 && (
+                    <div className="text-center py-12 text-zinc-500">
+                      No {activeFilter.label.toLowerCase()} dishes in this category.
                     </div>
                   )}
                 </div>
@@ -518,6 +643,7 @@ export const StoreMenuManager = ({ storeId }) => {
           </div>
         )}
       </div>
+    </div>
     </div>
   );
 };

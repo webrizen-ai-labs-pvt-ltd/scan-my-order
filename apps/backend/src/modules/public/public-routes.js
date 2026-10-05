@@ -114,15 +114,18 @@ router.get("/stores/:storeId/menu", asyncHandler(async (req, res) => {
 
   const prisma = getPrismaClient();
 
-  // Retrieve categories and items where BOTH isManuallyDisabled and isSystemDisabled are false
+  // Retrieve categories and items where BOTH isManuallyDisabled and isSystemDisabled are false.
+  // The POS-only "open" dish (custom dishes) and its category never appear to guests.
+  const { SYSTEM_OPEN_ITEM_NAME, SYSTEM_OPEN_CATEGORY_NAME } = require("../menu/system-items");
   const categories = await prisma.menuCategory.findMany({
-    where: { storeId },
+    where: { storeId, name: { not: SYSTEM_OPEN_CATEGORY_NAME } },
     orderBy: { sortOrder: 'asc' },
     include: {
       items: {
         where: {
           isManuallyDisabled: false,
-          isSystemDisabled: false
+          isSystemDisabled: false,
+          name: { not: SYSTEM_OPEN_ITEM_NAME }
         },
         include: {
           modifierGroups: {

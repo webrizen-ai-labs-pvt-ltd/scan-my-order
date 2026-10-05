@@ -43,7 +43,11 @@ const DIETARY_DOT = {
 /**
  * Left side of the POS terminal: search, categories and item grid.
  */
-export const MenuCatalog = ({ menu, lines, onAdd, onDecrement, onOpenCustomDish, toolbar }) => {
+/**
+ * @param {(item: object) => Promise<void>} [props.onRestock] puts a sold-out dish back on sale
+ */
+export const MenuCatalog = ({ menu, lines, onAdd, onDecrement, onOpenCustomDish, toolbar, onRestock }) => {
+  const [restockingId, setRestockingId] = useState(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState(() => menu[0]?.id || null);
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef(null);
@@ -219,8 +223,24 @@ export const MenuCatalog = ({ menu, lines, onAdd, onDecrement, onOpenCustomDish,
                     </div>
                   </div>
                   {isDisabled && (
-                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                    <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-2">
                       <span className="text-[10px] font-black tracking-widest text-white uppercase bg-rose-600 px-2.5 py-1 rounded-md">Sold Out</span>
+                      {item.isSystemDisabled ? (
+                        <span className="text-[10px] font-semibold text-white/80 px-2 text-center">Ingredient out in Inventory</span>
+                      ) : onRestock && (
+                        <button
+                          type="button"
+                          disabled={restockingId === item.id}
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setRestockingId(item.id);
+                            try { await onRestock(item); } finally { setRestockingId(null); }
+                          }}
+                          className="h-7 px-3 rounded-full bg-white/95 hover:bg-emerald-400 text-stone-900 text-[11px] font-bold disabled:opacity-60"
+                        >
+                          {restockingId === item.id ? 'Updating…' : 'Back in stock'}
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

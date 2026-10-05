@@ -1,7 +1,8 @@
 const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { userRoles } = require("../../constants/roles");
-const { storeTenantCache, publicMenuCache } = require("../../lib/cache");
+const { storeTenantCache, publicMenuCache, staffMenuCache } = require("../../lib/cache");
+const { SYSTEM_OPEN_CATEGORY_NAME } = require("./system-items");
 
 // Helper to check if actor has access to modify a store's data
 async function verifyStoreAccess(actor, storeId) {
@@ -53,6 +54,7 @@ async function verifyStoreAccess(actor, storeId) {
 function invalidateMenuCache(storeId) {
   if (storeId) {
     publicMenuCache.del(storeId);
+    staffMenuCache.del(storeId);
   }
 }
 
@@ -60,14 +62,15 @@ async function getFullMenu(actor, storeId) {
   // If actor is provided, do access check
   if (actor) await verifyStoreAccess(actor, storeId);
   
-  const cached = publicMenuCache.get(storeId);
+  const cached = staffMenuCache.get(storeId);
   if (cached) {
     return cached;
   }
 
   const prisma = getPrismaClient();
+  // The system category holding the POS "open" dish is internal (custom dishes have their own button)
   const categories = await prisma.menuCategory.findMany({
-    where: { storeId },
+    where: { storeId, name: { not: SYSTEM_OPEN_CATEGORY_NAME } },
     orderBy: { sortOrder: 'asc' },
     include: {
       items: {
@@ -85,7 +88,7 @@ async function getFullMenu(actor, storeId) {
     }
   });
   
-  publicMenuCache.set(storeId, categories);
+  staffMenuCache.set(storeId, categories);
   return categories;
 }
 
@@ -182,6 +185,28 @@ async function updateMenuItem(actor, storeId, id, input) {
     data: { categoryId, name, description, price, image, dietary, spiceLevel, isManuallyDisabled }
   });
   invalidateMenuCache(storeId);
+  return updated;
+}
+
+/**
+ * Puts a dish back on sale or marks it sold out (the kitchen's "Mark as sold out" sets the same flag).
+ * A dish whose ingredients ran out in Inventory stays unavailable until it's restocked.
+ */
+async function setMenuItemAvailability(actor, storeId, id, available) {
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+
+  const item = await prisma.menuItem.findUnique({ where: { id } });
+  if (!item || item.storeId !== storeId) throw createHttpError(404, "MenuItem not found");
+
+  const updated = await prisma.menuItem.update({
+    where: { id },
+    data: { isManuallyDisabled: !available },
+    select: { id: true, name: true, isManuallyDisabled: true, isSystemDisabled: true }
+  });
+  invalidateMenuCache(storeId);
+  const { broadcastToStore } = require("../orders/sse-service");
+  broadcastToStore(storeId, "MENU_ITEM_AVAILABILITY", updated);
   return updated;
 }
 
@@ -322,7 +347,7 @@ async function deleteModifierOption(actor, storeId, id) {
 module.exports = {
   getFullMenu,
   createCategory, updateCategory, deleteCategory,
-  createMenuItem, updateMenuItem, deleteMenuItem,
+  createMenuItem, updateMenuItem, deleteMenuItem, setMenuItemAvailability,
   createModifierGroup, updateModifierGroup, deleteModifierGroup,
   createModifierOption, updateModifierOption, deleteModifierOption,
   verifyStoreAccess

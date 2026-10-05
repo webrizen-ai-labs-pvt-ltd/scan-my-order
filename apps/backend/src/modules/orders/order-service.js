@@ -8,6 +8,7 @@ const { broadcastToStore, broadcastToCustomer } = require("./sse-service");
 const { sendNotification } = require("../notifications/notification-service");
 const { evaluateMenuItemAvailability } = require("../inventory/inventory-service");
 const { syncTablePromo } = require("./bill-promo-service");
+const { SYSTEM_OPEN_ITEM_NAME, SYSTEM_OPEN_CATEGORY_NAME } = require("../menu/system-items");
 const { 
   openItemRecordCache, 
   invalidateMaterialsCache, 
@@ -130,7 +131,7 @@ async function getOrCreateSystemOpenItem(prisma, storeId) {
   let openItem = await prisma.menuItem.findFirst({
     where: {
       storeId,
-      name: "Open Custom Dish"
+      name: SYSTEM_OPEN_ITEM_NAME
     }
   });
 
@@ -138,7 +139,7 @@ async function getOrCreateSystemOpenItem(prisma, storeId) {
     let category = await prisma.menuCategory.findFirst({
       where: {
         storeId,
-        name: "Custom & Open Orders"
+        name: SYSTEM_OPEN_CATEGORY_NAME
       }
     });
 
@@ -146,7 +147,7 @@ async function getOrCreateSystemOpenItem(prisma, storeId) {
       category = await prisma.menuCategory.create({
         data: {
           storeId,
-          name: "Custom & Open Orders",
+          name: SYSTEM_OPEN_CATEGORY_NAME,
           description: "System category for bespoke open items and dynamic custom creations",
           sortOrder: 999
         }
@@ -157,7 +158,7 @@ async function getOrCreateSystemOpenItem(prisma, storeId) {
       data: {
         storeId,
         categoryId: category.id,
-        name: "Open Custom Dish",
+        name: SYSTEM_OPEN_ITEM_NAME,
         description: "Bespoke dish created with custom ingredients on the fly",
         price: 0,
         dietary: "VEG",
@@ -261,6 +262,10 @@ async function buildCartItems(prisma, storeId, itemsInput, { allowCustom = false
     const soldOut = menuItem && (menuItem.isManuallyDisabled || menuItem.isSystemDisabled) && !alreadyOrderedIds.has(menuItem.id);
     if (!menuItem || menuItem.storeId !== storeId || (!isCustom && soldOut)) {
       throw createHttpError(400, `MenuItem ${targetMenuItemId} is not available`);
+    }
+    // The open dish is only for staff custom dishes (priced at the counter), never ordered as-is
+    if (menuItem.name === SYSTEM_OPEN_ITEM_NAME && (!allowCustom || !isCustom)) {
+      throw createHttpError(400, "This item can't be ordered from the menu");
     }
     
     let itemPrice = isCustom && item.customPrice !== undefined ? Number(item.customPrice) : menuItem.price;
@@ -1440,6 +1445,7 @@ async function rejectOrderItems(actor, storeId, orderId, input = {}) {
   if (soldOutIds.length > 0) {
     await prisma.menuItem.updateMany({ where: { id: { in: soldOutIds }, storeId }, data: { isManuallyDisabled: true } });
     invalidateMenuCache(storeId);
+    for (const id of soldOutIds) broadcastToStore(storeId, 'MENU_ITEM_AVAILABILITY', { id, isManuallyDisabled: true });
   }
 
   invalidateTablesCache(storeId);

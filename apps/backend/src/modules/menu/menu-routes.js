@@ -5,7 +5,7 @@ const { authenticate } = require("../../middleware/auth");
 const {
   getFullMenu,
   createCategory, updateCategory, deleteCategory,
-  createMenuItem, updateMenuItem, deleteMenuItem,
+  createMenuItem, updateMenuItem, deleteMenuItem, setMenuItemAvailability,
   createModifierGroup, updateModifierGroup, deleteModifierGroup,
   createModifierOption, updateModifierOption, deleteModifierOption
 } = require("./menu-service");
@@ -48,6 +48,12 @@ router.post("/items", asyncHandler(async (req, res) => {
 // PUT /api/stores/:storeId/menu/items/:id
 router.put("/items/:id", asyncHandler(async (req, res) => {
   const result = await updateMenuItem(req.user, req.params.storeId, req.params.id, req.body);
+  res.json(createApiResponse(result));
+}));
+
+// PATCH /api/stores/:storeId/menu/items/:id/availability  { available: boolean }
+router.patch("/items/:id/availability", asyncHandler(async (req, res) => {
+  const result = await setMenuItemAvailability(req.user, req.params.storeId, req.params.id, Boolean(req.body?.available));
   res.json(createApiResponse(result));
 }));
 

@@ -18,7 +18,23 @@ const tableBadge = (t) => {
 };
 
 export const PosTerminalPage = () => {
-  const { storeId, store, data, toast } = usePos();
+  const { storeId, store, data, toast, subscribe } = usePos();
+
+  // A dish sold out or back on sale anywhere (kitchen, menu editor, another till): refresh the menu
+  const reloadMenu = data.reload;
+  useEffect(() => subscribe((msg) => {
+    if (msg.type === 'MENU_ITEM_AVAILABILITY') reloadMenu();
+  }), [subscribe, reloadMenu]);
+
+  const restockItem = async (item) => {
+    try {
+      await api.patch(`/stores/${storeId}/menu/items/${item.id}/availability`, { available: true });
+      await data.reload();
+      toast(`${item.name} is back on sale`, 'success');
+    } catch (err) {
+      toast(apiErrorMessage(err, 'Could not update the item'), 'error');
+    }
+  };
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -180,6 +196,7 @@ export const PosTerminalPage = () => {
     <div className="h-full grid grid-cols-[1fr_360px] 2xl:grid-cols-[1fr_400px] gap-3 p-3 overflow-hidden">
       <MenuCatalog
         menu={data.menu}
+        onRestock={restockItem}
         lines={lines}
         onAdd={handleAdd}
         onDecrement={(lineId) => cart.updateQuantity(lineId, -1)}

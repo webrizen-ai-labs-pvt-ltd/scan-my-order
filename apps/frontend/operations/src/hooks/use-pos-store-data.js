@@ -148,5 +148,6 @@ export function usePosStoreData(storeId) {
     }
   }, [storeId]);
 
-  return { ...state, reload: () => load({ force: true }), refreshTables };
+  const reload = useCallback(() => load({ force: true }), [load]);
+  return { ...state, reload, refreshTables };
 }
