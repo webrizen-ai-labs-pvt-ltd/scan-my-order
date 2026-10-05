@@ -51,6 +51,9 @@ async function createRecipeIngredient(actor, storeId, input) {
   if (!rawMaterialId || !quantity) {
     throw createHttpError(400, "rawMaterialId and quantity are required");
   }
+  if (!(Number(quantity) > 0)) {
+    throw createHttpError(400, "Quantity must be more than 0");
+  }
   
   if (!menuItemId && !modifierOptionId) {
     throw createHttpError(400, "Either menuItemId or modifierOptionId is required");
@@ -78,14 +81,42 @@ async function createRecipeIngredient(actor, storeId, input) {
     }
   }
 
+  // Each ingredient appears once per dish (or option): change the quantity instead of adding it twice
+  const existing = await prisma.recipeIngredient.findFirst({
+    where: menuItemId ? { menuItemId, rawMaterialId } : { modifierOptionId, rawMaterialId }
+  });
+  if (existing) {
+    throw createHttpError(409, `${material.name} is already in this recipe. Change its quantity instead.`);
+  }
+
   return await prisma.recipeIngredient.create({
     data: {
       rawMaterialId,
       menuItemId,
       modifierOptionId,
-      quantity
+      quantity: Number(quantity)
     }
   });
+}
+
+/** Changes how much of an ingredient a dish (or option) uses */
+async function updateRecipeIngredient(actor, storeId, recipeId, input = {}) {
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+  const quantity = Number(input.quantity);
+  if (!(quantity > 0)) {
+    throw createHttpError(400, "Quantity must be more than 0");
+  }
+
+  const recipe = await prisma.recipeIngredient.findUnique({
+    where: { id: recipeId },
+    include: { rawMaterial: true }
+  });
+  if (!recipe || recipe.rawMaterial.storeId !== storeId) {
+    throw createHttpError(404, "Recipe ingredient not found");
+  }
+
+  return prisma.recipeIngredient.update({ where: { id: recipeId }, data: { quantity } });
 }
 
 async function deleteRecipeIngredient(actor, storeId, recipeId) {
@@ -264,6 +295,7 @@ module.exports = {
   getMaterials,
   createMaterial,
   createRecipeIngredient,
+  updateRecipeIngredient,
   deleteRecipeIngredient,
   addStockTransaction,
   evaluateMenuItemAvailability

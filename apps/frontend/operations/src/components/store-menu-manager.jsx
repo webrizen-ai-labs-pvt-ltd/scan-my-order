@@ -146,6 +146,30 @@ export const StoreMenuManager = ({ storeId }) => {
     }
   };
 
+  // Changing how much of an ingredient the dish uses (each ingredient is listed once)
+  const [qtyEdit, setQtyEdit] = useState(null); // { id, value }
+  const [isSavingQty, setIsSavingQty] = useState(false);
+  const handleSaveQuantity = async (e) => {
+    e.preventDefault();
+    const quantity = parseFloat(qtyEdit?.value);
+    if (!(quantity > 0)) {
+      setError('Quantity must be more than 0');
+      return;
+    }
+    setIsSavingQty(true);
+    try {
+      await api.patch(`/stores/${storeId}/inventory/recipes/${qtyEdit.id}`, { quantity });
+      setEditingItem(p => ({ ...p, recipe: p.recipe.map(r => (r.id === qtyEdit.id ? { ...r, quantity } : r)) }));
+      setQtyEdit(null);
+      setError('');
+      fetchMenu();
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Could not change the quantity');
+    } finally {
+      setIsSavingQty(false);
+    }
+  };
+
   const handleRemoveIngredient = async (recipeId) => {
     try {
       await api.delete(`/stores/${storeId}/inventory/recipes/${recipeId}`);
@@ -159,6 +183,10 @@ export const StoreMenuManager = ({ storeId }) => {
       setError('Error removing ingredient');
     }
   };
+
+  // Each ingredient is listed once per dish: only offer the ones not in its recipe yet
+  const recipeMaterialIds = new Set((editingItem?.recipe || []).map(r => r.rawMaterialId));
+  const availableMaterials = materials.filter(m => !recipeMaterialIds.has(m.id));
 
   return (
     <div className="flex flex-col md:flex-row h-full min-h-[600px]">
@@ -324,7 +352,7 @@ export const StoreMenuManager = ({ storeId }) => {
                              {editingItem.recipe.map((rec, index) => (
                               <div
                                 key={rec.id}
-                                className="group flex justify-between items-center bg-white dark:bg-zinc-950 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-all duration-200 hover:shadow-sm"
+                                className="group flex justify-between items-center bg-white dark:bg-zinc-950 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 transition-colors duration-200"
                               >
                                 <div className="flex items-center gap-3 min-w-0">
                                   {/* Index number */}
@@ -339,10 +367,38 @@ export const StoreMenuManager = ({ storeId }) => {
                                         {rec.rawMaterial.name}
                                       </span>
 
-                                      {/* Quantity badge */}
-                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/20">
-                                        {rec.quantity} {rec.rawMaterial.unit}
-                                      </span>
+                                      {/* Quantity: tap to change */}
+                                      {qtyEdit?.id === rec.id ? (
+                                        <form onSubmit={handleSaveQuantity} className="flex items-center gap-1">
+                                          <input
+                                            type="number"
+                                            step="0.001"
+                                            min="0"
+                                            autoFocus
+                                            value={qtyEdit.value}
+                                            onChange={e => setQtyEdit({ id: rec.id, value: e.target.value })}
+                                            onKeyDown={e => e.key === 'Escape' && setQtyEdit(null)}
+                                            aria-label={`Quantity of ${rec.rawMaterial.name}`}
+                                            className="w-20 h-7 px-2 rounded-md border border-yellow-300 bg-white dark:bg-zinc-900 text-xs outline-none"
+                                          />
+                                          <span className="text-xs text-zinc-500">{rec.rawMaterial.unit}</span>
+                                          <button type="submit" disabled={isSavingQty} aria-label="Save quantity" className="p-1 rounded text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-500/10">
+                                            {isSavingQty ? <Loading03Icon size={14} className="animate-spin" /> : <Tick02Icon size={14} />}
+                                          </button>
+                                          <button type="button" onClick={() => setQtyEdit(null)} aria-label="Cancel" className="p-1 rounded text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                                            <Cancel01Icon size={14} />
+                                          </button>
+                                        </form>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={() => setQtyEdit({ id: rec.id, value: String(rec.quantity) })}
+                                          title="Change quantity"
+                                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/20 hover:border-yellow-400"
+                                        >
+                                          {rec.quantity} {rec.rawMaterial.unit}
+                                        </button>
+                                      )}
                                     </div>
 
                                     {/* Additional info if available */}
@@ -382,12 +438,20 @@ export const StoreMenuManager = ({ storeId }) => {
                           </div>
                         )}
 
+                        {availableMaterials.length === 0 && (
+                          <p className="text-sm text-zinc-500 bg-zinc-50 dark:bg-zinc-900/30 p-3 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700">
+                            {materials.length === 0
+                              ? 'No ingredients in Inventory yet. Add some in Inventory to build recipes.'
+                              : 'All ingredients are already in this recipe. Tap a quantity to change it, or add more ingredients in Inventory.'}
+                          </p>
+                        )}
+                        {availableMaterials.length > 0 && (
                         <form onSubmit={handleAddIngredient} className="flex gap-2 items-end">
                           <div className="flex-1 space-y-1.5">
                             <Label>Material</Label>
                             <select name="rawMaterialId" className="w-full h-10 px-3 rounded-full rounded-r-none border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-sm">
                               <option value="">Select Material...</option>
-                              {materials.map(m => (
+                              {availableMaterials.map(m => (
                                 <option key={m.id} value={m.id}>{m.name} ({m.unit})</option>
                               ))}
                             </select>
@@ -400,6 +464,7 @@ export const StoreMenuManager = ({ storeId }) => {
                             {isAddingIngredient ? <Loading03Icon className="animate-spin" size={16} /> : 'Add'}
                           </Button>
                         </form>
+                        )}
                       </div>
                     )}
                   </CardContent>

@@ -6,6 +6,7 @@ const {
   getMaterials,
   createMaterial,
   createRecipeIngredient,
+  updateRecipeIngredient,
   deleteRecipeIngredient,
   addStockTransaction
 } = require("./inventory-service");
@@ -31,6 +32,12 @@ router.post("/materials", asyncHandler(async (req, res) => {
 router.post("/recipes", asyncHandler(async (req, res) => {
   const result = await createRecipeIngredient(req.user, req.params.storeId, req.body);
   res.status(201).json(createApiResponse(result));
+}));
+
+// PATCH /api/stores/:storeId/inventory/recipes/:id  { quantity }
+router.patch("/recipes/:id", asyncHandler(async (req, res) => {
+  const result = await updateRecipeIngredient(req.user, req.params.storeId, req.params.id, req.body || {});
+  res.json(createApiResponse(result));
 }));
 
 // DELETE /api/stores/:storeId/inventory/recipes/:id
