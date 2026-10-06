@@ -136,10 +136,22 @@ async function deleteCategory(actor, storeId, id) {
 }
 
 // Menu Items
+/** An optional http(s) video link for a dish; '' clears it */
+function cleanVideoUrl(value) {
+  if (value === undefined) return undefined;
+  const url = String(value || '').trim();
+  if (!url) return null;
+  if (url.length > 500 || !/^https?:\/\/\S+$/i.test(url)) {
+    throw createHttpError(400, "The video link must be a full web address starting with https://");
+  }
+  return url;
+}
+
 async function createMenuItem(actor, storeId, input) {
   await verifyStoreAccess(actor, storeId);
   const prisma = getPrismaClient();
   const { categoryId, name, description, price, image, dietary, spiceLevel } = input;
+  const videoUrl = cleanVideoUrl(input.videoUrl);
   
   if (!categoryId || !name || price == null) {
     throw createHttpError(400, "categoryId, name, and price are required");
@@ -159,6 +171,7 @@ async function createMenuItem(actor, storeId, input) {
       description,
       price,
       image,
+      videoUrl,
       dietary,
       spiceLevel
     }
@@ -171,6 +184,7 @@ async function updateMenuItem(actor, storeId, id, input) {
   await verifyStoreAccess(actor, storeId);
   const prisma = getPrismaClient();
   const { categoryId, name, description, price, image, dietary, spiceLevel, isManuallyDisabled } = input;
+  const videoUrl = cleanVideoUrl(input.videoUrl);
   
   const item = await prisma.menuItem.findUnique({ where: { id } });
   if (!item || item.storeId !== storeId) throw createHttpError(404, "MenuItem not found");
@@ -182,7 +196,7 @@ async function updateMenuItem(actor, storeId, id, input) {
   
   const updated = await prisma.menuItem.update({
     where: { id },
-    data: { categoryId, name, description, price, image, dietary, spiceLevel, isManuallyDisabled }
+    data: { categoryId, name, description, price, image, videoUrl, dietary, spiceLevel, isManuallyDisabled }
   });
   invalidateMenuCache(storeId);
   return updated;

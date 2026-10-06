@@ -55,6 +55,50 @@ router.get("/resolve/:brandSlug", asyncHandler(async (req, res) => {
   res.json(createApiResponse(tenant));
 }));
 
+// GET /api/public/brands/:brandSlug/logo
+// The brand's own logo served from our API, so printable QR cards can include it even when the
+// image host (e.g. Pinterest) doesn't allow other sites to use it. Only ever fetches the URL saved
+// on that brand, never one from the request.
+const brandLogoCache = new Map(); // logo URL -> { at, type, body } (a new logo is fetched fresh)
+const BRAND_LOGO_TTL_MS = 10 * 60 * 1000;
+const BRAND_LOGO_MAX_BYTES = 2 * 1024 * 1024;
+router.get("/brands/:brandSlug/logo", asyncHandler(async (req, res) => {
+  const slug = String(req.params.brandSlug || '').toLowerCase();
+  const tenant = await getPrismaClient().tenant.findUnique({ where: { slug }, select: { logo: true } });
+  const logoUrl = tenant?.logo?.trim();
+  if (!logoUrl || !/^https?:\/\//i.test(logoUrl)) throw createHttpError(404, "This brand has no logo");
+
+  let entry = brandLogoCache.get(logoUrl);
+  if (!entry || Date.now() - entry.at > BRAND_LOGO_TTL_MS) {
+    let upstream;
+    try {
+      upstream = await fetch(logoUrl, { signal: AbortSignal.timeout(5000), redirect: 'follow' });
+    } catch {
+      throw createHttpError(404, "The brand logo couldn't be loaded");
+    }
+    const type = upstream.headers.get('content-type') || '';
+    const declared = Number(upstream.headers.get('content-length') || 0);
+    if (!upstream.ok || !type.startsWith('image/') || declared > BRAND_LOGO_MAX_BYTES) {
+      throw createHttpError(404, "The brand logo couldn't be loaded");
+    }
+    const body = Buffer.from(await upstream.arrayBuffer());
+    if (body.length > BRAND_LOGO_MAX_BYTES) throw createHttpError(404, "The brand logo is too large");
+    entry = { at: Date.now(), type, body };
+    brandLogoCache.set(logoUrl, entry);
+  }
+  res.set('Content-Type', entry.type);
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.send(entry.body);
+}));
+
+// GET /api/public/venues/:slug — a mall / food court page: one card per counter
+router.get("/venues/:slug", asyncHandler(async (req, res) => {
+  const { getPublicVenue } = require("../venues/venue-service");
+  res.set("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
+  res.json(createApiResponse(await getPublicVenue(req.params.slug)));
+}));
+
 router.get("/resolve/:brandSlug/:storeSlug", asyncHandler(async (req, res) => {
   const prisma = getPrismaClient();
   const store = await prisma.store.findFirst({
@@ -74,7 +118,8 @@ router.get("/resolve/:brandSlug/:storeSlug", asyncHandler(async (req, res) => {
       tables: {
         where: { isActive: true },
         select: { tableNumber: true }
-      }
+      },
+      venue: { select: { name: true, slug: true, isActive: true } }
     }
   });
 
@@ -150,8 +195,11 @@ router.get("/stores/:storeId/menu", asyncHandler(async (req, res) => {
 router.post("/stores/:storeId/orders", orderLimiter, asyncHandler(async (req, res) => {
   const prisma = getPrismaClient();
   let tableId = req.body.tableId;
-  
-  if (!tableId && req.body.tableNumber) {
+  // Counter stores (malls, food courts) take takeaway orders without a table
+  const mode = await prisma.store.findUnique({ where: { id: req.params.storeId }, select: { serviceMode: true } });
+  const isCounter = mode?.serviceMode === 'COUNTER';
+
+  if (!isCounter && !tableId && req.body.tableNumber) {
     const table = await prisma.table.findUnique({
       where: { 
         storeId_tableNumber: { 
@@ -165,7 +213,7 @@ router.post("/stores/:storeId/orders", orderLimiter, asyncHandler(async (req, re
     }
   }
 
-  if (!tableId) {
+  if (!isCounter && !tableId) {
     throw createHttpError(400, "Invalid or missing table number. Please re-scan your table QR code.");
   }
 

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { StoreForm } from '../components/store-form';
 import { StoreMenuBuilder } from '../components/store-menu-builder';
+import { StoreVenuePanel } from '../components/store-venue-panel';
 import { Loading03Icon } from 'hugeicons-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@smo/ui';
 
@@ -12,6 +13,8 @@ export const StoreEdit = () => {
   const [initialData, setInitialData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     const fetchStore = async () => {
@@ -29,7 +32,7 @@ export const StoreEdit = () => {
       }
     };
     fetchStore();
-  }, [id]);
+  }, [id, reloadKey]);
 
   if (loading) {
     return (
@@ -61,6 +64,11 @@ export const StoreEdit = () => {
 
       <TabsContent value="details" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
         <StoreForm isEdit={true} initialData={initialData} />
+        <StoreVenuePanel
+          key={`${initialData.venueId}-${initialData.serviceMode}-${initialData.venueLocation}`}
+          store={initialData}
+          onChanged={() => setReloadKey(k => k + 1)}
+        />
       </TabsContent>
       <TabsContent value="menu" className="mt-0 focus-visible:outline-none focus-visible:ring-0">
         <StoreMenuBuilder storeId={id} />

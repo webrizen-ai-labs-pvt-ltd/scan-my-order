@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import api from '../lib/api';
 import { getSessionId } from '../lib/session';
 import { computePromoDiscount, computeOrderTotals } from '@smo/shared/pricing';
+import { checkIndianMobile } from '@smo/shared/phone';
 import { useCartStore } from '../store/cart-store';
 import { useAuthStore } from '../store/authStore';
 import { GoogleLogin } from '@react-oauth/google';
@@ -26,11 +27,15 @@ import {
   Coins01Icon,
   GiftIcon,
   Loading03Icon,
+  ArrowLeft01Icon,
+  SmartPhone01Icon,
+  PlayIcon,
 } from 'hugeicons-react';
 import { CallWaiterModal } from '../components/call-waiter-modal';
 import { WaiterFab } from '../components/waiter-fab';
 import { useWaiterCall } from '../hooks/use-waiter-call';
 import { CustomerWalletModal } from '../components/customer-wallet-modal';
+import { ItemVideoSheet } from '../components/item-video-sheet';
 
 // ─── Dietary Badge (FSSAI-style, refined) ────────────────────────────────────
 const DietaryBadge = ({ type, size = 'sm' }) => {
@@ -87,8 +92,9 @@ const QuantityStepper = ({ quantity, onDecrease, onIncrease, brandColor }) => (
 );
 
 // ─── Menu Item Card (Zomato-style) ───────────────────────────────────────────
-const MenuItemCard = ({ item, cartItem, onAdd, onUpdateQuantity, brandColor }) => {
+const MenuItemCard = ({ item, cartItem, onAdd, onUpdateQuantity, onPlayVideo, brandColor }) => {
   const hasImage = !!item.image;
+  const hasVideo = !!item.videoUrl;
 
   return (
     <article className="relative flex gap-3 bg-white p-4 transition dark:bg-zinc-900">
@@ -112,6 +118,17 @@ const MenuItemCard = ({ item, cartItem, onAdd, onUpdateQuantity, brandColor }) =
           <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
             {item.description}
           </p>
+        )}
+        {/* No photo to tap: offer the video here */}
+        {hasVideo && !hasImage && (
+          <button
+            type="button"
+            onClick={() => onPlayVideo(item)}
+            className="mt-2 inline-flex items-center gap-1 self-start text-xs font-bold"
+            style={{ color: brandColor }}
+          >
+            <PlayIcon size={14} /> Watch video
+          </button>
         )}
 
         {/* ADD button (no image variant) */}
@@ -144,14 +161,29 @@ const MenuItemCard = ({ item, cartItem, onAdd, onUpdateQuantity, brandColor }) =
       {/* Right: Image + overlapping ADD */}
       {hasImage && (
         <div className="relative flex flex-col items-center shrink-0">
-          <div className="h-[104px] w-[104px] overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50 shadow-sm dark:border-zinc-800 dark:bg-zinc-800 sm:h-[118px] sm:w-[118px]">
-            <img
-              src={item.image}
-              alt={item.name}
-              loading="lazy"
-              className="h-full w-full object-cover"
-            />
-          </div>
+          {hasVideo ? (
+            // Tap the photo to watch the dish (the video loads only then)
+            <button
+              type="button"
+              onClick={() => onPlayVideo(item)}
+              aria-label={`Watch a video of ${item.name}`}
+              className="relative h-[104px] w-[104px] overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-800 sm:h-[118px] sm:w-[118px]"
+            >
+              <img src={item.image} alt={item.name} loading="lazy" className="h-full w-full object-cover" />
+              <span className="absolute left-1.5 top-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm">
+                <PlayIcon size={14} />
+              </span>
+            </button>
+          ) : (
+            <div className="h-[104px] w-[104px] overflow-hidden rounded-xl border border-zinc-100 bg-zinc-50 shadow-sm dark:border-zinc-800 dark:bg-zinc-800 sm:h-[118px] sm:w-[118px]">
+              <img
+                src={item.image}
+                alt={item.name}
+                loading="lazy"
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )}
           {/* Overlapping ADD button on image */}
           <div className="absolute -bottom-3 z-10">
             {cartItem ? (
@@ -187,9 +219,20 @@ const MenuItemCard = ({ item, cartItem, onAdd, onUpdateQuantity, brandColor }) =
 export const StoreMenuPage = () => {
   const { brandSlug, storeSlug } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tableNumber = searchParams.get('table');
+  const tableParam = searchParams.get('table');
 
   const [store, setStore] = useState(null);
+  // Counter stores (malls, food courts): takeaway, paid on the phone, pickup number, no table or waiter
+  const isCounter = store?.serviceMode === 'COUNTER';
+  const tableNumber = isCounter ? null : tableParam;
+
+  // Counter guests leave a mobile number instead of logging in (remembered on this phone)
+  const savedGuest = useMemo(() => {
+    try { return JSON.parse(localStorage.getItem('smo_guest_contact') || '{}'); } catch { return {}; }
+  }, []);
+  const [guestPhone, setGuestPhone] = useState(savedGuest.phone || '');
+  const [guestName, setGuestName] = useState(savedGuest.name || '');
+  const [phoneError, setPhoneError] = useState('');
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -208,8 +251,10 @@ export const StoreMenuPage = () => {
   // Cart Store
   const { items, setStoreId, addItem, updateQuantity, getTotalPrice, getTotalItems, clearCart } = useCartStore();
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
+  const [videoItem, setVideoItem] = useState(null); // dish whose video sheet is open
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [paymentModel, setPaymentModel] = useState('POSTPAID');
+  const payModel = store?.serviceMode === 'COUNTER' ? 'PREPAID' : paymentModel;
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Table Session / PIN State
@@ -294,7 +339,7 @@ export const StoreMenuPage = () => {
       const storeRes = await api.get(`/public/resolve/${brandSlug}/${storeSlug}`);
       const resolvedStore = storeRes.data.data;
 
-      if (tableNumber) {
+      if (tableNumber && resolvedStore.serviceMode !== 'COUNTER') {
         const tableNumInt = parseInt(tableNumber, 10);
         const isValidTable = resolvedStore.tables?.some(t => t.tableNumber === tableNumInt);
         if (!isValidTable) {
@@ -459,9 +504,10 @@ export const StoreMenuPage = () => {
     const tokenToUse = overrideToken || activeTableToken || undefined;
     try {
       const payload = {
-        tableNumber: parseInt(tableNumber, 10),
-        paymentModel,
-        type: 'DINE_IN',
+        tableNumber: isCounter ? undefined : parseInt(tableNumber, 10),
+        paymentModel: payModel,
+        type: isCounter ? 'TAKEAWAY' : 'DINE_IN',
+        ...(isCounter ? { customerPhone: guestPhone, customerName: guestName.trim() || undefined } : {}),
         promoCode: appliedPromo?.code || undefined,
         applyWalletCredits: useWalletCredits && appliedWalletCredits > 0,
         walletCredits: appliedWalletCredits,
@@ -494,13 +540,13 @@ export const StoreMenuPage = () => {
         setTableSessionInfo(prev => ({ ...prev, hasActiveSession: true, isJoined: true, tableSessionId }));
       }
 
-      if (paymentModel === 'PREPAID' && res.data.data.order?.id) {
-        const pKey = `smo_prepaid_orders_${store.id}_${tableNumber}`;
+      if (payModel === 'PREPAID' && res.data.data.order?.id) {
+        const pKey = `smo_prepaid_orders_${store.id}_${tableNumber || 'counter'}`;
         const existingPaid = JSON.parse(localStorage.getItem(pKey) || '[]');
         localStorage.setItem(pKey, JSON.stringify([...existingPaid, res.data.data.order.id]));
       }
 
-      if (paymentModel === 'PREPAID' && paymentIntent) {
+      if (payModel === 'PREPAID' && paymentIntent) {
         const options = {
           key: paymentIntent.key || store.razorpayKeyId,
           amount: paymentIntent.amount,
@@ -518,7 +564,7 @@ export const StoreMenuPage = () => {
                 razorpay_signature: response.razorpay_signature,
               });
               if (verifyRes.data.data?.success) {
-                showToast('Payment successful! Order sent to kitchen.', 'success');
+                showToast(isCounter ? 'Paid! Watch your pickup number below.' : 'Payment successful! Order sent to kitchen.', 'success');
               } else {
                 showToast('Payment received — confirming with the bank. Your order will start shortly.', 'info');
               }
@@ -529,7 +575,9 @@ export const StoreMenuPage = () => {
             setIsCheckoutOpen(false);
             fetchWalletData();
           },
-          prefill: { name: `Table ${tableNumber}` },
+          prefill: isCounter
+            ? { name: guestName.trim() || undefined, contact: checkIndianMobile(guestPhone).phone || undefined }
+            : { name: `Table ${tableNumber}` },
           theme: { color: store.tenant?.brandColor || '#059669' },
         };
         const rzp = new window.Razorpay(options);
@@ -558,12 +606,27 @@ export const StoreMenuPage = () => {
 
   const handlePlaceOrder = async () => {
     if (items.length === 0) return;
+    if (isCounter) {
+      const checked = checkIndianMobile(guestPhone);
+      if (checked.error) {
+        setPhoneError(checked.error);
+        return;
+      }
+      setPhoneError('');
+      try { localStorage.setItem('smo_guest_contact', JSON.stringify({ phone: checked.phone, name: guestName.trim() })); } catch { /* private mode */ }
+      if (!store.razorpayConfigured) {
+        showToast("This counter isn't taking online payments yet. Please order at the counter.", 'error');
+        return;
+      }
+      await submitOrder();
+      return;
+    }
     if (!tableNumber) {
       showToast('Scan a valid table QR code to place an order.', 'error');
       return;
     }
 
-    if (paymentModel === 'PREPAID' && !token) {
+    if (payModel === 'PREPAID' && !token) {
       setShowAuthModal(true);
       return;
     }
@@ -835,7 +898,7 @@ export const StoreMenuPage = () => {
               )
             ) : (
               <div className="inline-flex h-7 items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 text-[11px] font-medium text-amber-600 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
-                Browse
+                {isCounter ? 'Takeaway' : 'Browse'}
               </div>
             )}
 
@@ -884,6 +947,16 @@ export const StoreMenuPage = () => {
             />
           </div>
         </header>
+
+        {/* ── Part of a mall / food court: back to every counter ───────── */}
+        {store.venue?.isActive && (
+          <Link
+            to={`/v/${store.venue.slug}`}
+            className="flex items-center gap-1.5 border-b border-zinc-100 px-4 py-2 text-xs font-semibold text-zinc-600 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-100"
+          >
+            <ArrowLeft01Icon size={14} /> All counters at {store.venue.name}
+          </Link>
+        )}
 
         {/* ── Hero Banner (shorter, scrolls away) ────────────────────────── */}
         <div className="relative w-full overflow-hidden">
@@ -1060,6 +1133,7 @@ export const StoreMenuPage = () => {
                           cartItem={cartItem}
                           onAdd={addItem}
                           onUpdateQuantity={updateQuantity}
+                          onPlayVideo={setVideoItem}
                           brandColor={brandColorHex}
                         />
                         {idx < cat.items.length - 1 && (
@@ -1144,6 +1218,11 @@ export const StoreMenuPage = () => {
                   {tableNumber && (
                     <p className="text-xs text-zinc-400">
                       Table {tableNumber} • {items.length} {items.length === 1 ? 'item' : 'items'}
+                    </p>
+                  )}
+                  {isCounter && (
+                    <p className="text-xs text-zinc-400">
+                      Takeaway • {items.length} {items.length === 1 ? 'item' : 'items'} • collect at the counter
                     </p>
                   )}
                 </div>
@@ -1421,7 +1500,44 @@ export const StoreMenuPage = () => {
                   </div>
                 </div>
 
+                {/* Counter: who to call when it's ready */}
+                {isCounter && (
+                  <div className="space-y-2 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                    <div>
+                      <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">Your details</p>
+                      <p className="text-[11px] text-zinc-500">You'll get a pickup number. We'll only use your number about this order.</p>
+                    </div>
+                    <label className={`flex items-center gap-2 rounded-xl border bg-zinc-50 px-3 dark:bg-zinc-950 ${phoneError ? 'border-rose-400' : 'border-zinc-200 focus-within:border-zinc-400 dark:border-zinc-700'}`}>
+                      <SmartPhone01Icon size={16} className="shrink-0 text-zinc-400" />
+                      <span className="text-sm text-zinc-500">+91</span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel-national"
+                        placeholder="Mobile number"
+                        aria-label="Mobile number"
+                        aria-invalid={Boolean(phoneError)}
+                        value={guestPhone}
+                        onChange={(e) => { setGuestPhone(e.target.value); if (phoneError) setPhoneError(''); }}
+                        className="h-11 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-zinc-400"
+                      />
+                    </label>
+                    {phoneError && <p role="alert" className="text-xs font-medium text-rose-600">{phoneError}</p>}
+                    <input
+                      type="text"
+                      autoComplete="name"
+                      placeholder="Name (optional)"
+                      aria-label="Your name"
+                      maxLength={60}
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      className="h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-sm outline-none placeholder:text-zinc-400 focus:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-950"
+                    />
+                  </div>
+                )}
+
                 {/* Payment Mode Toggle */}
+                {!isCounter && (
                 <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800">
                   <button
                     type="button"
@@ -1447,26 +1563,38 @@ export const StoreMenuPage = () => {
                     <CreditCardIcon size={14} /> Pay Online
                   </button>
                 </div>
+                )}
 
                 {/* Place Order CTA */}
                 <button
                   className="h-[52px] w-full rounded-xl text-base font-extrabold text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-40"
                   style={{ backgroundColor: brandColorHex }}
                   onClick={handlePlaceOrder}
-                  disabled={isPlacingOrder || items.length === 0 || !tableNumber}
+                  disabled={isPlacingOrder || items.length === 0 || (!isCounter && !tableNumber) || (isCounter && !store.razorpayConfigured)}
                 >
                   {isPlacingOrder
                     ? 'Placing your order...'
-                    : !tableNumber
-                      ? 'Scan Table QR to Order'
-                      : paymentModel === 'PREPAID'
-                        ? `Pay ₹${finalTotal} Now`
-                        : 'Place Order'}
+                    : isCounter && !store.razorpayConfigured
+                      ? 'Online ordering coming soon'
+                      : !isCounter && !tableNumber
+                        ? 'Scan Table QR to Order'
+                        : payModel === 'PREPAID'
+                          ? `Pay ₹${finalTotal} Now`
+                          : 'Place Order'}
                 </button>
               </div>
             </div>
           </div>
         )}
+
+        {/* ── Dish video (loads only when opened) ───────────────────────── */}
+        <ItemVideoSheet
+          item={videoItem}
+          onClose={() => setVideoItem(null)}
+          onAdd={(item) => { addItem(item); showToast(`${item.name} added`, 'success'); }}
+          inCart={Boolean(videoItem && items.some(i => i.menuItemId === videoItem.id))}
+          brandColor={brandColorHex}
+        />
 
         {/* ── Auth Sheet ─────────────────────────────────────────────── */}
         <Sheet open={showAuthModal} onOpenChange={(open) => {

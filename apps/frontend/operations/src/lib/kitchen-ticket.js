@@ -27,7 +27,9 @@ function timeLabel(date) {
  */
 export function kitchenTicketHtml(order, { storeName = '', paper = 80, reprint = false, test = false } = {}) {
   const p = PAPER[paper] || PAPER[80];
-  const where = order.table ? `TABLE ${order.table.tableNumber}` : (TYPE_LABEL[order.type] || 'Order').toUpperCase();
+  const where = order.table
+    ? `TABLE ${order.table.tableNumber}`
+    : order.pickupNumber != null ? `PICKUP #${order.pickupNumber}` : (TYPE_LABEL[order.type] || 'Order').toUpperCase();
   const items = (order.items || []).filter(i => i.status !== 'REJECTED');
   const count = items.reduce((s, i) => s + i.quantity, 0);
 

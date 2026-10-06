@@ -17,17 +17,30 @@ const INK = '#18181B';
 const MUTED = '#71717A';
 const FONT = '"Inter", "Segoe UI", system-ui, -apple-system, Arial, sans-serif';
 
-function loadImage(src) {
+export const DEFAULT_QR_LOGO = '/logo.png';
+
+function loadImage(src, { crossOrigin } = {}) {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    // Another site's logo must allow CORS, or the finished card couldn't be saved
+    if (crossOrigin) img.crossOrigin = 'anonymous';
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = src;
   });
 }
 
-let logoPromise = null;
-const loadLogo = () => (logoPromise ||= loadImage('/logo.png').catch(() => null));
+const logoCache = new Map();
+/** The logo for the middle of the code: the given one if it loads, otherwise ours */
+const loadLogo = (src = DEFAULT_QR_LOGO) => {
+  if (!logoCache.has(src)) {
+    const external = src !== DEFAULT_QR_LOGO;
+    logoCache.set(src, loadImage(src, { crossOrigin: external })
+      .catch(() => (external ? loadImage(DEFAULT_QR_LOGO) : null))
+      .catch(() => null));
+  }
+  return logoCache.get(src);
+};
 
 function roundRect(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -53,7 +66,7 @@ function fitText(ctx, text, maxWidth, size, weight) {
  * @param {SVGSVGElement} svgEl the table's QR preview (QRCodeSVG with an excavated logo)
  * @returns {Promise<string|null>} PNG data URL
  */
-export async function renderTableQrCard(svgEl, { tableNumber, storeName }) {
+export async function renderTableQrCard(svgEl, { tableNumber, storeName, logoSrc }) {
   if (!svgEl) return null;
   if (document.fonts?.ready) await document.fonts.ready.catch(() => {});
 
@@ -76,7 +89,7 @@ export async function renderTableQrCard(svgEl, { tableNumber, storeName }) {
   clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
   const svgText = new XMLSerializer().serializeToString(clone);
   const qrImg = await loadImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`);
-  const logo = await loadLogo();
+  const logo = await loadLogo(logoSrc);
 
   const canvas = document.createElement('canvas');
   canvas.width = CARD_WIDTH;

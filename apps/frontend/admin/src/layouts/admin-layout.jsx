@@ -31,7 +31,8 @@ import {
   Settings01Icon, 
   Building04Icon, 
   Home01Icon, 
-  ArrowRight01Icon 
+  ArrowRight01Icon,
+  QrCodeIcon
 } from 'hugeicons-react';
 
 export const AdminLayout = () => {
@@ -48,6 +49,7 @@ export const AdminLayout = () => {
     { name: 'Dashboard', path: '/', icon: DashboardSquare01Icon },
     { name: 'Brands', path: '/brands', icon: Building04Icon },
     { name: 'Stores', path: '/stores', icon: Store01Icon },
+    { name: 'Venues', path: '/venues', icon: QrCodeIcon },
     { name: 'Users', path: '/users', icon: UserGroupIcon },
     { name: 'Billing', path: '/billing', icon: Invoice01Icon },
     { name: 'Settings', path: '/settings', icon: Settings01Icon },
@@ -58,6 +60,7 @@ export const AdminLayout = () => {
     "brands": { label: "Brands", icon: Building04Icon },
     "users": { label: "User Management", icon: UserGroupIcon },
     "stores": { label: "Store Directory", icon: Store01Icon },
+    "venues": { label: "Venues", icon: QrCodeIcon },
     "settings": { label: "Settings", icon: Settings01Icon },
     "billing": { label: "Billing", icon: Invoice01Icon },
   };

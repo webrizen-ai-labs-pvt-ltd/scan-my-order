@@ -36,12 +36,16 @@ export function printReceipt(node) {
   doc.close();
 
   const win = iframe.contentWindow;
-  setTimeout(() => {
+  // Images (e.g. a payment QR) must finish loading or they print blank; give up after 4 s
+  const images = Array.from(doc.images || []);
+  const loaded = Promise.all(images.map(img => (img.complete ? null : new Promise(res => { img.onload = res; img.onerror = res; }))));
+  const timeout = new Promise(res => setTimeout(res, 4000));
+  Promise.race([loaded, timeout]).then(() => setTimeout(() => {
     try {
       win.focus();
       win.print();
     } finally {
       setTimeout(() => iframe.remove(), 300);
     }
-  }, 250);
+  }, 250));
 }

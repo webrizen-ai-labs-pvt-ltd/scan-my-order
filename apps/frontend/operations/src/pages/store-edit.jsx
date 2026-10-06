@@ -79,6 +79,14 @@ export const StoreEdit = () => {
               <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${STATUS_PILL[store.status] || STATUS_PILL.DISABLED}`}>
                 {String(store.status || '').charAt(0) + String(store.status || '').slice(1).toLowerCase()}
               </span>
+              {store.serviceMode === 'COUNTER' && (
+                <span
+                  className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-sky-50 text-sky-700 border border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30"
+                  title="Guests order from the venue's QR: takeaway, paid on their phone, collected with a pickup number. Set by Scan My Order."
+                >
+                  Counter{store.venueLocation ? ` · ${store.venueLocation}` : ''}
+                </span>
+              )}
             </div>
             <p className="text-sm text-zinc-500 truncate">{store.address || 'No address yet'}</p>
           </div>
@@ -124,7 +132,7 @@ export const StoreEdit = () => {
         <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 overflow-hidden min-h-[480px]">
           {active === 'menu' && <StoreMenuManager storeId={store.id} />}
           {active === 'smart' && <div className="p-6"><StoreMenuBuilder storeId={store.id} /></div>}
-          {active === 'tables' && <StoreTablesManager storeId={store.id} storeSlug={store.slug} brandSlug={store.tenant?.slug} storeName={store.name} />}
+          {active === 'tables' && <StoreTablesManager storeId={store.id} storeSlug={store.slug} brandSlug={store.tenant?.slug} storeName={store.name} brandLogo={store.tenant?.logo} />}
           {active === 'promos' && <StorePromoManager storeId={store.id} />}
           {active === 'rewards' && <StoreLoyaltyManager storeId={store.id} />}
         </div>

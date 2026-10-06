@@ -7,6 +7,7 @@ import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
 import { KitchenRejectDialog } from '../components/kds/kitchen-reject-dialog';
 import { KdsPrintPanel } from '../components/kds/kds-print-panel';
 import { subscribeStore } from '../lib/live-stream';
+import { orderPlaceLabel, orderGuestLabel } from '../lib/order-place';
 import { printKitchenTicket, wasPrinted, markPrinted, readPrintSettings, savePrintSettings } from '../lib/kitchen-ticket';
 
 /** 12m · 4h 46m · 2d 3h — compact wait time for kitchen tickets */
@@ -224,7 +225,7 @@ export const KDS = () => {
     }
   };
 
-  const ticketLabel = (order, orderId) => (order?.table ? `Table ${order.table.tableNumber}` : `#${orderId.slice(-4).toUpperCase()}`);
+  const ticketLabel = (order, orderId) => (order?.table || order?.pickupNumber != null ? orderPlaceLabel(order) : `#${orderId.slice(-4).toUpperCase()}`);
 
   const rememberReady = (orderId) => {
     const ticket = orders.find(o => o.id === orderId);
@@ -291,7 +292,7 @@ export const KDS = () => {
     if (viewMode !== 'TABLE') return {};
     const groups = {};
     orders.forEach(order => {
-      const tableKey = order.table ? `Table ${order.table.tableNumber}` : (order.type === 'TAKEAWAY' ? 'Takeaway' : (order.type === 'DELIVERY' ? 'Delivery' : 'No Table'));
+      const tableKey = orderPlaceLabel(order);
       if (!groups[tableKey]) groups[tableKey] = { orders: [], oldestWait: 0 };
       groups[tableKey].orders.push(order);
       const wait = getWaitTime(order.createdAt);
@@ -359,8 +360,11 @@ export const KDS = () => {
               {order.type.replace('_', ' ')} · #{order.id.slice(-4).toUpperCase()}
             </span>
             <span className="text-xl font-bold text-white leading-none">
-              {order.table ? `Table ${order.table.tableNumber}` : order.type === 'TAKEAWAY' ? 'Takeaway' : 'No table'}
+              {orderPlaceLabel(order)}
             </span>
+            {orderGuestLabel(order) && (
+              <span className={`mt-1 block text-[11px] font-medium ${isLate || isCompleting ? 'text-white/80' : 'text-zinc-400'}`}>{orderGuestLabel(order)}</span>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1.5">
           <div className="flex items-center gap-2">

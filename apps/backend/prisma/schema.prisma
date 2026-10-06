@@ -17,6 +17,48 @@ enum TenantStatus {
   DISABLED
 }
 
+// How guests order: at tables (waiters, table QR codes) or at a counter (takeaway, prepaid, pickup numbers)
+enum StoreServiceMode {
+  TABLES
+  COUNTER
+}
+
+// A mall, food court or cinema: counters from different brands behind one QR code
+model Venue {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  city        String?
+  address     String?
+  description String?
+  coverImage  String?
+  isActive    Boolean  @default(true)
+  stores      Store[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// Pickup numbers (#1, #2…) for counter orders, restarting every day per store
+model StorePickupCounter {
+  storeId String
+  store   Store  @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  day     String // YYYY-MM-DD in India time
+  last    Int    @default(0)
+
+  @@id([storeId, day])
+}
+
+// A guest who ordered with a phone number (no account); one row per number
+model GuestContact {
+  id          String   @id @default(cuid())
+  phone       String   @unique // 10-digit Indian mobile, normalised
+  name        String?
+  ordersCount Int      @default(0)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+  orders      Order[]
+}
+
 enum StoreStatus {
   ACTIVE
   SUSPENDED
@@ -205,7 +247,11 @@ model Store {
   slug      String
   address   String?
   contactPhone String?
+  // More numbers guests and staff can call (contactPhone stays the main one)
+  extraPhones  String[] @default([])
   contactEmail String?
+  // e.g. FSSAI licence or shop registration number; printed on bills
+  registrationNumber String?
   operatingHours Json?
   banner    String?
   status    StoreStatus @default(ACTIVE)
@@ -231,6 +277,13 @@ model Store {
   invoices            Invoice[]
   duesRepayments      DuesRepayment[]
   invoiceSequences    InvoiceSequence[]
+  pickupCounters      StorePickupCounter[]
+
+  serviceMode   StoreServiceMode @default(TABLES)
+  venueId       String?
+  venue         Venue?           @relation(fields: [venueId], references: [id], onDelete: SetNull)
+  // Where to find the counter inside the venue, e.g. "3rd floor food court, counter 12"
+  venueLocation String?
 
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
   taxRules     Json?       @default("[]")
@@ -244,6 +297,7 @@ model Store {
   updatedAt    DateTime    @updatedAt
 
   @@unique([tenantId, slug])
+  @@index([venueId])
   @@index([tenantId])
 }
 
@@ -369,6 +423,8 @@ model MenuItem {
   description        String?
   price              Int               // Stored in smallest currency unit
   image              String?
+  // Optional video of the dish (YouTube, Vimeo, Google Drive or a direct .mp4 link); plays when guests tap the photo
+  videoUrl           String?
   dietary            DietaryPreference @default(VEG)
   spiceLevel         SpiceLevel        @default(NONE)
   
@@ -551,6 +607,16 @@ model Order {
   // Kitchen timing: when the order was marked ready (enables a short "recall"), and delay minutes announced to the guest
   readyAt         DateTime?
   delayMinutes    Int            @default(0)
+  // When the kitchen got it, and when we told the guest it would be ready (moves with announced delays)
+  kitchenAt        DateTime?
+  estimatedReadyAt DateTime?
+
+  // Counter orders: the number called out at pickup, and who to call
+  pickupNumber    Int?
+  customerName    String?
+  customerPhone   String?
+  guestContactId  String?
+  guestContact    GuestContact?  @relation(fields: [guestContactId], references: [id], onDelete: SetNull)
 
   // Set when staff cancel the order (reason is mandatory)
   cancelReason    String?
@@ -585,6 +651,7 @@ model Order {
   @@index([sessionId])
   @@index([tableSessionId])
   @@index([tableId])
+  @@index([guestContactId])
 }
 
 // One tender line against an order or a whole table session.

@@ -9,6 +9,8 @@ const { sendNotification } = require("../notifications/notification-service");
 const { evaluateMenuItemAvailability } = require("../inventory/inventory-service");
 const { syncTablePromo } = require("./bill-promo-service");
 const { SYSTEM_OPEN_ITEM_NAME, SYSTEM_OPEN_CATEGORY_NAME } = require("../menu/system-items");
+const { checkIndianMobile } = require("../../lib/phone");
+const { estimatePrepMinutes } = require("./eta-service");
 const { 
   openItemRecordCache, 
   invalidateMaterialsCache, 
@@ -396,11 +398,90 @@ async function resolveTableSession(prisma, storeId, tableId, origin, input) {
   });
 }
 
+/** Where an order is: "Table 4", "Pickup #23" or "Order #AB12CD" (for notifications) */
+function orderPlace(order) {
+  if (order.table?.tableNumber != null) return `Table ${order.table.tableNumber}`;
+  if (order.pickupNumber != null) return `Pickup #${order.pickupNumber}`;
+  return `Order #${order.id.slice(-6).toUpperCase()}`;
+}
+
+/** Today's date in India, the day pickup numbers restart on */
+const pickupDay = (date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(date);
+
+/** Next pickup number for the store today (atomic, so two counters never get the same number) */
+async function nextPickupNumber(db, storeId) {
+  const rows = await db.$queryRaw`
+    INSERT INTO "StorePickupCounter" ("storeId", "day", "last") VALUES (${storeId}, ${pickupDay()}, 1)
+    ON CONFLICT ("storeId", "day") DO UPDATE SET "last" = "StorePickupCounter"."last" + 1
+    RETURNING "last"`;
+  return Number(rows[0].last);
+}
+
+/**
+ * An order just reached the kitchen: note when, promise a ready time, and give counter
+ * orders their pickup number. Runs once per order (a recall from Ready doesn't restart it).
+ * @returns {Promise<object|null>} the fields set, or null if it was already in the kitchen
+ */
+async function enterKitchen(db, order) {
+  if (order.kitchenAt) return null;
+  const store = await db.store.findUnique({ where: { id: order.storeId }, select: { serviceMode: true } });
+  const now = new Date();
+  const minutes = await estimatePrepMinutes(db, order);
+  const data = { kitchenAt: now, estimatedReadyAt: new Date(now.getTime() + minutes * 60000) };
+  if (store?.serviceMode === 'COUNTER' && order.pickupNumber == null && !order.tableId) {
+    data.pickupNumber = await nextPickupNumber(db, order.storeId);
+  }
+  const claim = await db.order.updateMany({ where: { id: order.id, kitchenAt: null }, data });
+  return claim.count > 0 ? data : null;
+}
+
+/**
+ * Counter (mall / food court) guests order without an account: a real-looking Indian mobile
+ * number is required so the counter can reach them. One row per number (GuestContact).
+ */
+async function resolveCounterGuest(prisma, input) {
+  const checked = checkIndianMobile(input.customerPhone);
+  if (checked.error) throw createHttpError(400, checked.error);
+  const phone = checked.phone;
+  const name = typeof input.customerName === 'string' ? input.customerName.trim().replace(/\s+/g, ' ').slice(0, 60) : '';
+
+  // One device cycling through numbers is someone typing fake ones
+  if (input.sessionId) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const used = await prisma.order.findMany({
+      where: { sessionId: input.sessionId, createdAt: { gte: since }, customerPhone: { not: null } },
+      distinct: ['customerPhone'],
+      select: { customerPhone: true }
+    });
+    if (used.filter(o => o.customerPhone !== phone).length >= 3) {
+      throw createHttpError(429, "This phone has already used several different numbers today. Please use your own number.");
+    }
+  }
+
+  const guest = await prisma.guestContact.upsert({
+    where: { phone },
+    create: { phone, name: name || null, ordersCount: 1 },
+    update: { lastSeenAt: new Date(), ordersCount: { increment: 1 }, ...(name ? { name } : {}) }
+  });
+  return { phone, name: name || guest.name || null, guestContactId: guest.id };
+}
+
 // 1. ORDER CREATION
 async function createOrder(storeId, actor, origin, input) {
   const prisma = getPrismaClient();
-  const { type, paymentModel, items: itemsInput, promoCode } = input;
-  const tableId = input.tableId || null;
+  const { items: itemsInput, promoCode } = input;
+  let { type, paymentModel } = input;
+  let tableId = input.tableId || null;
+
+  const store = await prisma.store.findUnique({ where: { id: storeId } });
+  if (!store) throw createHttpError(404, "Store not found");
+  // Counter stores (malls, food courts): guest orders are takeaway, paid upfront, no table
+  const isCounterGuest = origin === 'QR_MENU' && store.serviceMode === 'COUNTER';
+  if (isCounterGuest) {
+    type = 'TAKEAWAY';
+    paymentModel = 'PREPAID';
+    tableId = null;
+  }
 
   if (!['PREPAID', 'POSTPAID'].includes(paymentModel)) {
     throw createHttpError(400, "paymentModel must be PREPAID or POSTPAID");
@@ -408,7 +489,7 @@ async function createOrder(storeId, actor, origin, input) {
   if (!['DINE_IN', 'TAKEAWAY', 'DELIVERY'].includes(type)) {
     throw createHttpError(400, "type must be DINE_IN, TAKEAWAY or DELIVERY");
   }
-  if (origin === 'QR_MENU' && !tableId) {
+  if (origin === 'QR_MENU' && !tableId && !isCounterGuest) {
     throw createHttpError(400, "tableId is required for QR_MENU orders");
   }
 
@@ -425,11 +506,12 @@ async function createOrder(storeId, actor, origin, input) {
   }
 
   const { items, totalAmount: subTotal } = await buildCartItems(prisma, storeId, itemsInput, { allowCustom: isStaff });
-  const store = await prisma.store.findUnique({ where: { id: storeId } });
   // Guests can't order from a suspended or disabled store (staff at the counter still can)
   if (origin === 'QR_MENU' && store?.status !== 'ACTIVE') {
     throw createHttpError(403, "This store isn't taking orders right now. Please ask the staff.");
   }
+  const guest = isCounterGuest ? await resolveCounterGuest(prisma, input) : null;
+  const posCustomerName = origin === 'POS' && typeof input.customerName === 'string' ? input.customerName.trim().slice(0, 60) || null : null;
 
   let promo = null;
   if (promoCode) {
@@ -495,6 +577,9 @@ async function createOrder(storeId, actor, origin, input) {
       staffId: origin === 'POS' && actor ? actor.id : null,
       customerId: origin === 'QR_MENU' && actor ? actor.id : null,
       sessionId: input.sessionId || null,
+      customerName: guest ? guest.name : posCustomerName,
+      customerPhone: guest ? guest.phone : null,
+      guestContactId: guest ? guest.guestContactId : null,
       paymentModel,
       status,
       paidAt: paymentModel === 'PREPAID' && totals.totalAmount === 0 ? new Date() : null,
@@ -567,6 +652,7 @@ async function createOrder(storeId, actor, origin, input) {
     }).catch(() => {});
   } else if (status === 'PROCESSING') {
     await prisma.$transaction((tx) => deductInventory(tx, order), { timeout: 20000 });
+    Object.assign(order, await enterKitchen(prisma, order));
     broadcastToStore(storeId, 'ORDER_PROCESSING', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PROCESSING', order);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_PROCESSING', order);
@@ -574,7 +660,7 @@ async function createOrder(storeId, actor, origin, input) {
       storeId,
       type: 'ORDER_PROCESSING',
       title: 'New Kitchen Order',
-      body: `Table ${order.table?.tableNumber || 'N/A'}: Order #${order.id.slice(-6).toUpperCase()} received in kitchen.`,
+      body: `${orderPlace(order)}: Order #${order.id.slice(-6).toUpperCase()} received in kitchen.`,
       data: { orderId: order.id, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/kds' },
       target: { roles: ['KITCHEN', 'STORE_MANAGER'], storeId }
     }).catch(() => {});
@@ -1187,6 +1273,11 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
   });
   // A cancelled order leaves the table bill: re-split (or drop) a table-wide promo
   if (newStatus === 'CANCELLED') await syncTablePromo(order.tableSessionId);
+  // Reached the kitchen: ready-time promise, and a pickup number at counter stores
+  if (newStatus === 'PROCESSING') {
+    const entered = await enterKitchen(prisma, order).catch(err => { console.error('[Kitchen] entry details failed:', err.message); return null; });
+    if (entered) Object.assign(updatedOrder, entered);
+  }
 
   // Award cashback if transitioning to SETTLED, or refund wallet credits if cancelled
   if (newStatus === 'SETTLED') {
@@ -1248,7 +1339,7 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
         storeId,
         type: 'ORDER_READY',
         title: 'Order Ready for Pickup',
-        body: `Table ${tableNum}: Order #${shortId} is hot and ready to serve!`,
+        body: `${orderPlace(updatedOrder)}: Order #${shortId} is hot and ready to serve!`,
         data: { orderId: updatedOrder.id, tableNumber: tableNum, sound: 'notification.mp3', url: '/waiter' },
         target: { roles: ['WAITER', 'STORE_MANAGER'], storeId }
       }).catch(() => {});
@@ -1257,7 +1348,9 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
           storeId,
           type: 'ORDER_READY',
           title: 'Your Order is Ready!',
-          body: `Order #${shortId} is ready and will be served to your table shortly!`,
+          body: updatedOrder.pickupNumber != null
+            ? `Pickup #${updatedOrder.pickupNumber} is ready! Collect it at the counter.`
+            : `Order #${shortId} is ready and will be served to your table shortly!`,
           data: { orderId: updatedOrder.id, sound: 'notification.mp3' },
           target: { customerId: updatedOrder.customerId, sessionId: updatedOrder.sessionId }
         }).catch(() => {});
@@ -1548,7 +1641,6 @@ async function loadKitchenOrder(prisma, storeId, orderId) {
   return order;
 }
 
-const orderPlace = (order) => (order.table ? `Table ${order.table.tableNumber}` : `Order #${order.id.slice(-6).toUpperCase()}`);
 
 /**
  * Kitchen marks one line ready (e.g. starters before mains). When every remaining line
@@ -1638,7 +1730,14 @@ async function announceOrderDelay(actor, storeId, orderId, minutes) {
   const order = await loadKitchenOrder(prisma, storeId, orderId);
   if (order.status !== 'PROCESSING') throw createHttpError(409, "Only orders being cooked can be delayed");
 
-  await prisma.order.update({ where: { id: orderId }, data: { delayMinutes: { increment: mins } } });
+  const promisedAt = order.estimatedReadyAt ? Math.max(Date.now(), new Date(order.estimatedReadyAt).getTime()) : null;
+  await prisma.order.update({
+    where: { id: orderId },
+    data: {
+      delayMinutes: { increment: mins },
+      ...(promisedAt ? { estimatedReadyAt: new Date(promisedAt + mins * 60000) } : {})
+    }
+  });
   const updated = await getOrderById(storeId, orderId);
   const event = { orderId, tableNumber: order.table?.tableNumber ?? null, minutes: mins, totalDelay: updated.delayMinutes };
   await logOrderEvent({
@@ -1697,6 +1796,11 @@ async function getKdsOrders(actor, storeId) {
       table: {
         select: { tableNumber: true }
       },
+      // Counter orders: the number called at pickup, and who to call
+      pickupNumber: true,
+      customerName: true,
+      customerPhone: true,
+      estimatedReadyAt: true,
       paidAt: true,
       readyAt: true,
       delayMinutes: true,
@@ -1965,6 +2069,8 @@ async function getTableSessionBill(storeId, tableSessionId, { includePin = false
       name: session.store.name,
       address: session.store.address,
       contactPhone: session.store.contactPhone,
+      extraPhones: session.store.extraPhones || [],
+      registrationNumber: session.store.registrationNumber || null,
       gstin: session.store.tenant?.gstin,
       companyLegalName: session.store.tenant?.companyLegalName || session.store.tenant?.name,
       taxRules: session.store.taxRules || []

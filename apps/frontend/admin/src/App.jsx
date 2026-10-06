@@ -15,6 +15,8 @@ import { BrandCreate } from './pages/brand-create';
 import { BrandEdit } from './pages/brand-edit';
 import { Billing } from './pages/billing';
 import { Settings } from './pages/settings';
+import { Venues } from './pages/venues';
+import { VenueEdit } from './pages/venue-edit';
 
 function App() {
   return (
@@ -29,6 +31,9 @@ function App() {
           <Route path="/brands" element={<Brands />} />
           <Route path="/brands/new" element={<BrandCreate />} />
           <Route path="/brands/:id/edit" element={<BrandEdit />} />
+          <Route path="/venues" element={<Venues />} />
+          <Route path="/venues/new" element={<VenueEdit />} />
+          <Route path="/venues/:id" element={<VenueEdit />} />
           <Route path="/users" element={<Users />} />
           <Route path="/users/create" element={<UserCreate />} />
           <Route path="/users/:id/edit" element={<UserEdit />} />

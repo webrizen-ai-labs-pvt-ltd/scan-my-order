@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@smo/ui';
 import { computeCartSubTotal, computeLineUnitPrice, computeOrderTotals } from '@smo/shared/pricing';
 import { usePosCartStore, toOrderItems } from '../../store/pos-cart-store';
-import { ArrowLeft01Icon, PrinterIcon, Loading03Icon, Cancel01Icon, CheckmarkCircle02Icon, Building02Icon, Invoice03Icon, NoteEditIcon } from 'hugeicons-react';
+import { ArrowLeft01Icon, PrinterIcon, Loading03Icon, Cancel01Icon, CheckmarkCircle02Icon, Building02Icon, Invoice03Icon, NoteEditIcon, QrCodeIcon } from 'hugeicons-react';
 import api from '../../lib/api';
 import { usePos } from './pos-layout';
 import { PaymentCollector } from '../../components/payments/payment-collector';
@@ -284,6 +285,71 @@ export const PosCheckoutPage = () => {
       : `Order #${id.slice(-6).toUpperCase()}${bill?.table ? ` · Table ${bill.table.tableNumber}` : bill ? ' · Takeaway' : ''}`;
 
   const shownBill = isDraft ? draftBill : bill;
+
+  /* ---------- the bill, shown and printable before payment ---------- */
+  // Same <Receipt> as the paid one: unpaid until payments cover it, then it becomes the receipt
+  const liveBill = !bill || isDraft ? null : isTable ? sessionBillToReceipt(bill, paySummary?.payments) : bill;
+  const billPrintRef = useRef(null);
+  const [printQr, setPrintQr] = useState(null); // only set while printing
+  const [qrBusy, setQrBusy] = useState(false);
+
+  // A payment landed (cash, QR, another till): show it on the bill straight away
+  const paidSoFar = paySummary?.paidAmount || 0;
+  useEffect(() => {
+    if (!isDraft && paidSoFar > 0) loadBill();
+  }, [paidSoFar, isDraft, loadBill]);
+
+  const channels = paySummary?.channels;
+  const qrChannel = channels?.RAZORPAY?.enabled ? 'RAZORPAY' : channels?.UPI_OFFLINE?.enabled ? 'UPI_OFFLINE' : null;
+  const pendingQr = (paySummary?.payments || []).find(p => p.status === 'PENDING' && (p.channel === 'RAZORPAY' || p.channel === 'UPI_OFFLINE'));
+
+  const printBill = (qr = null) => {
+    // Render the bill with the QR, copy it to the printer, then take the QR off the screen copy
+    flushSync(() => setPrintQr(qr));
+    printReceipt(billPrintRef.current);
+    flushSync(() => setPrintQr(null));
+  };
+
+  /**
+   * Prints the bill with a "Scan to pay" QR for what's left to pay. Razorpay when the brand has it
+   * (confirms itself), otherwise the store's own UPI ID (the cashier confirms). The QR is a real
+   * pending payment, shown in the payment panel too, so the bill can't be charged twice.
+   */
+  const printBillWithQr = async () => {
+    if (qrBusy || !paySummary) return;
+    setQrBusy(true);
+    try {
+      let payment = pendingQr;
+      if (!payment) {
+        const amount = Math.max(0, (paySummary.dueAmount || 0) - (paySummary.pendingAmount || 0));
+        if (amount <= 0) {
+          printBill();
+          return;
+        }
+        const ref = isTable ? { tableSessionId: id } : { orderId: id };
+        const res = await api.post(`/stores/${storeId}/payments`, { ...ref, channel: qrChannel, amount });
+        const summary = res.data.data.summary;
+        payment = (summary?.payments || []).filter(p => p.status === 'PENDING' && p.channel === qrChannel).pop();
+        setBillVersion(v => v + 1); // the payment panel shows the new QR as waiting
+      }
+      if (!payment || (!payment.qrImageUrl && !payment.qrPayload)) {
+        toast('The payment QR could not be created. Try again from the payment panel.', 'error');
+        return;
+      }
+      printBill({
+        channel: payment.channel,
+        amount: payment.amount,
+        imageUrl: payment.qrImageUrl,
+        payload: payment.qrPayload,
+        vpa: channels?.UPI_OFFLINE?.vpa,
+        payeeName: channels?.UPI_OFFLINE?.payeeName,
+      });
+    } catch (err) {
+      toast(apiErrorMessage(err, 'Could not create the payment QR'), 'error');
+    } finally {
+      setQrBusy(false);
+    }
+  };
   const items = isDraft ? draftBill?.items : isTable ? bill?.aggregatedItems : bill?.items;
   // Paid or cancelled bills are invoiced from the invoice page instead
   const billOpen = isDraft
@@ -366,6 +432,37 @@ export const PosCheckoutPage = () => {
                     </Button>
                     <Button variant="outline" className="flex-1" onClick={() => navigate('/dashboard/pos/orders')}>Active orders</Button>
                   </div>
+                </div>
+              ) : liveBill ? (
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`text-sm font-bold ${paidSoFar > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                      {paidSoFar > 0 ? `Part paid · ₹${(paySummary?.dueAmount || 0).toLocaleString('en-IN')} still due` : 'Bill · not paid yet'}
+                    </span>
+                    {pendingQr && <span className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">QR payment waiting</span>}
+                  </div>
+                  <div className="bg-stone-100 dark:bg-black rounded-xl p-3 max-h-[60vh] overflow-y-auto">
+                    <Receipt ref={billPrintRef} order={liveBill} storeData={store} payQr={printQr} />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1" onClick={() => printBill()}>
+                      <PrinterIcon size={16} className="mr-2" /> Print bill
+                    </Button>
+                    {qrChannel && (
+                      <Button
+                        className="flex-1"
+                        onClick={printBillWithQr}
+                        disabled={qrBusy || !paySummary || paySummary.blockers?.length > 0}
+                        title={paySummary?.blockers?.length > 0 ? paySummary.blockers[0].reason : qrChannel === 'RAZORPAY' ? 'Razorpay UPI QR: confirms automatically when paid' : 'Your UPI QR: confirm in the payment panel once it arrives'}
+                      >
+                        {qrBusy ? <Loading03Icon size={16} className="mr-2 animate-spin" /> : <QrCodeIcon size={16} className="mr-2" />}
+                        Print with payment QR
+                      </Button>
+                    )}
+                  </div>
+                  {isTable && bill.orders?.some(o => o.paidAt) && (
+                    <p className="text-[11px] text-zinc-500">Some orders on this table were already paid separately; only the unpaid ones are due.</p>
+                  )}
                 </div>
               ) : (
                 <>

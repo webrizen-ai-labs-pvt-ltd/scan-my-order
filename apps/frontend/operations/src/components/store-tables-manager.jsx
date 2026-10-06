@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
 import { menuUrlFor, menuUrlIsLocalOnly } from '../lib/menu-url';
-import { renderTableQrCard, CARD_WIDTH, CARD_HEIGHT } from '../lib/table-qr-card';
+import { renderTableQrCard, CARD_WIDTH, CARD_HEIGHT, DEFAULT_QR_LOGO } from '../lib/table-qr-card';
 import { useAuthStore } from '../store/authStore';
 import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
@@ -23,10 +23,49 @@ const sortByNumber = (a, b) => a.tableNumber - b.tableNumber;
 
 // Preview QR: error correction "H" (survives ~30% damage) so the logo in the middle can't stop it scanning
 const QR_PREVIEW_SIZE = 140;
-const QR_LOGO_WIDTH = 30; // about 21% of the code's width
-const QR_LOGO_HEIGHT = QR_LOGO_WIDTH * (500 / 512); // logo.png is 512×500
+const QR_LOGO_BOX = 30; // the logo fits in about 21% of the code's width
+const OUR_LOGO = { src: DEFAULT_QR_LOGO, width: 512, height: 500 };
 
-export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName }) => {
+/**
+ * The logo for the middle of the QR codes: the brand's own, or ours when the brand has none or
+ * its image can't be used (its host must allow CORS, or the downloaded card couldn't be saved).
+ * The preview and the downloaded cards always use the same one.
+ */
+function useQrLogo(brandLogo) {
+  const [logo, setLogo] = useState(OUR_LOGO);
+  useEffect(() => {
+    if (!brandLogo) {
+      setLogo(OUR_LOGO);
+      return undefined;
+    }
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (!cancelled) setLogo({ src: brandLogo, width: img.naturalWidth || 1, height: img.naturalHeight || 1, crossOrigin: 'anonymous' });
+    };
+    img.onerror = () => { if (!cancelled) setLogo({ ...OUR_LOGO, brandFailed: true }); };
+    img.src = brandLogo;
+    return () => { cancelled = true; };
+  }, [brandLogo]);
+
+  // Keep its shape: fit inside the box
+  const ratio = logo.width / logo.height;
+  return {
+    ...logo,
+    boxWidth: ratio >= 1 ? QR_LOGO_BOX : QR_LOGO_BOX * ratio,
+    boxHeight: ratio >= 1 ? QR_LOGO_BOX / ratio : QR_LOGO_BOX,
+    isBrand: logo.src !== DEFAULT_QR_LOGO,
+  };
+}
+
+export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName, brandLogo }) => {
+  // Served through our API so it works on downloaded cards whatever site hosts the image
+  // (the URL in the query makes a changed logo load fresh)
+  const brandLogoSrc = brandLogo && brandSlug
+    ? `${api.defaults.baseURL}/public/brands/${brandSlug}/logo?v=${encodeURIComponent(brandLogo.slice(-40))}`
+    : null;
+  const qrLogo = useQrLogo(brandLogoSrc);
   const { user } = useAuthStore();
   const isSuperOrTenantAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'TENANT_ADMIN';
   // `tables === null` means "never loaded" → only then do we show skeletons.
@@ -195,7 +234,7 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName })
   const getQRUrl = (tableNumber) => `${menuUrlFor(brandSlug, storeSlug)}?table=${tableNumber}`;
 
   const getCanvasForTable = (tableNumber) =>
-    renderTableQrCard(document.getElementById(`qr-${tableNumber}`), { tableNumber, storeName });
+    renderTableQrCard(document.getElementById(`qr-${tableNumber}`), { tableNumber, storeName, logoSrc: qrLogo.src });
 
   const downloadAllQRsAsPDF = async () => {
     setIsGeneratingPDF(true);
@@ -355,6 +394,14 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName })
         </div>
       </div>
 
+      {/* The brand has a logo, but its host doesn't let us put it on downloadable QR cards */}
+      {qrLogo.brandFailed && (
+        <p className="flex items-start gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+          <AlertCircleIcon size={14} className="mt-0.5 shrink-0" />
+          Your brand logo couldn't be loaded, so QR codes show the Scan My Order logo. Check the logo link in the brand settings.
+        </p>
+      )}
+
       {/* QR codes pointing at "localhost" only open on this computer */}
       {menuUrlIsLocalOnly() && (
         <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-300">
@@ -491,9 +538,10 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName })
                       level="H"
                       marginSize={0}
                       imageSettings={{
-                        src: '/logo.png',
-                        height: QR_LOGO_HEIGHT,
-                        width: QR_LOGO_WIDTH,
+                        src: qrLogo.src,
+                        height: qrLogo.boxHeight,
+                        width: qrLogo.boxWidth,
+                        crossOrigin: qrLogo.crossOrigin,
                         excavate: true,
                       }}
                     />

@@ -58,7 +58,7 @@ export const StoreMenuManager = ({ storeId }) => {
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
 
   const [editingItem, setEditingItem] = useState(null); // null = not editing, {} = new, {id...} = edit existing
-  const [itemForm, setItemForm] = useState({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', isManuallyDisabled: false });
+  const [itemForm, setItemForm] = useState({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', isManuallyDisabled: false });
   const [isSavingItem, setIsSavingItem] = useState(false);
   const [isAddingIngredient, setIsAddingIngredient] = useState(false);
 
@@ -358,7 +358,7 @@ export const StoreMenuManager = ({ storeId }) => {
               </div>
               <Button onClick={() => {
                 setEditingItem({});
-                setItemForm({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', isManuallyDisabled: false });
+                setItemForm({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', isManuallyDisabled: false });
               }}>
                 <PlusSignIcon size={16} className="mr-2" /> Add Item
               </Button>
@@ -437,6 +437,15 @@ export const StoreMenuManager = ({ storeId }) => {
                             <img src={itemForm.image} alt="Preview" className="w-full h-full object-cover" onError={(e) => e.target.src = 'https://placehold.co/400x300?text=Invalid+Image'} />
                           </div>
                         )}
+                      </div>
+                      <div className="space-y-1.5 col-span-2">
+                        <Label>Video link (Optional)</Label>
+                        <Input
+                          placeholder="YouTube, Vimeo, Google Drive or a .mp4 link"
+                          value={itemForm.videoUrl || ''}
+                          onChange={e => setItemForm(p => ({ ...p, videoUrl: e.target.value }))}
+                        />
+                        <p className="text-xs text-zinc-500">Guests tap the dish photo on the menu to watch it. It only loads when they do.</p>
                       </div>
                     </div>
                     <div className="flex justify-end gap-2 pt-4 border-b border-zinc-200 dark:border-zinc-800 pb-4">

@@ -16,6 +16,11 @@
       "name": "operations",
       "url": "http://localhost:5176",
       "port": 5176
+    },
+    {
+      "name": "menu",
+      "url": "http://localhost:5175",
+      "port": 5175
     }
   ]
 }

@@ -29,6 +29,27 @@ const STATUS_MAPPING = {
   CANCELLED: { label: 'Cancelled', icon: Cancel01Icon, color: 'text-rose-600', bg: 'bg-rose-100' },
 };
 
+const clockTime = (date) => new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+/**
+ * When the guest can expect their food, from the time promised when it reached the kitchen
+ * (the kitchen's "running late" pushes it back).
+ * @returns {{ headline: string, detail?: string } | null}
+ */
+function readyEstimate(order, now) {
+  if (order.status === 'READY') {
+    return order.pickupNumber != null
+      ? { headline: `Ready! Collect it at the counter`, detail: `Show pickup number #${order.pickupNumber}` }
+      : { headline: 'Ready, coming to your table' };
+  }
+  if (order.status === 'PENDING_VERIFICATION') return { headline: 'Waiting for the staff to confirm' };
+  if (order.status !== 'PROCESSING' || !order.estimatedReadyAt) return null;
+  const minutes = Math.ceil((new Date(order.estimatedReadyAt).getTime() - now) / 60000);
+  if (minutes > 1) return { headline: `Ready in about ${minutes} min`, detail: `by ${clockTime(order.estimatedReadyAt)}` };
+  if (minutes >= -3) return { headline: 'Almost ready' };
+  return { headline: 'Taking a little longer than usual', detail: "It's nearly there" };
+}
+
 /**
  * @param {object} props
  * @param {'aboveCart'|'besideWaiter'|'bottom'} [props.placement] where the "Live orders" pill sits:
@@ -47,6 +68,12 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
 
   useEffect(() => {
     initAudioUnlock();
+  }, []);
+
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
   }, []);
   
   useEffect(() => {
@@ -195,8 +222,22 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
                 <ChefHatIcon size={20} />
               </div>
               <div className="text-left">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-white/80">Live Orders</p>
-                <p className="text-sm font-bold leading-none">{activeOrders.length} active</p>
+                {(() => {
+                  // Counter orders: the pickup number and how long, right on the pill
+                  const pickup = activeOrders.find(o => o.pickupNumber != null);
+                  const eta = pickup && readyEstimate(pickup, now);
+                  return pickup ? (
+                    <>
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-white/80">Pickup #{pickup.pickupNumber}</p>
+                      <p className="text-sm font-bold leading-none">{eta?.headline || STATUS_MAPPING[pickup.status]?.label}</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[11px] font-medium uppercase tracking-wider text-white/80">Live Orders</p>
+                      <p className="text-sm font-bold leading-none">{activeOrders.length} active</p>
+                    </>
+                  );
+                })()}
               </div>
             </div>
             <div className="text-xs font-semibold px-2 py-1 bg-white/20 rounded-lg">View</div>
@@ -261,18 +302,33 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
               {activeOrders.map(order => {
                 const conf = STATUS_MAPPING[order.status] || STATUS_MAPPING.PROCESSING;
                 const Icon = conf.icon;
+                const eta = readyEstimate(order, now);
                 return (
-                  <div key={order.id} className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
-                    <div className="flex items-center justify-between mb-2">
-                      <div>
-                        <p className="text-xs font-mono text-zinc-500">Order #{order.id.slice(-5).toUpperCase()}</p>
-                        <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">₹{order.totalAmount}</p>
+                  <div key={order.id} className={`rounded-2xl border p-4 ${order.status === 'READY' ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        {order.pickupNumber != null && (
+                          <div className="flex h-14 min-w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-zinc-900 px-2 text-white dark:bg-white dark:text-zinc-900">
+                            <span className="text-[9px] font-semibold uppercase tracking-wider opacity-70">Pickup</span>
+                            <span className="text-xl font-black leading-none tabular-nums">#{order.pickupNumber}</span>
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="text-xs font-mono text-zinc-500">Order #{order.id.slice(-5).toUpperCase()}</p>
+                          <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">₹{order.totalAmount}</p>
+                        </div>
                       </div>
-                      <div className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${conf.bg} ${conf.color}`}>
+                      <div className={`flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ${conf.bg} ${conf.color}`}>
                         <Icon size={14} />
                         {conf.label}
                       </div>
                     </div>
+                    {eta && (
+                      <div className="mt-3 flex items-baseline justify-between gap-2 border-t border-zinc-200/70 pt-2.5 dark:border-zinc-800">
+                        <p className={`text-sm font-bold ${order.status === 'READY' ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}`}>{eta.headline}</p>
+                        {eta.detail && <p className="shrink-0 text-xs text-zinc-500">{eta.detail}</p>}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -314,7 +370,8 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
               <div className="text-center pb-4 border-b border-dashed border-zinc-300">
                 <h4 className="text-base font-bold uppercase">{billData.store.name}</h4>
                 {billData.store.address && <p className="text-[11px] text-zinc-600">{billData.store.address}</p>}
-                {billData.store.contactPhone && <p className="text-[11px] text-zinc-600">Tel: {billData.store.contactPhone}</p>}
+                {billData.store.contactPhone && <p className="text-[11px] text-zinc-600">Tel: {[billData.store.contactPhone, ...(billData.store.extraPhones || [])].join(', ')}</p>}
+                {billData.store.registrationNumber && <p className="text-[11px] text-zinc-600">Reg. No: {billData.store.registrationNumber}</p>}
                 {billData.store.gstin && <p className="text-[11px] text-zinc-600">GSTIN: {billData.store.gstin}</p>}
               </div>
 

@@ -1,7 +1,57 @@
 import React from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 
-export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
+// Razorpay's QR image is a 674×1644 poster; the scannable card sits at x 107–567, y 520–1132
+const POSTER = { w: 674, x: 107, y: 520, cw: 460, ch: 612 };
+
+/**
+ * "Scan to pay" block at the foot of a bill. Inline styles only: the print iframe has no Tailwind.
+ * @param {{ channel: 'RAZORPAY'|'UPI_OFFLINE', amount: number, imageUrl?: string, payload?: string, vpa?: string, payeeName?: string }} qr
+ */
+const PayQr = ({ qr }) => {
+  const width = 180;
+  return (
+    <div className="border-t" style={{ borderTop: '1px dashed black', paddingTop: 8, marginBottom: 8, textAlign: 'center' }}>
+      <div className="font-bold" style={{ fontWeight: 'bold' }}>Scan to pay ₹{Number(qr.amount).toFixed(2)}</div>
+      {qr.imageUrl ? (
+        <div style={{ position: 'relative', overflow: 'hidden', width, height: Math.round(width * POSTER.ch / POSTER.cw), margin: '6px auto' }}>
+          <img
+            src={qr.imageUrl}
+            alt=""
+            style={{
+              position: 'absolute',
+              maxWidth: 'none',
+              width: `${(POSTER.w / POSTER.cw) * 100}%`,
+              left: `${-(POSTER.x / POSTER.cw) * 100}%`,
+              top: `${-(POSTER.y / POSTER.ch) * 100}%`,
+            }}
+          />
+        </div>
+      ) : qr.payload ? (
+        <div style={{ margin: '6px auto', width: 170 }}>
+          <QRCodeSVG value={qr.payload} size={170} level="M" />
+        </div>
+      ) : null}
+      <div className="text-xs" style={{ fontSize: '0.75rem' }}>
+        {qr.channel === 'RAZORPAY'
+          ? 'Any UPI app · confirms automatically'
+          : [qr.payeeName, qr.vpa].filter(Boolean).join(' · ')}
+      </div>
+    </div>
+  );
+};
+
+/**
+ * @param {object} props
+ * @param {object} props.order
+ * @param {object} props.storeData
+ * @param {object} [props.payQr] adds a "Scan to pay" QR at the bottom (printed bills)
+ */
+export const Receipt = React.forwardRef(({ order, storeData, payQr }, ref) => {
   if (!order || !storeData) return null;
+  const isPaid = Boolean(order.paidAt) || order.status === 'SETTLED';
+  const paidSoFar = (order.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
+  const amountDue = Math.max(0, order.totalAmount - paidSoFar);
 
   const formattedDate = new Intl.DateTimeFormat('en-IN', {
     dateStyle: 'medium',
@@ -15,8 +65,11 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
         {storeData.tenant?.name && storeData.tenant.name !== storeData.name && (
           <div className="font-bold">{storeData.name}</div>
         )}
+        {storeData.registrationNumber && <div>Reg. No: {storeData.registrationNumber}</div>}
         {storeData.address && <div>{storeData.address}</div>}
-        {storeData.contactPhone && <div>Tel: {storeData.contactPhone}</div>}
+        {(storeData.contactPhone || storeData.extraPhones?.length > 0) && (
+          <div>Tel: {[storeData.contactPhone, ...(storeData.extraPhones || [])].filter(Boolean).join(', ')}</div>
+        )}
         {storeData.tenant?.gstin && <div>GSTIN: {storeData.tenant.gstin}</div>}
       </div>
 
@@ -41,10 +94,14 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
         <div className="flex justify-between">
           <span>Type: {order.type === 'DINE_IN' ? 'Dine-In' : 'Takeaway'}</span>
           {order.table && <span className="font-bold text-lg">Table: {order.table.tableNumber}</span>}
+          {!order.table && order.pickupNumber != null && <span className="font-bold text-lg">Pickup #{order.pickupNumber}</span>}
         </div>
-        <div className="flex justify-between">
-          <span>Status: {order.paidAt || order.status === 'SETTLED' ? 'Paid' : 'Unpaid'}</span>
-        </div>
+        {/* A bill printed with a payment QR is for the guest to pay: no status line on it */}
+        {!payQr && (
+          <div className="flex justify-between">
+            <span>Status: {isPaid ? 'Paid' : 'Unpaid'}</span>
+          </div>
+        )}
       </div>
 
       <div className="border-b border-dashed border-black pb-2 mb-2">
@@ -122,6 +179,12 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
         <span>Total</span>
         <span>₹{order.totalAmount.toFixed(2)}</span>
       </div>
+      {!isPaid && paidSoFar > 0 && (
+        <div className="flex justify-between font-bold mb-2">
+          <span>Amount due</span>
+          <span>₹{amountDue.toFixed(2)}</span>
+        </div>
+      )}
 
 
       {order.payments?.length > 0 ? (
@@ -187,6 +250,8 @@ export const Receipt = React.forwardRef(({ order, storeData }, ref) => {
           <span className="font-semibold">₹{order.refundDue.toFixed(2)}</span>
         </div>
       )}
+
+      {payQr && !isPaid && <PayQr qr={payQr} />}
 
       <div className="text-center">
         <p>Thank you for visiting!</p>

@@ -179,6 +179,28 @@ async function getStores(actor, query = {}) {
   return stores.map(serializeStore);
 }
 
+const MAX_EXTRA_PHONES = 4;
+
+/** Up to 4 extra numbers: digits with + - ( ) and spaces, 6–15 digits each, no repeats of the main one */
+function cleanExtraPhones(list, mainPhone) {
+  if (!Array.isArray(list)) throw createHttpError(400, "extraPhones must be a list of phone numbers");
+  const digitsOf = (p) => String(p || '').replace(/\D/g, '');
+  const seen = new Set(mainPhone ? [digitsOf(mainPhone)] : []);
+  const out = [];
+  for (const raw of list) {
+    const phone = String(raw || '').trim();
+    if (!phone) continue;
+    if (!/^[+\d][\d\s\-()]*$/.test(phone) || digitsOf(phone).length < 6 || digitsOf(phone).length > 15) {
+      throw createHttpError(400, `"${phone.slice(0, 20)}" isn't a valid phone number`);
+    }
+    if (seen.has(digitsOf(phone))) continue; // same number twice
+    seen.add(digitsOf(phone));
+    out.push(phone.slice(0, 20));
+  }
+  if (out.length > MAX_EXTRA_PHONES) throw createHttpError(400, `Add up to ${MAX_EXTRA_PHONES} extra numbers`);
+  return out;
+}
+
 async function getStoreById(actor, storeId) {
   let store = storeMetadataCache.get(storeId);
   if (!store) {
@@ -235,6 +257,13 @@ async function updateStore(actor, storeId, input) {
     throw createHttpError(403, "Only the brand owner can add store managers");
   }
 
+  // Contact numbers beyond the main one, and an optional registration number (e.g. FSSAI)
+  const contactExtras = {};
+  if (input.extraPhones !== undefined) contactExtras.extraPhones = cleanExtraPhones(input.extraPhones, contactPhone);
+  if (input.registrationNumber !== undefined) {
+    contactExtras.registrationNumber = String(input.registrationNumber || '').trim().slice(0, 50) || null;
+  }
+
   // Per-store UPI override: only brand owners decide where money is paid
   const upiOverride = {};
   if (input.offlineUpiId !== undefined) {
@@ -252,7 +281,7 @@ async function updateStore(actor, storeId, input) {
 
     const updatedStore = await tx.store.update({
       where: { id: storeId },
-      data: { name, banner, status, address, contactPhone, contactEmail, operatingHours, tenantId: targetTenantId, taxRules, ...upiOverride },
+      data: { name, banner, status, address, contactPhone, contactEmail, operatingHours, tenantId: targetTenantId, taxRules, ...contactExtras, ...upiOverride },
       include: { tenant: true }
     });
 

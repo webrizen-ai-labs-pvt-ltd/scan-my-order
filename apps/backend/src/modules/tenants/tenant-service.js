@@ -119,6 +119,11 @@ async function createTenant(actor, input) {
 
   const prisma = getPrismaClient();
 
+  // Top-level menu links the menu app uses itself (/v/<venue> is the mall / food court page)
+  if (["v", "api", "admin", "login", "menu", "venues"].includes(String(slug).toLowerCase())) {
+    throw createHttpError(400, "That link name is reserved. Pick another one.");
+  }
+
   // Check unique slug
   const existingTenant = await prisma.tenant.findUnique({ where: { slug } });
   if (existingTenant) {

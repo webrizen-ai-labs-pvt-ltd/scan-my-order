@@ -9,6 +9,7 @@ import { usePosCartStore } from '../../store/pos-cart-store';
 import { CancelOrderDialog } from '../../components/pos/cancel-order-dialog';
 import { RefundDialog } from '../../components/pos/refund-dialog';
 import { apiErrorMessage } from '../../components/pos/pos-toasts';
+import { orderPlaceLabel, orderGuestLabel } from '../../lib/order-place';
 
 const STATUS_DISPLAY = {
   PENDING_VERIFICATION: { label: 'Awaiting approval', tone: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800' },
@@ -69,6 +70,8 @@ export const PosActiveOrdersPage = () => {
     const term = search.trim().toLowerCase();
     const list = (orders || []).filter(o => !term
       || String(o.table?.tableNumber ?? '').includes(term)
+      || String(o.pickupNumber ?? '') === term.replace('#', '')
+      || String(o.customerPhone ?? '').includes(term)
       || String(o.tableSession?.pin ?? '').includes(term)
       || o.id.toLowerCase().includes(term));
 
@@ -188,7 +191,10 @@ export const PosActiveOrdersPage = () => {
                 <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-start gap-2">
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-bold text-xl">{group.table ? `Table ${group.table.tableNumber}` : 'Takeaway'}</span>
+                      <span className="font-bold text-xl">{group.table ? `Table ${group.table.tableNumber}` : orderPlaceLabel(group.orders[0])}</span>
+                      {!group.table && orderGuestLabel(group.orders[0]) && (
+                        <span className="text-xs text-zinc-500">{orderGuestLabel(group.orders[0])}</span>
+                      )}
                       {group.tableSession?.pin && (
                         <span className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs px-2 py-0.5 rounded-md font-bold dark:bg-indigo-950/50 dark:border-indigo-800 dark:text-indigo-300">
                           <LockKeyIcon size={11} /> PIN {group.tableSession.pin}

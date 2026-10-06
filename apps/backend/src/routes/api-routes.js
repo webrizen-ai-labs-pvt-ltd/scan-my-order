@@ -10,6 +10,7 @@ const maintenanceRoutes = require("../modules/maintenance/maintenance-routes");
 const analyticsRoutes = require("../modules/analytics/analytics-routes");
 const duesRoutes = require("../modules/dues/dues-routes");
 const reportsRoutes = require("../modules/reports/reports-routes");
+const venueRoutes = require("../modules/venues/venue-routes");
 const { staffNotificationRouter } = require("../modules/notifications/notification-routes");
 
 const router = express.Router();
@@ -25,6 +26,7 @@ router.use("/maintenance", maintenanceRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/dues", duesRoutes);
 router.use("/reports", reportsRoutes);
+router.use("/venues", venueRoutes);
 router.use("/notifications", staffNotificationRouter);
 
 module.exports = router;

@@ -34,7 +34,9 @@ function editableFrom(store) {
     name: store.name || '',
     address: store.address || '',
     contactPhone: store.contactPhone || '',
+    extraPhones: Array.isArray(store.extraPhones) ? [...store.extraPhones] : [],
     contactEmail: store.contactEmail || '',
+    registrationNumber: store.registrationNumber || '',
     banner: store.banner || '',
     operatingHours: parseHours(store.operatingHours),
     taxRules: Array.isArray(store.taxRules) ? store.taxRules.map(r => ({ name: r.name || '', rate: Number(r.rate) || 0 })) : [],
@@ -318,7 +320,9 @@ export const StoreSettings = ({ store, onSaved }) => {
       name: form.name.trim(),
       address: form.address.trim(),
       contactPhone: form.contactPhone.trim(),
+      extraPhones: form.extraPhones.map(p => p.trim()).filter(Boolean),
       contactEmail: form.contactEmail.trim(),
+      registrationNumber: form.registrationNumber.trim(),
       banner: form.banner.trim(),
       operatingHours: form.operatingHours,
       taxRules: form.taxRules.map(r => ({ name: String(r.name).trim(), rate: Number(r.rate) })),
@@ -362,7 +366,8 @@ export const StoreSettings = ({ store, onSaved }) => {
 
   // Sections with unsaved edits get a dot in the nav
   const changed = {
-    profile: ['name', 'address', 'contactPhone', 'contactEmail', 'banner'].some(k => form[k] !== saved[k]),
+    profile: ['name', 'address', 'contactPhone', 'contactEmail', 'registrationNumber', 'banner'].some(k => form[k] !== saved[k])
+      || JSON.stringify(form.extraPhones) !== JSON.stringify(saved.extraPhones),
     hours: JSON.stringify(form.operatingHours) !== JSON.stringify(saved.operatingHours),
     taxes: JSON.stringify(form.taxRules) !== JSON.stringify(saved.taxRules),
     payments: form.offlineUpiId !== saved.offlineUpiId || form.offlineUpiPayeeName !== saved.offlineUpiPayeeName,
@@ -394,11 +399,52 @@ export const StoreSettings = ({ store, onSaved }) => {
             <Row label="Address">
               <textarea value={form.address} onChange={set('address')} rows={2} maxLength={300} className="w-full max-w-xl rounded-md border border-zinc-300 dark:border-zinc-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-zinc-400/40" />
             </Row>
-            <Row label="Contact" hint="Shown on receipts.">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-xl">
-                <div className="flex flex-col gap-1.5"><Label htmlFor="s-phone">Phone</Label><Input id="s-phone" type="tel" value={form.contactPhone} onChange={set('contactPhone')} maxLength={20} /></div>
-                <div className="flex flex-col gap-1.5"><Label htmlFor="s-email">Email</Label><Input id="s-email" type="email" value={form.contactEmail} onChange={set('contactEmail')} maxLength={120} /></div>
+            <Row label="Phone numbers" hint="All of them are printed on bills. The first one is the main number.">
+              <div className="flex flex-col gap-2 max-w-md">
+                <div className="flex items-center gap-2">
+                  <Input id="s-phone" type="tel" value={form.contactPhone} onChange={set('contactPhone')} maxLength={20} placeholder="Main number" aria-label="Main phone number" />
+                  <span className="shrink-0 w-16 text-[11px] font-semibold text-zinc-500">Main</span>
+                </div>
+                {form.extraPhones.map((phone, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Input
+                      type="tel"
+                      value={phone}
+                      maxLength={20}
+                      placeholder="Another number"
+                      aria-label={`Phone number ${i + 2}`}
+                      onChange={e => setForm(f => ({ ...f, extraPhones: f.extraPhones.map((p, j) => (j === i ? e.target.value : p)) }))}
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 w-16 text-zinc-500 hover:text-red-600"
+                      aria-label={`Remove phone number ${i + 2}`}
+                      onClick={() => setForm(f => ({ ...f, extraPhones: f.extraPhones.filter((_, j) => j !== i) }))}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                ))}
+                {form.extraPhones.length < 4 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="self-start"
+                    onClick={() => setForm(f => ({ ...f, extraPhones: [...f.extraPhones, ''] }))}
+                  >
+                    + Add another number
+                  </Button>
+                )}
               </div>
+            </Row>
+            <Row label="Email" hint="Shown on receipts.">
+              <Input id="s-email" type="email" value={form.contactEmail} onChange={set('contactEmail')} maxLength={120} className="max-w-md" />
+            </Row>
+            <Row label="Registration number" hint="Optional. For example your FSSAI licence or shop registration number. Printed on bills.">
+              <Input value={form.registrationNumber} onChange={set('registrationNumber')} maxLength={50} placeholder="e.g. 12823999000123" className="max-w-md" />
             </Row>
             <Row label="Banner" hint="The wide picture at the top of the QR menu. Paste an image link.">
               <div className="flex flex-col gap-2 max-w-xl">

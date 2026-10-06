@@ -9,7 +9,8 @@
     "./audio": "./src/audio-player.js",
     "./assets/*": "./assets/*",
     "./pricing": "./src/pricing.mjs",
-    "./gst": "./src/gst.mjs"
+    "./gst": "./src/gst.mjs",
+    "./phone": "./src/phone.mjs"
   },
   "files": [
     "assets",
