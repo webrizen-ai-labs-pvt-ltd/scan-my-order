@@ -36,6 +36,7 @@ import { WaiterFab } from '../components/waiter-fab';
 import { useWaiterCall } from '../hooks/use-waiter-call';
 import { CustomerWalletModal } from '../components/customer-wallet-modal';
 import { ItemVideoSheet } from '../components/item-video-sheet';
+import { UpiPaySheet } from '../components/upi-pay-sheet';
 
 // ─── Dietary Badge (FSSAI-style, refined) ────────────────────────────────────
 const DietaryBadge = ({ type, size = 'sm' }) => {
@@ -255,6 +256,18 @@ export const StoreMenuPage = () => {
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [paymentModel, setPaymentModel] = useState('POSTPAID');
   const payModel = store?.serviceMode === 'COUNTER' ? 'PREPAID' : paymentModel;
+
+  // Ways to pay upfront here: online (Razorpay), else UPI to the store's own ID (a cashier confirms),
+  // plus "pay at counter" where a counter store allows it
+  const payOptions = store?.paymentOptions || { online: Boolean(store?.razorpayConfigured), upi: false, payAtCounter: false };
+  const prepaidMethods = [
+    ...(payOptions.online ? ['ONLINE'] : payOptions.upi ? ['UPI'] : []),
+    ...(store?.serviceMode === 'COUNTER' && payOptions.payAtCounter ? ['COUNTER'] : []),
+  ];
+  const [payWithChoice, setPayWith] = useState(null);
+  const payWith = prepaidMethods.includes(payWithChoice) ? payWithChoice : prepaidMethods[0] || null;
+  const [upiSheet, setUpiSheet] = useState(null); // the UPI payment to make, after placing an order
+  const [ordersVersion, setOrdersVersion] = useState(0); // tells Live Orders to reload
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Table Session / PIN State
@@ -508,6 +521,7 @@ export const StoreMenuPage = () => {
         paymentModel: payModel,
         type: isCounter ? 'TAKEAWAY' : 'DINE_IN',
         ...(isCounter ? { customerPhone: guestPhone, customerName: guestName.trim() || undefined } : {}),
+        payWith: payModel === 'PREPAID' ? payWith : undefined,
         promoCode: appliedPromo?.code || undefined,
         applyWalletCredits: useWalletCredits && appliedWalletCredits > 0,
         walletCredits: appliedWalletCredits,
@@ -522,7 +536,7 @@ export const StoreMenuPage = () => {
       };
 
       const res = await api.post(`/public/stores/${store.id}/orders`, payload);
-      const { paymentIntent, tableSessionId, sessionPin, sessionToken } = res.data.data;
+      const { paymentIntent, upiPayment, tableSessionId, sessionPin, sessionToken } = res.data.data;
 
       if (sessionPin || sessionToken) {
         if (sessionPin) {
@@ -546,7 +560,21 @@ export const StoreMenuPage = () => {
         localStorage.setItem(pKey, JSON.stringify([...existingPaid, res.data.data.order.id]));
       }
 
-      if (payModel === 'PREPAID' && paymentIntent) {
+      const placed = res.data.data.order;
+      if (upiPayment) {
+        // Pay the store's own UPI ID now; a cashier confirms it
+        clearCart();
+        setIsCheckoutOpen(false);
+        fetchWalletData();
+        setOrdersVersion(v => v + 1);
+        setUpiSheet({ ...upiPayment, orderId: placed.id, cooking: placed.status === 'PROCESSING' });
+      } else if (payModel === 'PREPAID' && payWith === 'COUNTER') {
+        clearCart();
+        setIsCheckoutOpen(false);
+        fetchWalletData();
+        setOrdersVersion(v => v + 1);
+        showToast(`Order placed! Pay ₹${placed.totalAmount} at the counter and show code SMO-${placed.id.slice(-6).toUpperCase()}.`, 'success');
+      } else if (payModel === 'PREPAID' && paymentIntent) {
         const options = {
           key: paymentIntent.key || store.razorpayKeyId,
           amount: paymentIntent.amount,
@@ -614,8 +642,8 @@ export const StoreMenuPage = () => {
       }
       setPhoneError('');
       try { localStorage.setItem('smo_guest_contact', JSON.stringify({ phone: checked.phone, name: guestName.trim() })); } catch { /* private mode */ }
-      if (!store.razorpayConfigured) {
-        showToast("This counter isn't taking online payments yet. Please order at the counter.", 'error');
+      if (!payWith) {
+        showToast("This counter isn't taking orders on the menu yet. Please order at the counter.", 'error');
         return;
       }
       await submitOrder();
@@ -1551,18 +1579,41 @@ export const StoreMenuPage = () => {
                   </button>
                   <button
                     type="button"
-                    disabled={!store.razorpayConfigured}
-                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-all ${!store.razorpayConfigured
+                    disabled={prepaidMethods.length === 0}
+                    className={`flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-all ${prepaidMethods.length === 0
                       ? 'cursor-not-allowed text-zinc-300 dark:text-zinc-600'
                       : paymentModel === 'PREPAID'
                         ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white'
                         : 'text-zinc-500 hover:text-zinc-700'
                       }`}
-                    onClick={() => store.razorpayConfigured && setPaymentModel('PREPAID')}
+                    onClick={() => prepaidMethods.length > 0 && setPaymentModel('PREPAID')}
                   >
-                    <CreditCardIcon size={14} /> Pay Online
+                    <CreditCardIcon size={14} /> {payWith === 'UPI' ? 'Pay by UPI' : 'Pay Online'}
                   </button>
                 </div>
+                )}
+
+                {/* Counter: pay now, or order now and pay at the counter */}
+                {isCounter && prepaidMethods.length > 1 && (
+                  <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800" role="radiogroup" aria-label="How do you want to pay?">
+                    {prepaidMethods.map(m => (
+                      <button
+                        key={m}
+                        type="button"
+                        role="radio"
+                        aria-checked={payWith === m}
+                        onClick={() => setPayWith(m)}
+                        className={`flex items-center justify-center gap-1.5 rounded-lg py-2.5 text-xs font-bold transition-all ${payWith === m
+                          ? 'bg-white text-zinc-900 shadow-sm dark:bg-zinc-700 dark:text-white'
+                          : 'text-zinc-500 hover:text-zinc-700'}`}
+                      >
+                        {m === 'COUNTER' ? <><Store01Icon size={14} /> Pay at counter</> : <><CreditCardIcon size={14} /> {m === 'UPI' ? 'Pay by UPI' : 'Pay online'}</>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {payModel === 'PREPAID' && payWith === 'UPI' && (
+                  <p className="text-center text-[11px] text-zinc-500">You'll pay {store.name} directly from your UPI app. The store confirms it.</p>
                 )}
 
                 {/* Place Order CTA */}
@@ -1570,22 +1621,34 @@ export const StoreMenuPage = () => {
                   className="h-[52px] w-full rounded-xl text-base font-extrabold text-white shadow-lg transition-all active:scale-[0.98] disabled:opacity-40"
                   style={{ backgroundColor: brandColorHex }}
                   onClick={handlePlaceOrder}
-                  disabled={isPlacingOrder || items.length === 0 || (!isCounter && !tableNumber) || (isCounter && !store.razorpayConfigured)}
+                  disabled={isPlacingOrder || items.length === 0 || (!isCounter && !tableNumber) || (isCounter && !payWith)}
                 >
                   {isPlacingOrder
                     ? 'Placing your order...'
-                    : isCounter && !store.razorpayConfigured
-                      ? 'Online ordering coming soon'
+                    : isCounter && !payWith
+                      ? 'Please order at the counter'
                       : !isCounter && !tableNumber
                         ? 'Scan Table QR to Order'
                         : payModel === 'PREPAID'
-                          ? `Pay ₹${finalTotal} Now`
+                          ? payWith === 'COUNTER'
+                            ? `Place order · pay ₹${finalTotal} at counter`
+                            : payWith === 'UPI' ? `Pay ₹${finalTotal} by UPI` : `Pay ₹${finalTotal} Now`
                           : 'Place Order'}
                 </button>
               </div>
             </div>
           </div>
         )}
+
+        {/* ── Pay by UPI to the store (after placing the order) ────────── */}
+        <UpiPaySheet
+          key={upiSheet?.paymentId || 'none'}
+          storeId={store.id}
+          payment={upiSheet}
+          cooking={upiSheet?.cooking}
+          onClose={() => setUpiSheet(null)}
+          onClaimed={() => setOrdersVersion(v => v + 1)}
+        />
 
         {/* ── Dish video (loads only when opened) ───────────────────────── */}
         <ItemVideoSheet
@@ -1726,6 +1789,7 @@ export const StoreMenuPage = () => {
         <LiveOrders
           storeId={store.id}
           tableNumber={tableNumber}
+          refreshKey={ordersVersion}
           placement={getTotalItems() > 0 ? 'aboveCart' : tableNumber ? 'besideWaiter' : 'bottom'}
           activeSessionId={tableSessionInfo?.tableSessionId || localStorage.getItem(`smo_table_session_${store.id}_${tableNumber}`)}
         />

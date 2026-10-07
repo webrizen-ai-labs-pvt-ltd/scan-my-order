@@ -8,6 +8,7 @@ const {
   createPayment,
   getPayment,
   confirmOfflinePayment,
+  listGuestUpiPayments,
   cancelPayment,
   putBillOnDues
 } = require("./payment-service");
@@ -36,6 +37,11 @@ router.get("/summary", asyncHandler(async (req, res) => {
 router.post("/", asyncHandler(async (req, res) => {
   const result = await createPayment(req.user, req.params.storeId, req.body);
   res.status(201).json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/payments/guest-upi  (guests' UPI payments waiting for a cashier)
+router.get("/guest-upi", asyncHandler(async (req, res) => {
+  res.json(createApiResponse(await listGuestUpiPayments(req.user, req.params.storeId)));
 }));
 
 // GET /api/stores/:storeId/payments/:paymentId  (re-checks Razorpay if still pending)

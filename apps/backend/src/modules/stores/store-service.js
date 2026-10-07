@@ -260,6 +260,10 @@ async function updateStore(actor, storeId, input) {
   // Contact numbers beyond the main one, and an optional registration number (e.g. FSSAI)
   const contactExtras = {};
   if (input.extraPhones !== undefined) contactExtras.extraPhones = cleanExtraPhones(input.extraPhones, contactPhone);
+  // Guest ordering: cook before a UPI payment is confirmed; pay-at-counter orders (counter stores)
+  for (const key of ["startBeforeUpiConfirmed", "payAtCounter"]) {
+    if (input[key] !== undefined) contactExtras[key] = Boolean(input[key]);
+  }
   if (input.registrationNumber !== undefined) {
     contactExtras.registrationNumber = String(input.registrationNumber || '').trim().slice(0, 50) || null;
   }

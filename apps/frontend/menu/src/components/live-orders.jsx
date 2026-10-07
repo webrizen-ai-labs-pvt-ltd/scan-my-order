@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { 
   ChefHatIcon, 
@@ -17,6 +17,7 @@ import { getSessionId } from '../lib/session';
 import { openCustomerStream } from '../lib/customer-stream';
 import { initAudioUnlock, playNotificationChime, getAudioMuted, setAudioMuted } from '@smo/shared/audio';
 import { usePushNotifications } from '../hooks/use-push-notifications';
+import { UpiPaySheet } from './upi-pay-sheet';
 
 const STATUS_MAPPING = {
   DRAFT: { label: 'Draft', icon: Time02Icon, color: 'text-zinc-500', bg: 'bg-zinc-100' },
@@ -55,7 +56,7 @@ function readyEstimate(order, now) {
  * @param {'aboveCart'|'besideWaiter'|'bottom'} [props.placement] where the "Live orders" pill sits:
  *   above the cart bar, at the bottom next to the corner waiter, or at the bottom on its own
  */
-export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 'bottom' }) => {
+export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 'bottom', refreshKey = 0 }) => {
   const { token } = useAuthStore();
   const [orders, setOrders] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -70,6 +71,25 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
     initAudioUnlock();
   }, []);
 
+  const [payingOrder, setPayingOrder] = useState(null); // UPI payment reopened from the list
+
+  const loadOrders = useCallback(async () => {
+    const sessionId = getSessionId();
+    if ((!token && !sessionId) || !storeId) return;
+    try {
+      const queryParams = token ? '' : `?sessionId=${sessionId}`;
+      const res = await api.get(`/public/stores/${storeId}/orders/me${queryParams}`);
+      setOrders(res.data.data || []);
+    } catch (err) {
+      console.error("Failed to fetch active orders", err);
+    }
+  }, [token, storeId]);
+
+  // The page placed an order (e.g. UPI or pay at counter): show it right away
+  useEffect(() => {
+    if (refreshKey > 0) loadOrders();
+  }, [refreshKey, loadOrders]);
+
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
@@ -81,16 +101,7 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
     if (!token && !sessionId) return;
     if (!storeId) return;
 
-    // Fetch initial active orders
-    const fetchOrders = async () => {
-      try {
-        const queryParams = token ? '' : `?sessionId=${sessionId}`;
-        const res = await api.get(`/public/stores/${storeId}/orders/me${queryParams}`);
-        setOrders(res.data.data || []);
-      } catch (err) {
-        console.error("Failed to fetch initial active orders", err);
-      }
-    };
+    const fetchOrders = loadOrders;
     fetchOrders();
 
     // Reconnects by itself; after a drop we reload the orders so no status change is missed
@@ -98,6 +109,17 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
       try {
         if (data.type === 'STREAM_RECONNECTED') {
           fetchOrders();
+        } else if (data.type === 'GUEST_PAYMENT_UPDATED') {
+          // A cashier confirmed (or didn't find) the guest's UPI payment
+          fetchOrders();
+          playNotificationChime({ haptic: true });
+          const paid = data.data?.outcome === 'PAID';
+          setToastNotification({
+            title: paid ? 'Payment confirmed' : 'Payment not received',
+            body: paid ? 'Thanks! Your order is being prepared.' : "The store couldn't find your UPI payment. Please pay at the counter.",
+            id: Date.now()
+          });
+          setTimeout(() => setToastNotification(null), paid ? 6000 : 12000);
         } else if (data.type === 'NOTIFICATION') {
           playNotificationChime({ haptic: true });
           setToastNotification({
@@ -144,7 +166,7 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
             const existingIdx = prev.findIndex(o => o.id === data.data.id);
             if (existingIdx >= 0) {
               const newOrders = [...prev];
-              newOrders[existingIdx] = data.data;
+              newOrders[existingIdx] = { ...data.data, guestUpi: data.data.guestUpi ?? prev[existingIdx].guestUpi };
               return newOrders;
             }
             return [data.data, ...prev];
@@ -154,9 +176,10 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
         console.error('Live order update failed', err);
       }
     });
-  }, [token, storeId]);
+  }, [token, storeId, loadOrders]);
 
-  const activeOrders = orders.filter(o => ['PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED'].includes(o.status));
+  // Waiting for a UPI confirmation or a counter payment counts as active too
+  const activeOrders = orders.filter(o => ['PENDING_VERIFICATION', 'PENDING_PAYMENT', 'PROCESSING', 'READY', 'SERVED'].includes(o.status));
 
   // Determine effective tableSessionId
   const effectiveSessionId = activeSessionId || orders.find(o => o.tableSessionId)?.tableSessionId;
@@ -323,6 +346,29 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
                         {conf.label}
                       </div>
                     </div>
+                    {(() => {
+                      // Paying by UPI to the store, or at the counter
+                      const upi = order.guestUpi;
+                      const code = `SMO-${order.id.slice(-6).toUpperCase()}`;
+                      let line = null;
+                      if (order.guestPayMethod === 'COUNTER' && order.status === 'PENDING_PAYMENT') {
+                        line = <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Pay ₹{order.totalAmount} at the counter <span className="font-mono text-xs font-semibold text-zinc-500">· {code}</span></p>;
+                      } else if (order.guestPayMethod === 'UPI' && upi && !order.paidAt) {
+                        if (upi.status === 'PENDING' && !upi.claimedAt) {
+                          line = (
+                            <div className="flex items-center justify-between gap-2">
+                              <p className="text-sm font-bold text-amber-700 dark:text-amber-400">Payment pending</p>
+                              <button type="button" onClick={() => setPayingOrder(order)} className="shrink-0 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white">Pay ₹{upi.amount} by UPI</button>
+                            </div>
+                          );
+                        } else if (upi.status === 'PENDING') {
+                          line = <p className="text-sm font-bold text-amber-700 dark:text-amber-400">Waiting for the store to confirm your payment</p>;
+                        } else if (upi.status === 'CANCELLED') {
+                          line = <p className="text-sm font-bold text-rose-600">Payment not received. Please pay at the counter <span className="font-mono text-xs">· {code}</span></p>;
+                        }
+                      }
+                      return line && <div className="mt-3 border-t border-zinc-200/70 pt-2.5 dark:border-zinc-800">{line}</div>;
+                    })()}
                     {eta && (
                       <div className="mt-3 flex items-baseline justify-between gap-2 border-t border-zinc-200/70 pt-2.5 dark:border-zinc-800">
                         <p className={`text-sm font-bold ${order.status === 'READY' ? 'text-emerald-700 dark:text-emerald-400' : 'text-zinc-900 dark:text-zinc-100'}`}>{eta.headline}</p>
@@ -350,6 +396,15 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
           </div>
         </div>
       )}
+
+      <UpiPaySheet
+        key={payingOrder?.id || 'none'}
+        storeId={storeId}
+        payment={payingOrder?.guestUpi ? { ...payingOrder.guestUpi, orderId: payingOrder.id } : null}
+        cooking={payingOrder?.status === 'PROCESSING'}
+        onClose={() => setPayingOrder(null)}
+        onClaimed={loadOrders}
+      />
 
       {/* Printable Consolidated Bill Modal */}
       {showBillModal && billData && (

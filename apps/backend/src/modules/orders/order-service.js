@@ -511,6 +511,22 @@ async function createOrder(storeId, actor, origin, input) {
     throw createHttpError(403, "This store isn't taking orders right now. Please ask the staff.");
   }
   const guest = isCounterGuest ? await resolveCounterGuest(prisma, input) : null;
+
+  // How a QR-menu guest pays upfront: Razorpay (ONLINE), the store's own UPI ID (UPI, staff confirm
+  // it on the POS) or at the counter (COUNTER, counter stores that allow it)
+  let guestPayMethod = null;
+  if (origin === 'QR_MENU' && paymentModel === 'PREPAID') {
+    guestPayMethod = ['UPI', 'COUNTER'].includes(input.payWith) ? input.payWith : 'ONLINE';
+    if (guestPayMethod === 'COUNTER' && !(isCounterGuest && store.payAtCounter)) {
+      throw createHttpError(400, "This store doesn't take pay-at-counter orders. Please pay online.");
+    }
+    if (guestPayMethod === 'UPI') {
+      const { storeTakesGuestUpi } = require("../payments/payment-service");
+      if (!(await storeTakesGuestUpi(storeId))) {
+        throw createHttpError(400, "This store hasn't set up UPI payments yet.");
+      }
+    }
+  }
   const posCustomerName = origin === 'POS' && typeof input.customerName === 'string' ? input.customerName.trim().slice(0, 60) || null : null;
 
   let promo = null;
@@ -558,8 +574,11 @@ async function createOrder(storeId, actor, origin, input) {
     status = 'PENDING_VERIFICATION';
   } else if (paymentModel === 'POSTPAID') {
     status = 'PROCESSING'; // A cashier punching a postpaid ticket sends it straight to the kitchen
+  } else if (totals.totalAmount === 0) {
+    status = 'PROCESSING';
   } else {
-    status = totals.totalAmount === 0 ? 'PROCESSING' : 'PENDING_PAYMENT';
+    // UPI to the store's own ID: some stores start cooking while staff check the money arrived
+    status = guestPayMethod === 'UPI' && store.startBeforeUpiConfirmed ? 'PROCESSING' : 'PENDING_PAYMENT';
   }
 
   const tableSession = tableId ? await resolveTableSession(prisma, storeId, tableId, origin, input) : null;
@@ -579,6 +598,7 @@ async function createOrder(storeId, actor, origin, input) {
       sessionId: input.sessionId || null,
       customerName: guest ? guest.name : posCustomerName,
       customerPhone: guest ? guest.phone : null,
+      guestPayMethod,
       guestContactId: guest ? guest.guestContactId : null,
       paymentModel,
       status,
@@ -682,9 +702,19 @@ async function createOrder(storeId, actor, origin, input) {
     invalidateTablesCache(storeId);
   }
 
-  // Customers pay prepaid QR orders through Razorpay Checkout; staff collect POS payments on the checkout screen
+  // Customers pay prepaid QR orders through Razorpay Checkout, or by UPI to the store's own ID;
+  // staff collect POS (and pay-at-counter) payments on the checkout screen
   let paymentIntent = null;
-  if (status === 'PENDING_PAYMENT' && origin === 'QR_MENU') {
+  let upiPayment = null;
+  if (guestPayMethod === 'UPI' && totals.totalAmount > 0) {
+    const { createGuestUpiPayment } = require("../payments/payment-service");
+    try {
+      upiPayment = await createGuestUpiPayment(order);
+    } catch (error) {
+      await updateOrderStatus(null, storeId, order.id, 'CANCELLED', true, { reason: 'UPI payment could not be started' }).catch(() => {});
+      throw error;
+    }
+  } else if (status === 'PENDING_PAYMENT' && origin === 'QR_MENU' && guestPayMethod === 'ONLINE') {
     const { createCheckoutForOrder } = require("../payments/payment-service");
     try {
       paymentIntent = await createCheckoutForOrder(order);
@@ -720,6 +750,7 @@ async function createOrder(storeId, actor, origin, input) {
   return {
     order: finalOrder,
     paymentIntent,
+    upiPayment,
     paymentSummary: payNowSummary,
     tableSessionId: tableSession ? tableSession.id : null,
     sessionToken: tableSession ? tableSession.sessionToken : null,
@@ -1801,6 +1832,7 @@ async function getKdsOrders(actor, storeId) {
       customerName: true,
       customerPhone: true,
       estimatedReadyAt: true,
+      guestPayMethod: true,
       paidAt: true,
       readyAt: true,
       delayMinutes: true,

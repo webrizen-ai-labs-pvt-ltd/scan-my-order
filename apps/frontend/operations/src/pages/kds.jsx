@@ -362,6 +362,9 @@ export const KDS = () => {
             <span className="text-xl font-bold text-white leading-none">
               {orderPlaceLabel(order)}
             </span>
+            {order.guestPayMethod === 'UPI' && !order.paidAt && (
+              <span className="mt-1 inline-block rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-950">UPI not confirmed yet</span>
+            )}
             {orderGuestLabel(order) && (
               <span className={`mt-1 block text-[11px] font-medium ${isLate || isCompleting ? 'text-white/80' : 'text-zinc-400'}`}>{orderGuestLabel(order)}</span>
             )}

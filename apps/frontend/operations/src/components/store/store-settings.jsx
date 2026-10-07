@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, Input, Label } from '@smo/ui';
 import {
   Store01Icon, Clock01Icon, PercentIcon, SmartPhone01Icon, UserGroupIcon, ViewIcon, Loading03Icon,
-  Delete02Icon, PlusSignIcon, Copy01Icon, LinkSquare02Icon, CheckmarkCircle02Icon,
+  Delete02Icon, PlusSignIcon, Copy01Icon, LinkSquare02Icon, CheckmarkCircle02Icon, ShoppingBag01Icon,
 } from 'hugeicons-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
@@ -43,8 +43,21 @@ function editableFrom(store) {
     status: store.status || 'ACTIVE',
     offlineUpiId: store.offlineUpiId || '',
     offlineUpiPayeeName: store.offlineUpiPayeeName || '',
+    startBeforeUpiConfirmed: Boolean(store.startBeforeUpiConfirmed),
+    payAtCounter: Boolean(store.payAtCounter),
   };
 }
+
+/** On/off setting with a title and an explanation */
+const ToggleRow = ({ checked, onChange, title, hint, disabled }) => (
+  <label className={`flex items-start justify-between gap-4 rounded-lg border border-zinc-200 dark:border-zinc-800 px-3 py-2.5 max-w-xl ${disabled ? 'opacity-60' : 'cursor-pointer'}`}>
+    <span>
+      <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">{title}</span>
+      <span className="block text-xs text-zinc-500">{hint}</span>
+    </span>
+    <input type="checkbox" className="mt-0.5 size-5 shrink-0 accent-emerald-600" checked={checked} disabled={disabled} onChange={e => onChange(e.target.checked)} />
+  </label>
+);
 
 const fmtTime = (t) => {
   const [h, m] = String(t || '00:00').split(':').map(Number);
@@ -327,6 +340,8 @@ export const StoreSettings = ({ store, onSaved }) => {
       operatingHours: form.operatingHours,
       taxRules: form.taxRules.map(r => ({ name: String(r.name).trim(), rate: Number(r.rate) })),
       status: form.status,
+      startBeforeUpiConfirmed: form.startBeforeUpiConfirmed,
+      payAtCounter: form.payAtCounter,
       // Only brand owners decide where UPI money goes; the API refuses it for others
       ...(isOwner ? { offlineUpiId: form.offlineUpiId.trim(), offlineUpiPayeeName: form.offlineUpiPayeeName.trim() } : {}),
     };
@@ -354,6 +369,7 @@ export const StoreSettings = ({ store, onSaved }) => {
     { id: 'hours', label: 'Opening hours', hint: 'Weekly timings', icon: Clock01Icon },
     { id: 'taxes', label: 'Taxes', hint: 'GST on bills', icon: PercentIcon },
     ...(isOwner ? [{ id: 'payments', label: 'Payments', hint: 'Store UPI ID', icon: SmartPhone01Icon }] : []),
+    { id: 'ordering', label: 'Guest ordering', hint: 'UPI & pay at counter', icon: ShoppingBag01Icon },
     { id: 'managers', label: 'Managers', hint: 'Who runs it', icon: UserGroupIcon },
     { id: 'visibility', label: 'Visibility', hint: 'Status', icon: ViewIcon },
   ];
@@ -372,6 +388,7 @@ export const StoreSettings = ({ store, onSaved }) => {
     taxes: JSON.stringify(form.taxRules) !== JSON.stringify(saved.taxRules),
     payments: form.offlineUpiId !== saved.offlineUpiId || form.offlineUpiPayeeName !== saved.offlineUpiPayeeName,
     visibility: form.status !== saved.status,
+    ordering: form.startBeforeUpiConfirmed !== saved.startBeforeUpiConfirmed || form.payAtCounter !== saved.payAtCounter,
   };
   const navTabs = sections.map(s => ({ ...s, label: changed[s.id] ? `${s.label} •` : s.label }));
 
@@ -488,6 +505,36 @@ export const StoreSettings = ({ store, onSaved }) => {
         )}
 
         {active === 'managers' && <ManagersPanel storeId={store.id} canManage={isOwner} />}
+
+        {active === 'ordering' && (
+          <Panel title="Guest ordering" description="How guests pay when they order from the QR menu.">
+            <Row label="UPI to your own ID" hint="When the brand has no Razorpay keys, guests pay the store's UPI ID from their phone, then a cashier or manager confirms it on the POS.">
+              <div className="flex flex-col gap-2">
+                <ToggleRow
+                  checked={form.startBeforeUpiConfirmed}
+                  onChange={set('startBeforeUpiConfirmed')}
+                  title="Start cooking before the payment is confirmed"
+                  hint="Faster for guests, but the kitchen may cook an order that was never paid. Off: the kitchen gets it once a cashier confirms the money arrived."
+                />
+                {!store.offlineUpiId && !store.tenant?.offlineUpiId && (
+                  <p className="text-xs text-amber-700 dark:text-amber-400 max-w-xl">No UPI ID is set yet, so guests can't pay this way. {isOwner ? 'Add one under Payments.' : 'Ask the brand owner to add one.'}</p>
+                )}
+                <p className="text-xs text-zinc-500 max-w-xl">Tip: use a business UPI ID (GPay for Business, PhonePe Business). Payment apps limit or warn on pre-filled payments to personal IDs.</p>
+              </div>
+            </Row>
+            <Row label="Pay at counter" hint="For counter stores (malls, food courts): guests can place the order on their phone and pay when they collect.">
+              <ToggleRow
+                checked={form.payAtCounter}
+                onChange={set('payAtCounter')}
+                title="Allow pay at counter"
+                hint={store.serviceMode === 'COUNTER'
+                  ? 'Guests choose it at checkout. The kitchen gets the order once the cashier collects the payment. Off: online or UPI payment only.'
+                  : 'Only used by counter stores. This store takes orders at tables, where guests can already pay at the table.'}
+                disabled={store.serviceMode !== 'COUNTER'}
+              />
+            </Row>
+          </Panel>
+        )}
 
         {active === 'visibility' && (
           <Panel title="Visibility" description="Whether guests can find this store and order from its QR menu.">

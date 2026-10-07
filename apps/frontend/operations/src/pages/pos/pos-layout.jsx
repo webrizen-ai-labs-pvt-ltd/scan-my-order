@@ -17,6 +17,10 @@ import { usePosCartStore } from '../../store/pos-cart-store';
 import { usePosStoreData } from '../../hooks/use-pos-store-data';
 import { useStoreStream } from '../../hooks/use-store-stream';
 import { PosToasts, usePosToasts } from '../../components/pos/pos-toasts';
+import { GuestUpiConfirmations } from '../../components/pos/guest-upi-confirmations';
+
+// Who confirms guests' UPI payments to the store's own ID (the API enforces the same)
+const GUEST_UPI_CONFIRM_ROLES = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
 import { playNotificationChime } from '@smo/shared/audio';
 
 const Spinner = ({ size = 14, className = '' }) => (
@@ -242,6 +246,10 @@ export const PosLayout = () => {
         <div role="status" className="shrink-0 px-4 py-1.5 bg-amber-100 dark:bg-amber-950/60 border-b border-amber-300 dark:border-amber-900 text-xs font-semibold text-amber-900 dark:text-amber-200 text-center">
           {streamStatus === 'revoked' ? 'Live updates stopped: please sign in again.' : 'Connection lost — reconnecting. Orders and tables will refresh when it’s back.'}
         </div>
+      )}
+
+      {selectedStoreId && GUEST_UPI_CONFIRM_ROLES.includes(user?.role) && (
+        <GuestUpiConfirmations storeId={selectedStoreId} subscribe={subscribe} toast={toast} />
       )}
 
       <main className="flex-1 min-h-0 overflow-hidden relative">{renderContent()}</main>

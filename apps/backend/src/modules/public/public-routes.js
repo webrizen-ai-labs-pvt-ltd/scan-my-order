@@ -108,7 +108,7 @@ router.get("/resolve/:brandSlug/:storeSlug", asyncHandler(async (req, res) => {
     },
     include: {
       tenant: {
-        select: { id: true, name: true, slug: true, logo: true, brandColor: true, status: true,
+        select: { id: true, name: true, slug: true, logo: true, brandColor: true, status: true, offlineUpiId: true,
           paymentGateways: {
             where: { provider: 'RAZORPAY', isActive: true },
             select: { merchantId: true, apiKey: true }
@@ -132,10 +132,18 @@ router.get("/resolve/:brandSlug/:storeSlug", asyncHandler(async (req, res) => {
   const razorpayGateway = store.tenant.paymentGateways?.[0];
   const responseData = {
     ...store,
+    // How guests can pay upfront: online (Razorpay), UPI to the store's own ID (staff confirm),
+    // or at the counter (counter stores that allow it)
+    paymentOptions: {
+      online: !!razorpayGateway,
+      upi: Boolean(store.offlineUpiId || store.tenant.offlineUpiId),
+      payAtCounter: store.serviceMode === 'COUNTER' && store.payAtCounter
+    },
     razorpayConfigured: !!razorpayGateway,
     razorpayKeyId: razorpayGateway?.apiKey ? decrypt(razorpayGateway.apiKey) : null
   };
   delete responseData.tenant.paymentGateways; // Clean up response
+  delete responseData.tenant.offlineUpiId;
 
   res.set("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
   res.json(createApiResponse(responseData));
@@ -263,7 +271,11 @@ router.get("/stores/:storeId/orders/me", asyncHandler(async (req, res) => {
   const prisma = getPrismaClient();
   const whereClause = {
     storeId: req.params.storeId,
-    status: { in: ['PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED'] }
+    OR: [
+      { status: { in: ['PENDING_VERIFICATION', 'PROCESSING', 'READY', 'SERVED'] } },
+      // Waiting for the guest's UPI payment to be confirmed, or for them to pay at the counter
+      { status: 'PENDING_PAYMENT', guestPayMethod: { in: ['UPI', 'COUNTER'] } }
+    ]
   };
   
   if (actor) {
@@ -276,8 +288,39 @@ router.get("/stores/:storeId/orders/me", asyncHandler(async (req, res) => {
     where: whereClause,
     orderBy: { createdAt: 'desc' }
   });
-  
+
+  // UPI orders: where the guest's payment stands (and what to pay with if they haven't yet)
+  const upiOrderIds = orders.filter(o => o.guestPayMethod === 'UPI').map(o => o.id);
+  if (upiOrderIds.length > 0) {
+    const { guestUpiView, resolveOfflineUpi, loadStore } = require("../payments/payment-service");
+    const [payments, store] = await Promise.all([
+      prisma.payment.findMany({ where: { orderId: { in: upiOrderIds }, fromGuest: true }, orderBy: { createdAt: 'asc' } }),
+      loadStore(prisma, req.params.storeId)
+    ]);
+    const upi = resolveOfflineUpi(store);
+    const latest = new Map(payments.map(p => [p.orderId, p]));
+    for (const o of orders) {
+      if (latest.has(o.id)) o.guestUpi = guestUpiView(latest.get(o.id), upi);
+    }
+  }
+
   res.json(createApiResponse(orders));
+}));
+
+// POST /api/public/stores/:storeId/orders/:orderId/upi-paid  { sessionId?, reference? }
+// The guest says they paid by UPI (optionally with the 12-digit reference); a cashier confirms it
+router.post("/stores/:storeId/orders/:orderId/upi-paid", orderLimiter, asyncHandler(async (req, res) => {
+  let customerId = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const { verifyJwt } = require("../../lib/jwt");
+      customerId = verifyJwt(authHeader.split(' ')[1])?.sub || null;
+    } catch { /* guest without an account */ }
+  }
+  const { claimGuestUpiPayment } = require("../payments/payment-service");
+  const result = await claimGuestUpiPayment(req.params.storeId, req.params.orderId, { sessionId: req.body?.sessionId, customerId }, req.body || {});
+  res.json(createApiResponse(result));
 }));
 
 // GET /api/public/customer/stream

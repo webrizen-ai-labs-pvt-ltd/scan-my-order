@@ -2,7 +2,7 @@ const { getPrismaClient } = require("../../lib/prisma");
 const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
 const { userRoles } = require("../../constants/roles");
-const { broadcastToStore } = require("../orders/sse-service");
+const { broadcastToStore, broadcastToCustomer } = require("../orders/sse-service");
 const { invalidateTablesCache } = require("../../lib/cache");
 const { buildUpiIntent, UPI_ID_PATTERN } = require("@smo/shared/pricing");
 const { cleanPhone, cleanEmail } = require("../../lib/contact");
@@ -25,6 +25,8 @@ const COLLECTOR_ROLES = [
   userRoles.cashier,
   userRoles.waiter
 ];
+// Guests' UPI payments to the store's own ID are confirmed by these roles only (not waiters)
+const GUEST_UPI_CONFIRM_ROLES = [userRoles.superAdmin, userRoles.tenantAdmin, userRoles.storeManager, userRoles.cashier];
 // Don't hammer Razorpay when several screens poll the same payment
 const REFRESH_THROTTLE_MS = 3000;
 const lastRefreshAt = new Map();
@@ -97,6 +99,9 @@ function serializePayment(p) {
     duesAccount: p.duesAccount ? { id: p.duesAccount.id, name: p.duesAccount.name } : null,
     paidAt: p.paidAt,
     expiresAt: p.expiresAt,
+    fromGuest: Boolean(p.fromGuest),
+    guestClaimedAt: p.guestClaimedAt || null,
+    guestReference: p.guestReference || null,
     createdAt: p.createdAt
   };
 }
@@ -756,9 +761,11 @@ async function confirmOfflinePayment(actor, storeId, paymentId) {
   if (payment.channel !== "UPI_OFFLINE") {
     throw createHttpError(400, "Only offline UPI payments are confirmed by staff. Razorpay payments are verified automatically.");
   }
+  assertCanConfirmGuestUpi(actor, payment);
   if (payment.status !== "PENDING") throw createHttpError(409, `Payment is already ${payment.status.toLowerCase()}`);
 
   await markPaymentPaid(payment.id, { collectedById: actor.id });
+  if (payment.fromGuest) await tellGuestAboutPayment(payment, "PAID");
   await logOrderEvent({
     storeId,
     orderId: payment.orderId,
@@ -776,9 +783,11 @@ async function cancelPayment(actor, storeId, paymentId) {
   await verifyStoreAccess(actor, storeId);
   const prisma = getPrismaClient();
   const payment = await loadPaymentForStore(prisma, storeId, paymentId);
+  assertCanConfirmGuestUpi(actor, payment);
   if (payment.status !== "PENDING") throw createHttpError(409, `Payment is already ${payment.status.toLowerCase()}`);
 
   const outcome = await withdrawPayment(storeId, payment);
+  if (payment.fromGuest) await tellGuestAboutPayment(payment, outcome === "PAID" ? "PAID" : "NOT_RECEIVED");
   await logOrderEvent({
     storeId,
     orderId: payment.orderId,
@@ -793,6 +802,152 @@ async function cancelPayment(actor, storeId, paymentId) {
   }
   await broadcastSummary(storeId, targetRef(payment));
   return getPayment(actor, storeId, paymentId);
+}
+
+// ─── Guests paying by UPI to the store's own ID (menu app) ──────────────────────
+
+function assertCanConfirmGuestUpi(actor, payment) {
+  if (payment.fromGuest && !GUEST_UPI_CONFIRM_ROLES.includes(actor?.role)) {
+    throw createHttpError(403, "Only cashiers and managers can confirm or reject a guest's UPI payment");
+  }
+}
+
+/** Live update for the guest's order screen after staff confirm or reject their UPI payment */
+async function tellGuestAboutPayment(payment, outcome) {
+  if (!payment.orderId) return;
+  const order = await getPrismaClient().order.findUnique({ where: { id: payment.orderId }, select: { id: true, customerId: true, sessionId: true } });
+  const event = { orderId: payment.orderId, paymentId: payment.id, outcome };
+  if (order?.customerId) broadcastToCustomer(order.customerId, "GUEST_PAYMENT_UPDATED", event);
+  if (order?.sessionId) broadcastToCustomer(order.sessionId, "GUEST_PAYMENT_UPDATED", event);
+  broadcastToStore(payment.storeId, "GUEST_UPI_UPDATED", event);
+}
+
+/** Can guests pay this store by UPI to its own ID? */
+async function storeTakesGuestUpi(storeId) {
+  return Boolean(resolveOfflineUpi(await loadStore(getPrismaClient(), storeId)));
+}
+
+/**
+ * A guest chose "Pay by UPI": a pending payment on the store's own UPI ID with the order code in
+ * the note, so staff can match it in their UPI app. Staff confirm it (or not) on the POS.
+ */
+async function createGuestUpiPayment(order) {
+  const prisma = getPrismaClient();
+  const store = await loadStore(prisma, order.storeId);
+  const upi = resolveOfflineUpi(store);
+  if (!upi) throw createHttpError(400, "This store hasn't set up UPI payments yet. Please pay at the counter.");
+
+  const code = `SMO-${shortRef(order.id)}`;
+  const payment = await prisma.payment.create({
+    data: {
+      storeId: order.storeId,
+      orderId: order.id,
+      channel: "UPI_OFFLINE",
+      amount: order.totalAmount,
+      fromGuest: true,
+      qrPayload: buildUpiIntent({ vpa: upi.vpa, payeeName: upi.payeeName, amount: order.totalAmount, note: `${code} ${store.name}`.slice(0, 50) })
+    }
+  });
+  await logOrderEvent({
+    storeId: order.storeId,
+    orderId: order.id,
+    type: "PAYMENT_STARTED",
+    source: "QR_MENU",
+    amountAfter: payment.amount,
+    data: { channel: "UPI_OFFLINE", label: "UPI (guest, store's own ID)", paymentId: payment.id, code }
+  });
+  broadcastToStore(order.storeId, "GUEST_UPI_UPDATED", { orderId: order.id, paymentId: payment.id, outcome: "STARTED" });
+  return guestUpiView(payment, upi);
+}
+
+/** What the guest's phone needs to pay, and where the payment stands */
+function guestUpiView(payment, upi = null) {
+  return {
+    paymentId: payment.id,
+    status: payment.status,
+    amount: payment.amount,
+    qrPayload: payment.status === "PENDING" ? payment.qrPayload : null,
+    code: payment.orderId ? `SMO-${shortRef(payment.orderId)}` : null,
+    payeeName: upi?.payeeName || null,
+    vpa: upi?.vpa || null,
+    claimedAt: payment.guestClaimedAt || null
+  };
+}
+
+const UPI_REFERENCE = /^\d{12}$/;
+
+/**
+ * The guest says they've paid. Optional: the 12-digit UPI reference from their app, which staff
+ * see next to the payment; the same reference can't be used twice at a store.
+ * @param {{ sessionId?: string, customerId?: string }} guest who is asking (must own the order)
+ */
+async function claimGuestUpiPayment(storeId, orderId, guest, input = {}) {
+  const prisma = getPrismaClient();
+  const order = await prisma.order.findUnique({ where: { id: orderId }, select: { id: true, storeId: true, sessionId: true, customerId: true, table: { select: { tableNumber: true } }, pickupNumber: true } });
+  const owns = order && order.storeId === storeId
+    && ((guest.sessionId && order.sessionId === guest.sessionId) || (guest.customerId && order.customerId === guest.customerId));
+  if (!owns) throw createHttpError(404, "Order not found");
+
+  const payment = await prisma.payment.findFirst({
+    where: { orderId, fromGuest: true, channel: "UPI_OFFLINE" },
+    orderBy: { createdAt: "desc" }
+  });
+  if (!payment) throw createHttpError(404, "There's no UPI payment on this order");
+  if (payment.status === "PAID") return guestUpiView(payment);
+  if (payment.status !== "PENDING") throw createHttpError(409, "This payment was closed. Please pay at the counter.");
+
+  let reference = null;
+  if (input.reference !== undefined && input.reference !== null && String(input.reference).trim() !== '') {
+    reference = String(input.reference).replace(/\s/g, '');
+    if (!UPI_REFERENCE.test(reference)) throw createHttpError(400, "The UPI reference number has 12 digits. You can also leave it empty.");
+    const used = await prisma.payment.findFirst({
+      where: { storeId, guestReference: reference, id: { not: payment.id }, status: { in: ["PENDING", "PAID"] } },
+      select: { id: true }
+    });
+    if (used) throw createHttpError(409, "That UPI reference number was already used for another payment");
+  }
+
+  const updated = await prisma.payment.update({
+    where: { id: payment.id },
+    data: { guestClaimedAt: payment.guestClaimedAt || new Date(), ...(reference ? { guestReference: reference } : {}) }
+  });
+
+  const place = order.table ? `Table ${order.table.tableNumber}` : order.pickupNumber != null ? `Pickup #${order.pickupNumber}` : `Order #${shortRef(orderId)}`;
+  broadcastToStore(storeId, "GUEST_UPI_UPDATED", { orderId, paymentId: payment.id, outcome: "CLAIMED" });
+  const { sendNotification } = require("../notifications/notification-service");
+  sendNotification({
+    storeId,
+    type: "GUEST_UPI_CLAIMED",
+    title: `${place}: UPI payment to confirm`,
+    body: `Guest says they paid ₹${payment.amount} (SMO-${shortRef(orderId)}${reference ? `, ref …${reference.slice(-4)}` : ''}). Check your UPI app and confirm on the POS.`,
+    data: { orderId, paymentId: payment.id, sound: "notification.mp3", url: "/dashboard/pos" },
+    target: { roles: ["CASHIER", "STORE_MANAGER"], storeId }
+  }).catch(() => {});
+
+  return guestUpiView(updated);
+}
+
+/** Guest UPI payments waiting for a cashier, oldest first */
+async function listGuestUpiPayments(actor, storeId) {
+  if (!GUEST_UPI_CONFIRM_ROLES.includes(actor?.role)) {
+    throw createHttpError(403, "Only cashiers and managers confirm guest UPI payments");
+  }
+  await verifyStoreAccess(actor, storeId);
+  const payments = await getPrismaClient().payment.findMany({
+    where: { storeId, fromGuest: true, channel: "UPI_OFFLINE", status: "PENDING" },
+    orderBy: { createdAt: "asc" },
+    take: 50,
+    include: {
+      order: {
+        select: { id: true, status: true, pickupNumber: true, customerName: true, customerPhone: true, table: { select: { tableNumber: true } } }
+      }
+    }
+  });
+  return payments.map(p => ({
+    ...serializePayment(p),
+    code: p.orderId ? `SMO-${shortRef(p.orderId)}` : null,
+    order: p.order
+  }));
 }
 
 // ─── Customer checkout (menu app) ────────────────────────────────────────────
@@ -974,6 +1129,13 @@ function isValidUpiId(value) {
 }
 
 module.exports = {
+  createGuestUpiPayment,
+  claimGuestUpiPayment,
+  listGuestUpiPayments,
+  guestUpiView,
+  storeTakesGuestUpi,
+  resolveOfflineUpi,
+  loadStore,
   putBillOnDues,
   getPaymentChannels,
   getPaymentSummary,

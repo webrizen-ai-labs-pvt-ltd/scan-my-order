@@ -60,9 +60,10 @@ async function getPublicVenue(slug) {
         orderBy: { createdAt: 'asc' },
         select: {
           id: true, name: true, slug: true, banner: true, status: true, serviceMode: true, venueLocation: true,
+          offlineUpiId: true, payAtCounter: true,
           tenant: {
             select: {
-              name: true, slug: true, logo: true, brandColor: true, status: true,
+              name: true, slug: true, logo: true, brandColor: true, status: true, offlineUpiId: true,
               subscription: { select: { status: true, gracePeriodEndsAt: true } },
               paymentGateways: { where: { provider: 'RAZORPAY', isActive: true }, select: { id: true } }
             }
@@ -76,7 +77,8 @@ async function getPublicVenue(slug) {
   const counters = venue.stores
     .filter(s => s.status !== 'DISABLED' && s.tenant.status === 'ACTIVE')
     .map(s => {
-      const paymentsReady = s.tenant.paymentGateways.length > 0;
+      // Online (Razorpay), UPI to the store's own ID, or paying at the counter
+      const paymentsReady = s.tenant.paymentGateways.length > 0 || Boolean(s.offlineUpiId || s.tenant.offlineUpiId) || s.payAtCounter;
       const open = s.status === 'ACTIVE' && subscriptionAllowsOrders(s.tenant.subscription);
       return {
         id: s.id,
@@ -91,7 +93,7 @@ async function getPublicVenue(slug) {
         serviceMode: s.serviceMode,
         // Counter stores take orders here (with online payment); table stores take them at their tables
         takingOrders: open && s.serviceMode === 'COUNTER' && paymentsReady,
-        closedReason: !open ? 'Not taking orders right now' : (s.serviceMode === 'COUNTER' && !paymentsReady ? 'Online ordering coming soon' : null)
+        closedReason: !open ? 'Not taking orders right now' : (s.serviceMode === 'COUNTER' && !paymentsReady ? 'Order at the counter' : null)
       };
     });
 

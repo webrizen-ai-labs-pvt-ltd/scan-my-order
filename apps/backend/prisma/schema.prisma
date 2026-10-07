@@ -285,6 +285,11 @@ model Store {
   // Where to find the counter inside the venue, e.g. "3rd floor food court, counter 12"
   venueLocation String?
 
+  // Guest ordering: send UPI orders to the kitchen before staff confirm the money arrived,
+  // and (counter stores) let guests order now and pay at the counter
+  startBeforeUpiConfirmed Boolean @default(false)
+  payAtCounter            Boolean @default(false)
+
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
   taxRules     Json?       @default("[]")
   promoCodes   PromoCode[]
@@ -615,6 +620,8 @@ model Order {
   pickupNumber    Int?
   customerName    String?
   customerPhone   String?
+  // How a QR-menu guest chose to pay: ONLINE (Razorpay), UPI (store's own UPI ID) or COUNTER
+  guestPayMethod  String?
   guestContactId  String?
   guestContact    GuestContact?  @relation(fields: [guestContactId], references: [id], onDelete: SetNull)
 
@@ -687,6 +694,12 @@ model Payment {
   duesReduced       Int            @default(0) // taken off because items weren't served
   duesAllocations   DuesAllocation[]
 
+  // Started by a guest from the QR menu (UPI to the store's own ID): only cashiers and managers confirm it
+  fromGuest         Boolean        @default(false)
+  // The guest said they paid, with the UPI reference number if they gave it (12 digits)
+  guestClaimedAt    DateTime?
+  guestReference    String?
+
   // Cash drawer details
   cashTendered      Int?
   changeDue         Int?
@@ -703,6 +716,7 @@ model Payment {
   @@index([tableSessionId])
   @@index([storeId, status])
   @@index([status, channel])
+  @@index([storeId, guestReference])
 }
 
 // Money returned to a guest (e.g. the kitchen could not make paid items).
