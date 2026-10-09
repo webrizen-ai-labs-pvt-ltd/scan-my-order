@@ -149,7 +149,7 @@ export const UpiPaySheet = ({ storeId, payment, cooking, onClose, onClaimed }) =
                 disabled={busy}
                 className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 text-base font-extrabold text-white disabled:opacity-50 dark:bg-white dark:text-zinc-900"
               >
-                {busy ? <Loading03Icon size={18} className="animate-spin" /> : <CheckmarkCircle02Icon size={18} />} I've paid
+                {busy ? <Loading03Icon size={18} className="animate-spin" /> : <CheckmarkCircle02Icon size={18} />} Pay cash at the counter
               </button>
               <p className="mt-2 text-center text-[11px] text-zinc-400">
                 {cooking ? 'Your order is being prepared. The cashier will confirm the payment.' : 'Your order goes to the kitchen once the cashier confirms the payment.'}
