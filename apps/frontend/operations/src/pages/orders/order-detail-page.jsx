@@ -13,7 +13,7 @@ import { useOrderPage } from './use-order-page';
 import { ORDER_STATUSES, statusTone } from './order-status';
 
 const money = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
-const PAY_LABEL = { CASH: 'Cash', UPI_OFFLINE: 'UPI', RAZORPAY: 'Online (UPI/Card)', DUES: 'Dues' };
+const PAY_LABEL = { CASH: 'Cash', CARD: 'Card', UPI_OFFLINE: 'UPI', RAZORPAY: 'Online (UPI/Card)', DUES: 'Dues' };
 
 const Section = ({ title, children, className = '' }) => (
   <section className={`rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 ${className}`}>

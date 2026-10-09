@@ -16,7 +16,7 @@ const S = {
   stamp: { border: '1px solid #b91c1c', color: '#b91c1c', padding: '2px 8px', borderRadius: 4, fontWeight: 700, fontSize: 11 },
 };
 
-const CHANNEL = { CASH: 'Cash', UPI_OFFLINE: 'UPI', RAZORPAY: 'Online (UPI/Card)', DUES: 'On account (dues)' };
+const CHANNEL = { CASH: 'Cash', CARD: 'Card', UPI_OFFLINE: 'UPI', RAZORPAY: 'Online (UPI/Card)', DUES: 'On account (dues)' };
 
 /**
  * GST invoice / credit note, rendered from the frozen snapshot saved when it was issued.

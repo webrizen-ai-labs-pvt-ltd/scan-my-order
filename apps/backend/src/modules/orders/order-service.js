@@ -528,6 +528,13 @@ async function createOrder(storeId, actor, origin, input) {
     }
   }
   const posCustomerName = origin === 'POS' && typeof input.customerName === 'string' ? input.customerName.trim().slice(0, 60) || null : null;
+  // The cashier may note the guest's mobile number too (optional)
+  let posCustomerPhone = null;
+  if (origin === 'POS' && typeof input.customerPhone === 'string' && input.customerPhone.trim()) {
+    const checked = checkIndianMobile(input.customerPhone);
+    if (checked.error) throw createHttpError(400, checked.error);
+    posCustomerPhone = checked.phone;
+  }
 
   let promo = null;
   if (promoCode) {
@@ -597,7 +604,7 @@ async function createOrder(storeId, actor, origin, input) {
       customerId: origin === 'QR_MENU' && actor ? actor.id : null,
       sessionId: input.sessionId || null,
       customerName: guest ? guest.name : posCustomerName,
-      customerPhone: guest ? guest.phone : null,
+      customerPhone: guest ? guest.phone : posCustomerPhone,
       guestPayMethod,
       guestContactId: guest ? guest.guestContactId : null,
       paymentModel,

@@ -158,6 +158,7 @@ enum PaymentChannel {
   UPI_OFFLINE  // Store's own UPI ID, confirmed manually by staff
   CASH
   DUES         // Bill put on dues: owed by a dues account, paid back later
+  CARD         // Swiped or tapped on the store's card machine; recorded by staff as paid
 }
 
 // How money owed on dues came in
@@ -289,6 +290,9 @@ model Store {
   // and (counter stores) let guests order now and pay at the counter
   startBeforeUpiConfirmed Boolean @default(false)
   payAtCounter            Boolean @default(false)
+
+  // POS "New order" screen: CLASSIC (single-screen billing, like other Indian POS) or MODERN (picture menu)
+  posLayout               String  @default("CLASSIC")
 
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
   taxRules     Json?       @default("[]")
@@ -430,6 +434,8 @@ model MenuItem {
   image              String?
   // Optional video of the dish (YouTube, Vimeo, Google Drive or a direct .mp4 link); plays when guests tap the photo
   videoUrl           String?
+  // Optional code the cashier types to add it fast on the POS (e.g. "12" or "PT")
+  shortCode          String?
   dietary            DietaryPreference @default(VEG)
   spiceLevel         SpiceLevel        @default(NONE)
   

@@ -3,6 +3,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { Button } from '@smo/ui';
 import {
   Money01Icon,
+  CreditCardIcon,
   QrCodeIcon,
   SmartPhone01Icon,
   Tick02Icon,
@@ -34,9 +35,15 @@ const CHANNELS = [
     hint: 'Counter cash',
     icon: Money01Icon,
   },
+  {
+    id: 'CARD',
+    label: 'Card',
+    hint: 'Your card machine · record once it goes through',
+    icon: CreditCardIcon,
+  },
 ];
 
-const CHANNEL_LABEL = { RAZORPAY: 'Online (Razorpay)', UPI_OFFLINE: 'UPI (own QR)', CASH: 'Cash', DUES: 'Dues' };
+const CHANNEL_LABEL = { RAZORPAY: 'Online (Razorpay)', UPI_OFFLINE: 'UPI (own QR)', CASH: 'Cash', CARD: 'Card', DUES: 'Dues' };
 const STATUS_TONE = {
   PAID: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300',
   PENDING: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
@@ -404,7 +411,7 @@ export const PaymentCollector = ({ storeId, orderId, tableSessionId, draft, auto
             {summary.paidAmount > 0 || pending.length > 0 ? 'Collect the remaining amount' : 'Collect payment'}
           </div>
 
-          <div className="grid grid-cols-3 gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-800/60 rounded-2xl" role="radiogroup" aria-label="Payment method">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 bg-zinc-100 dark:bg-zinc-800/60 rounded-2xl" role="radiogroup" aria-label="Payment method">
             {CHANNELS.map(c => {
               const enabled = channels?.[c.id]?.enabled;
               const active = channel === c.id;
@@ -501,10 +508,11 @@ export const PaymentCollector = ({ storeId, orderId, tableSessionId, draft, auto
             size="lg"
             disabled={busy || amountInvalid || tenderShort || !channels?.[channel]?.enabled}
             onClick={createPayment}
-            className={channel === 'CASH' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
+            className={channel === 'CASH' || channel === 'CARD' ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}
           >
             {busy ? 'Working…'
               : channel === 'CASH' ? `Record cash ${rupees(amountNum)}`
+                : channel === 'CARD' ? `Record card ${rupees(amountNum)}`
                 : channel === 'UPI_OFFLINE' ? `Show UPI QR for ${rupees(amountNum)}`
                   : `Generate QR for ${rupees(amountNum)}`}
           </Button>

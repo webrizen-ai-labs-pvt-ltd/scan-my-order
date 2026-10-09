@@ -58,7 +58,7 @@ export const StoreMenuManager = ({ storeId }) => {
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
 
   const [editingItem, setEditingItem] = useState(null); // null = not editing, {} = new, {id...} = edit existing
-  const [itemForm, setItemForm] = useState({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', isManuallyDisabled: false });
+  const [itemForm, setItemForm] = useState({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', shortCode: '', isManuallyDisabled: false });
   const [isSavingItem, setIsSavingItem] = useState(false);
   const [isAddingIngredient, setIsAddingIngredient] = useState(false);
 
@@ -358,7 +358,7 @@ export const StoreMenuManager = ({ storeId }) => {
               </div>
               <Button onClick={() => {
                 setEditingItem({});
-                setItemForm({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', isManuallyDisabled: false });
+                setItemForm({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', shortCode: '', isManuallyDisabled: false });
               }}>
                 <PlusSignIcon size={16} className="mr-2" /> Add Item
               </Button>
@@ -383,6 +383,15 @@ export const StoreMenuManager = ({ storeId }) => {
                       <div className="space-y-1.5 col-span-2 md:col-span-1">
                         <Label>Price (₹) *</Label>
                         <Input type="number" value={itemForm.price} onChange={e => setItemForm(p => ({ ...p, price: e.target.value }))} />
+                      </div>
+                      <div className="space-y-1.5 col-span-2 md:col-span-1">
+                        <Label>POS short code (Optional)</Label>
+                        <Input
+                          value={itemForm.shortCode || ''}
+                          onChange={e => setItemForm(p => ({ ...p, shortCode: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10) }))}
+                          placeholder="e.g. 12 or PT"
+                        />
+                        <p className="text-xs text-zinc-500">Cashiers type it in the classic POS to add this dish.</p>
                       </div>
                       <div className="space-y-1.5 col-span-2 md:col-span-1">
                         <Label>Dietary Preference</Label>

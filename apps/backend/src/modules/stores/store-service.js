@@ -264,6 +264,11 @@ async function updateStore(actor, storeId, input) {
   for (const key of ["startBeforeUpiConfirmed", "payAtCounter"]) {
     if (input[key] !== undefined) contactExtras[key] = Boolean(input[key]);
   }
+  // Which POS billing screen this store uses
+  if (input.posLayout !== undefined) {
+    if (!["CLASSIC", "MODERN"].includes(input.posLayout)) throw createHttpError(400, "posLayout must be CLASSIC or MODERN");
+    contactExtras.posLayout = input.posLayout;
+  }
   if (input.registrationNumber !== undefined) {
     contactExtras.registrationNumber = String(input.registrationNumber || '').trim().slice(0, 50) || null;
   }

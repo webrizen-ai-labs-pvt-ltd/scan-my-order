@@ -147,11 +147,21 @@ function cleanVideoUrl(value) {
   return url;
 }
 
+/** An optional POS short code: letters and digits, up to 10 (stored upper-case) */
+function cleanShortCode(value) {
+  if (value === undefined) return undefined;
+  const code = String(value || '').trim().toUpperCase();
+  if (!code) return null;
+  if (!/^[A-Z0-9]{1,10}$/.test(code)) throw createHttpError(400, "Short codes use letters and numbers only (up to 10)");
+  return code;
+}
+
 async function createMenuItem(actor, storeId, input) {
   await verifyStoreAccess(actor, storeId);
   const prisma = getPrismaClient();
   const { categoryId, name, description, price, image, dietary, spiceLevel } = input;
   const videoUrl = cleanVideoUrl(input.videoUrl);
+  const shortCode = cleanShortCode(input.shortCode);
   
   if (!categoryId || !name || price == null) {
     throw createHttpError(400, "categoryId, name, and price are required");
@@ -172,6 +182,7 @@ async function createMenuItem(actor, storeId, input) {
       price,
       image,
       videoUrl,
+      shortCode,
       dietary,
       spiceLevel
     }
@@ -185,6 +196,7 @@ async function updateMenuItem(actor, storeId, id, input) {
   const prisma = getPrismaClient();
   const { categoryId, name, description, price, image, dietary, spiceLevel, isManuallyDisabled } = input;
   const videoUrl = cleanVideoUrl(input.videoUrl);
+  const shortCode = cleanShortCode(input.shortCode);
   
   const item = await prisma.menuItem.findUnique({ where: { id } });
   if (!item || item.storeId !== storeId) throw createHttpError(404, "MenuItem not found");
@@ -196,7 +208,7 @@ async function updateMenuItem(actor, storeId, id, input) {
   
   const updated = await prisma.menuItem.update({
     where: { id },
-    data: { categoryId, name, description, price, image, videoUrl, dietary, spiceLevel, isManuallyDisabled }
+    data: { categoryId, name, description, price, image, videoUrl, shortCode, dietary, spiceLevel, isManuallyDisabled }
   });
   invalidateMenuCache(storeId);
   return updated;

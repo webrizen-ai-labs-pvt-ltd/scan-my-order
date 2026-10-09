@@ -6,7 +6,7 @@ import { Login } from './pages/login';
 import { Home } from './pages/home';
 import { Dashboard } from './pages/dashboard';
 import { PosLayout } from './pages/pos/pos-layout';
-import { PosTerminalPage } from './pages/pos/pos-terminal-page';
+import { PosNewOrderPage } from './pages/pos/pos-new-order-page';
 import { PosOrderEditPage } from './pages/pos/pos-order-edit-page';
 import { PosActiveOrdersPage } from './pages/pos/pos-active-orders-page';
 import { PosCheckoutPage } from './pages/pos/pos-checkout-page';
@@ -59,7 +59,7 @@ function App() {
           {/* POS & Orders (Cashier + Manager/Admin) */}
           <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'CASHIER']} />}>
             <Route path="/dashboard/pos" element={<PosLayout />}>
-              <Route index element={<PosTerminalPage />} />
+              <Route index element={<PosNewOrderPage />} />
               <Route path="orders" element={<PosActiveOrdersPage />} />
               <Route path="orders/:orderId/edit" element={<PosOrderEditPage />} />
               <Route path="custom-dish" element={<PosCustomDishPage />} />

@@ -193,7 +193,7 @@ export const Receipt = React.forwardRef(({ order, storeData, payQr }, ref) => {
           {order.payments.map((p) => (
             <div key={p.id}>
               <div className="flex justify-between">
-                <span>{p.channel === 'CASH' ? 'Cash' : p.channel === 'UPI_OFFLINE' ? 'UPI' : p.channel === 'DUES' ? `Dues (${p.duesAccount?.name || 'account'})` : 'Online (UPI/Card)'}</span>
+                <span>{p.channel === 'CASH' ? 'Cash' : p.channel === 'CARD' ? 'Card' : p.channel === 'UPI_OFFLINE' ? 'UPI' : p.channel === 'DUES' ? `Dues (${p.duesAccount?.name || 'account'})` : 'Online (UPI/Card)'}</span>
                 <span>₹{p.amount.toFixed(2)}</span>
               </div>
               {p.channel === 'CASH' && p.cashTendered > p.amount && (

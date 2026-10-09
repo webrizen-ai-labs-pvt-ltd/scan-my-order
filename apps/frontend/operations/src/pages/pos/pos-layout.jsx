@@ -6,8 +6,6 @@ import {
   ShoppingCart01Icon,
   Invoice01Icon,
   Motorbike01Icon,
-  Calendar01Icon,
-  Clock01Icon,
   Loading03Icon,
   Alert01Icon,
 } from 'hugeicons-react';
@@ -18,10 +16,10 @@ import { usePosStoreData } from '../../hooks/use-pos-store-data';
 import { useStoreStream } from '../../hooks/use-store-stream';
 import { PosToasts, usePosToasts } from '../../components/pos/pos-toasts';
 import { GuestUpiConfirmations } from '../../components/pos/guest-upi-confirmations';
+import { playNotificationChime } from '@smo/shared/audio';
 
 // Who confirms guests' UPI payments to the store's own ID (the API enforces the same)
 const GUEST_UPI_CONFIRM_ROLES = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
-import { playNotificationChime } from '@smo/shared/audio';
 
 const Spinner = ({ size = 14, className = '' }) => (
   <Loading03Icon size={size} className={`animate-spin ${className}`} />
@@ -51,11 +49,23 @@ const TABLE_EVENTS = new Set([
 ]);
 
 const tabClass = ({ isActive }) =>
-  `flex items-center gap-2 h-9 px-4 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+  `flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-semibold transition-colors ${
     isActive
-      ? 'bg-amber-400 text-zinc-900 dark:bg-amber-500 dark:text-zinc-950'
-      : 'bg-stone-50 text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700 dark:hover:text-zinc-100'
+      ? 'bg-zinc-900 text-white dark:bg-amber-500 dark:text-zinc-950'
+      : 'text-stone-600 hover:bg-stone-100 hover:text-stone-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100'
   }`;
+
+// Small count next to a tab label; inherits the tab's colours so it reads on both states
+const TabCount = ({ children }) => (
+  <span className="min-w-[18px] px-1 rounded text-[10px] font-bold tabular-nums text-center bg-current/15">{children}</span>
+);
+
+const LIVE_DOT = {
+  live: ['bg-emerald-500', 'Live'],
+  connecting: ['bg-amber-400', 'Connecting'],
+  reconnecting: ['bg-amber-400', 'Reconnecting'],
+  revoked: ['bg-red-500', 'Offline'],
+};
 
 /**
  * Store-scoped data and helpers for every POS child page.
@@ -140,11 +150,6 @@ export const PosLayout = () => {
     if (TABLE_EVENTS.has(msg.type) || msg.type === 'STREAM_RECONNECTED') refreshTables();
   }), [subscribe, refreshTables]);
 
-  const formattedDate = useMemo(
-    () => new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' }),
-    []
-  );
-
   const store = data.store || user?.store || null;
   const outletContext = useMemo(
     () => ({ storeId: selectedStoreId, store, data, subscribe, toast, token }),
@@ -178,59 +183,15 @@ export const PosLayout = () => {
 
   return (
     <div className="flex flex-col h-full w-full bg-stone-100/50 dark:bg-zinc-950 overflow-hidden">
-      <header className="shrink-0 h-14 px-4 bg-white dark:bg-zinc-900 border-b-2 border-stone-300 dark:border-zinc-700 flex items-center justify-between gap-4 shadow-sm">
-        <div className="flex items-center gap-3 min-w-0">
-          <div className="size-9 rounded-sm bg-amber-400 dark:bg-amber-500 text-zinc-900 flex items-center justify-center border border-amber-500/70 shadow-sm shrink-0">
-            <Store01Icon size={17} />
-          </div>
-          <div className="flex flex-col min-w-0">
-            <span className="font-bold text-[13px] tracking-wide uppercase text-stone-900 dark:text-zinc-100 truncate">
-              {store?.name || 'POS Terminal'}
-            </span>
-            <span className="text-[10px] font-medium text-stone-500 dark:text-zinc-400 truncate flex items-center gap-1 tracking-wide">
-              <Calendar01Icon size={11} className="text-amber-600 dark:text-amber-400" />
-              {formattedDate}
-            </span>
-          </div>
-        </div>
-
-        <nav aria-label="POS sections" className="flex items-stretch rounded-full overflow-hidden border border-stone-300 dark:border-zinc-700 divide-x divide-stone-300 dark:divide-zinc-700 shadow-sm">
-          <NavLink to="/dashboard/pos" end className={tabClass}>
-            <ShoppingCart01Icon size={13} />
-            <span>New Order</span>
-            {cartCount > 0 && (
-              <span className="ml-0.5 min-w-[18px] px-1 rounded-sm text-[10px] font-bold tabular-nums bg-zinc-900 text-amber-400 text-center">
-                {cartCount}
-              </span>
-            )}
-          </NavLink>
-          <NavLink to="/dashboard/pos/orders" className={tabClass}>
-            <Invoice01Icon size={13} />
-            <span>Active Orders</span>
-            {stats?.activeCount > 0 && (
-              <span className="ml-0.5 min-w-[18px] px-1 rounded-sm text-[10px] font-bold tabular-nums bg-zinc-900 text-amber-400 text-center">
-                {stats.activeCount}
-              </span>
-            )}
-          </NavLink>
-          <NavLink to="/dashboard/pos/delivery" className={tabClass} title="Zomato & Swiggy orders — coming soon">
-            <Motorbike01Icon size={13} />
-            <span>Zomato / Swiggy</span>
-            <span className="ml-0.5 px-1 rounded-sm text-[9px] font-black bg-zinc-900 text-amber-400">SOON</span>
-          </NavLink>
-        </nav>
-
-        <div className="flex items-center gap-1 shrink-0">
-          <div className="hidden lg:flex items-center gap-1.5 px-3 py-2 rounded-l-full bg-stone-50 dark:bg-zinc-800 border border-stone-300 dark:border-zinc-700 text-[11px] font-medium text-stone-600 dark:text-zinc-300">
-            <Clock01Icon size={13} className="text-amber-600 dark:text-amber-400" />
-            <span>
-              <strong className="text-stone-900 dark:text-zinc-100 font-bold tabular-nums">{stats?.totalToday ?? '–'}</strong> Orders today
-            </span>
-          </div>
-          {!user?.store && stores.length > 0 && (
+      <header className="shrink-0 h-12 px-3 bg-white dark:bg-zinc-900 border-b border-stone-200 dark:border-zinc-800 grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+        {/* Store: also the store picker for people who run more than one */}
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="size-7 rounded-md bg-amber-400 dark:bg-amber-500 text-zinc-900 flex items-center justify-center shrink-0">
+            <Store01Icon size={15} />
+          </span>
+          {!user?.store && stores.length > 1 ? (
             <Select value={selectedStoreId || undefined} onValueChange={setSelectedStoreId}>
-              <SelectTrigger className="w-[170px] h-8.5 text-xs rounded-r-full bg-white dark:bg-zinc-800 border-stone-300 dark:border-zinc-700">
-                <Store01Icon size={14} className="mr-1 text-stone-400" />
+              <SelectTrigger aria-label="Store" className="h-8 w-auto max-w-[240px] gap-1 px-2 border-0 bg-transparent text-sm font-semibold text-stone-900 dark:text-zinc-100 hover:bg-stone-100 dark:hover:bg-zinc-800">
                 <SelectValue placeholder="Select store" />
               </SelectTrigger>
               <SelectContent>
@@ -239,7 +200,37 @@ export const PosLayout = () => {
                 ))}
               </SelectContent>
             </Select>
+          ) : (
+            <span className="text-sm font-semibold text-stone-900 dark:text-zinc-100 truncate">{store?.name || 'POS'}</span>
           )}
+        </div>
+
+        <nav aria-label="POS sections" className="flex items-center gap-1">
+          <NavLink to="/dashboard/pos" end className={tabClass}>
+            <ShoppingCart01Icon size={14} />
+            <span>New order</span>
+            {cartCount > 0 && <TabCount>{cartCount}</TabCount>}
+          </NavLink>
+          <NavLink to="/dashboard/pos/orders" className={tabClass}>
+            <Invoice01Icon size={14} />
+            <span>Active orders</span>
+            {stats?.activeCount > 0 && <TabCount>{stats.activeCount}</TabCount>}
+          </NavLink>
+          <NavLink to="/dashboard/pos/delivery" className={tabClass} title="Zomato & Swiggy orders — coming soon">
+            <Motorbike01Icon size={14} />
+            <span className="hidden lg:inline">Zomato / Swiggy</span>
+            <span className="text-[10px] font-medium opacity-60">soon</span>
+          </NavLink>
+        </nav>
+
+        <div className="flex items-center justify-end gap-4 min-w-0 text-xs text-stone-500 dark:text-zinc-400">
+          <span className="hidden md:inline whitespace-nowrap">
+            <strong className="font-semibold tabular-nums text-stone-900 dark:text-zinc-100">{stats?.totalToday ?? '–'}</strong> orders today
+          </span>
+          <span className="flex items-center gap-1.5 whitespace-nowrap" title="Live updates from the kitchen, guests and other tills">
+            <span className={`size-2 rounded-full ${(LIVE_DOT[streamStatus] || LIVE_DOT.connecting)[0]}`} />
+            {(LIVE_DOT[streamStatus] || LIVE_DOT.connecting)[1]}
+          </span>
         </div>
       </header>
       {(streamStatus === 'reconnecting' || streamStatus === 'revoked') && (

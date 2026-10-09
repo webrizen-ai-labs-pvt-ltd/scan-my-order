@@ -17,7 +17,7 @@ const {
   describeRazorpayError
 } = require("./razorpay-gateway");
 
-const CHANNELS = ["RAZORPAY", "UPI_OFFLINE", "CASH"];
+const CHANNELS = ["RAZORPAY", "UPI_OFFLINE", "CASH", "CARD"];
 const COLLECTOR_ROLES = [
   userRoles.superAdmin,
   userRoles.tenantAdmin,
@@ -34,7 +34,7 @@ const lastRefreshAt = new Map();
 // Lazy to avoid a require cycle with order-service
 const orderService = () => require("../orders/order-service");
 const { logOrderEvent } = require("../audit/audit-service");
-const CHANNEL_LABEL = { RAZORPAY: "Razorpay", UPI_OFFLINE: "UPI (own QR)", CASH: "Cash", DUES: "Dues" };
+const CHANNEL_LABEL = { RAZORPAY: "Razorpay", UPI_OFFLINE: "UPI (own QR)", CASH: "Cash", CARD: "Card", DUES: "Dues" };
 
 function assertCanCollect(actor) {
   if (!actor || !COLLECTOR_ROLES.includes(actor.role)) {
@@ -605,7 +605,9 @@ async function resolvePaymentChannels(store) {
       reason: !rp ? 'Razorpay keys are not set up for this brand.' : qrStatus?.reason || null
     },
     UPI_OFFLINE: { enabled: Boolean(offlineUpi), vpa: offlineUpi?.vpa || null, payeeName: offlineUpi?.payeeName || null },
-    CASH: { enabled: true }
+    CASH: { enabled: true },
+    // The store's own card machine: the cashier records it once the card goes through
+    CARD: { enabled: true }
   };
 }
 
@@ -685,6 +687,16 @@ async function createPayment(actor, storeId, input = {}) {
         changeDue: tendered - amount,
         collectedById: actor.id
       }
+    });
+  } else if (channel === "CARD") {
+    // Paid on the store's card machine: recorded as received straight away
+    payment = await prisma.payment.create({
+      data: { ...base, status: "PAID", paidAt: new Date(), collectedById: actor.id }
+    });
+  } else if (channel === "UPI_OFFLINE" && input.received === true) {
+    // The cashier already saw the UPI money arrive (soundbox or UPI app): record it as received
+    payment = await prisma.payment.create({
+      data: { ...base, status: "PAID", paidAt: new Date(), collectedById: actor.id }
     });
   } else if (channel === "UPI_OFFLINE") {
     const upi = resolveOfflineUpi(store);

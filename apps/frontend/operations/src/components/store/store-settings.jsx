@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, Input, Label } from '@smo/ui';
 import {
   Store01Icon, Clock01Icon, PercentIcon, SmartPhone01Icon, UserGroupIcon, ViewIcon, Loading03Icon,
-  Delete02Icon, PlusSignIcon, Copy01Icon, LinkSquare02Icon, CheckmarkCircle02Icon, ShoppingBag01Icon,
+  Delete02Icon, PlusSignIcon, Copy01Icon, LinkSquare02Icon, CheckmarkCircle02Icon, ShoppingBag01Icon, ComputerIcon,
 } from 'hugeicons-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
@@ -45,6 +45,7 @@ function editableFrom(store) {
     offlineUpiPayeeName: store.offlineUpiPayeeName || '',
     startBeforeUpiConfirmed: Boolean(store.startBeforeUpiConfirmed),
     payAtCounter: Boolean(store.payAtCounter),
+    posLayout: store.posLayout === 'MODERN' ? 'MODERN' : 'CLASSIC',
   };
 }
 
@@ -342,6 +343,7 @@ export const StoreSettings = ({ store, onSaved }) => {
       status: form.status,
       startBeforeUpiConfirmed: form.startBeforeUpiConfirmed,
       payAtCounter: form.payAtCounter,
+      posLayout: form.posLayout,
       // Only brand owners decide where UPI money goes; the API refuses it for others
       ...(isOwner ? { offlineUpiId: form.offlineUpiId.trim(), offlineUpiPayeeName: form.offlineUpiPayeeName.trim() } : {}),
     };
@@ -369,6 +371,7 @@ export const StoreSettings = ({ store, onSaved }) => {
     { id: 'hours', label: 'Opening hours', hint: 'Weekly timings', icon: Clock01Icon },
     { id: 'taxes', label: 'Taxes', hint: 'GST on bills', icon: PercentIcon },
     ...(isOwner ? [{ id: 'payments', label: 'Payments', hint: 'Store UPI ID', icon: SmartPhone01Icon }] : []),
+    { id: 'pos', label: 'POS', hint: 'Billing screen', icon: ComputerIcon },
     { id: 'ordering', label: 'Guest ordering', hint: 'UPI & pay at counter', icon: ShoppingBag01Icon },
     { id: 'managers', label: 'Managers', hint: 'Who runs it', icon: UserGroupIcon },
     { id: 'visibility', label: 'Visibility', hint: 'Status', icon: ViewIcon },
@@ -388,6 +391,7 @@ export const StoreSettings = ({ store, onSaved }) => {
     taxes: JSON.stringify(form.taxRules) !== JSON.stringify(saved.taxRules),
     payments: form.offlineUpiId !== saved.offlineUpiId || form.offlineUpiPayeeName !== saved.offlineUpiPayeeName,
     visibility: form.status !== saved.status,
+    pos: form.posLayout !== saved.posLayout,
     ordering: form.startBeforeUpiConfirmed !== saved.startBeforeUpiConfirmed || form.payAtCounter !== saved.payAtCounter,
   };
   const navTabs = sections.map(s => ({ ...s, label: changed[s.id] ? `${s.label} •` : s.label }));
@@ -505,6 +509,25 @@ export const StoreSettings = ({ store, onSaved }) => {
         )}
 
         {active === 'managers' && <ManagersPanel storeId={store.id} canManage={isOwner} />}
+
+        {active === 'pos' && (
+          <Panel title="POS" description="How the counter takes orders on this store's POS.">
+            <Row label="Billing screen" hint="What staff see when they start a new order. Both use the same orders, payments and printing.">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-w-xl" role="radiogroup" aria-label="Billing screen">
+                {[
+                  ['CLASSIC', 'Classic', 'Everything on one screen: categories, item names, the bill, and Save / KOT buttons. Fastest for counter staff; type short codes to add items.'],
+                  ['MODERN', 'Modern', 'A picture menu with a cart and a separate checkout page. Good for tablets and when photos help.'],
+                ].map(([id, label, hint]) => (
+                  <button key={id} type="button" role="radio" aria-checked={form.posLayout === id} onClick={() => set('posLayout')(id)}
+                    className={`rounded-lg border px-3 py-2.5 text-left ${form.posLayout === id ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-400'}`}>
+                    <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">{label}</span>
+                    <span className="block text-xs text-zinc-500">{hint}</span>
+                  </button>
+                ))}
+              </div>
+            </Row>
+          </Panel>
+        )}
 
         {active === 'ordering' && (
           <Panel title="Guest ordering" description="How guests pay when they order from the QR menu.">
