@@ -12,6 +12,7 @@ const EVENT_LABELS = {
   ORDER_RECALLED: "Recalled to kitchen",
   ITEMS_EDITED: "Items edited",
   ITEMS_REJECTED: "Kitchen rejected items",
+  COMPLIMENTARY_GIVEN: "Complimentary food given",
   ITEM_READY: "Item marked ready",
   ITEM_UNREADY: "Item ready undone",
   DELAY_ANNOUNCED: "Delay announced",
@@ -204,6 +205,119 @@ async function listStoreAudit(actor, storeId, query = {}) {
   };
 }
 
+// Things that happened to an order after it was placed and cost (or may cost) the store money.
+// kind: "lost" = money gone, "risk" = money not collected yet, "watch" = worth a look, no amount lost by itself
+const LEAK_CATEGORIES = [
+  { key: "CANCELLED", kind: "lost", label: "Cancelled orders", hint: "Orders cancelled by staff after they were placed" },
+  { key: "REJECTED", kind: "lost", label: "Kitchen couldn't make", hint: "Items the kitchen rejected and took off the bill" },
+  { key: "COMPLIMENTARY", kind: "lost", label: "Complimentary food", hint: "Free food given in place of something that went wrong" },
+  { key: "EDITED", kind: "lost", label: "Bills edited", hint: "Items changed after the order was placed; the amount is how much bills went down" },
+  { key: "DISCOUNT", kind: "lost", label: "Discounts by staff", hint: "Promo codes staff added to a bill after it was placed" },
+  { key: "REFUND", kind: "lost", label: "Refunds", hint: "Money given back to guests" },
+  { key: "DUES_REDUCED", kind: "lost", label: "Dues written down", hint: "Dues reduced without being paid" },
+  { key: "DUES", kind: "risk", label: "Put on dues", hint: "Bills left unpaid, to be collected later" },
+  { key: "PAYMENT_WITHDRAWN", kind: "watch", label: "Payments withdrawn", hint: "A payment was started, then marked as not received" },
+  { key: "INVOICE_CANCELLED", kind: "watch", label: "Invoices cancelled", hint: "A tax invoice was cancelled after being issued" }
+];
+const LEAK_EVENT_TYPES = [
+  "ORDER_CANCELLED", "ITEMS_REJECTED", "COMPLIMENTARY_GIVEN", "ITEMS_EDITED", "PROMO_APPLIED",
+  "REFUND_ISSUED", "DUES_REDUCED", "BILL_ON_DUES", "PAYMENT_WITHDRAWN", "INVOICE_CANCELLED"
+];
+
+const drop = (e) => Math.max(0, (e.amountBefore || 0) - (e.amountAfter || 0));
+
+/** Which leakage an audit entry is and how much money it involves; null when it isn't one. */
+function classifyLeak(e) {
+  switch (e.type) {
+    case "ORDER_CANCELLED":
+      // Guests abandoning an unpaid order, and timeouts, aren't leakage
+      if (!e.actorId) return null;
+      // A whole order rejected by the kitchen is counted once, under rejections
+      if ((e.reason || "").startsWith("Rejected by kitchen")) return null;
+      return { category: "CANCELLED", amount: e.amountBefore || 0, afterKitchen: ["PROCESSING", "READY", "SERVED"].includes(e.data?.from) };
+    case "ITEMS_REJECTED":
+      return { category: "REJECTED", amount: e.data?.wholeOrder ? (e.amountBefore || 0) : drop(e) };
+    case "COMPLIMENTARY_GIVEN":
+      return { category: "COMPLIMENTARY", amount: e.amountBefore || 0 };
+    case "ITEMS_EDITED":
+      return { category: "EDITED", amount: drop(e) };
+    case "PROMO_APPLIED":
+      return e.actorId && e.source !== "QR_MENU" ? { category: "DISCOUNT", amount: drop(e) } : null;
+    case "REFUND_ISSUED":
+      return { category: "REFUND", amount: drop(e) };
+    case "DUES_REDUCED":
+      return { category: "DUES_REDUCED", amount: drop(e) };
+    case "BILL_ON_DUES":
+      return { category: "DUES", amount: e.amountAfter || 0 };
+    case "PAYMENT_WITHDRAWN":
+      return { category: "PAYMENT_WITHDRAWN", amount: e.amountAfter || 0 };
+    case "INVOICE_CANCELLED":
+      return { category: "INVOICE_CANCELLED", amount: 0 };
+    default:
+      return null;
+  }
+}
+
+/**
+ * Leakage report: everything unusual that happened to orders after they were placed, in a date range,
+ * with totals per kind and per staff member.
+ *
+ * @param {object} query from, to (ISO dates; defaults to today), category (optional)
+ */
+async function listLeakages(actor, storeId, query = {}) {
+  await assertViewer(actor, storeId);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const from = query.from ? new Date(query.from) : startOfToday;
+  const to = query.to ? new Date(query.to) : new Date();
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) throw createHttpError(400, "Invalid date range");
+
+  const MAX = 5000;
+  const rows = await getPrismaClient().orderEvent.findMany({
+    where: { storeId, type: { in: LEAK_EVENT_TYPES }, createdAt: { gte: from, lte: to } },
+    orderBy: { createdAt: "desc" },
+    take: MAX
+  });
+
+  const totals = new Map(LEAK_CATEGORIES.map(c => [c.key, { ...c, count: 0, amount: 0 }]));
+  const people = new Map();
+  const events = [];
+  for (const row of rows) {
+    const leak = classifyLeak(row);
+    if (!leak) continue;
+    const bucket = totals.get(leak.category);
+    bucket.count += 1;
+    bucket.amount += leak.amount;
+
+    const event = { ...serializeEvent(row), category: leak.category, kind: bucket.kind, leakAmount: leak.amount, afterKitchen: Boolean(leak.afterKitchen) };
+    const personKey = row.actorId || `name:${event.actorName}`;
+    if (!people.has(personKey)) {
+      people.set(personKey, { actorId: row.actorId, actorName: event.actorName, actorRole: row.actorRole, count: 0, lostAmount: 0, counts: {} });
+    }
+    const person = people.get(personKey);
+    person.count += 1;
+    person.counts[leak.category] = (person.counts[leak.category] || 0) + 1;
+    if (bucket.kind === "lost") person.lostAmount += leak.amount;
+
+    if (!query.category || query.category === leak.category) events.push(event);
+  }
+
+  const categories = [...totals.values()];
+  return {
+    from,
+    to,
+    truncated: rows.length === MAX,
+    summary: {
+      lostAmount: categories.filter(c => c.kind === "lost").reduce((sum, c) => sum + c.amount, 0),
+      riskAmount: categories.filter(c => c.kind === "risk").reduce((sum, c) => sum + c.amount, 0),
+      count: categories.reduce((sum, c) => sum + c.count, 0)
+    },
+    categories,
+    byPerson: [...people.values()].sort((a, b) => b.lostAmount - a.lostAmount || b.count - a.count),
+    events: events.slice(0, 500)
+  };
+}
+
 const csvCell = (value) => {
   if (value === null || value === undefined) return "";
   const text = typeof value === "object" ? JSON.stringify(value) : String(value);
@@ -244,5 +358,6 @@ module.exports = {
   sourceFor,
   getOrderAudit,
   listStoreAudit,
+  listLeakages,
   exportStoreAuditCsv
 };

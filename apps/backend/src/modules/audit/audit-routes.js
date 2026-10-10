@@ -2,7 +2,7 @@ const express = require("express");
 const { createApiResponse } = require("@smo/shared");
 const { asyncHandler } = require("../../middleware/async-handler");
 const { authenticate } = require("../../middleware/auth");
-const { listStoreAudit, exportStoreAuditCsv } = require("./audit-service");
+const { listStoreAudit, listLeakages, exportStoreAuditCsv } = require("./audit-service");
 
 const router = express.Router({ mergeParams: true });
 
@@ -12,6 +12,11 @@ router.use(authenticate);
 router.get("/", asyncHandler(async (req, res) => {
   const result = await listStoreAudit(req.user, req.params.storeId, req.query);
   res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/audit/leakages?from=&to=&category=
+router.get("/leakages", asyncHandler(async (req, res) => {
+  res.json(createApiResponse(await listLeakages(req.user, req.params.storeId, req.query)));
 }));
 
 // GET /api/stores/:storeId/audit/export.csv  (same filters)

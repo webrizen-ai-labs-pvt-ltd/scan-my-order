@@ -5,6 +5,9 @@ import { Search01Icon, Cancel01Icon, Loading03Icon, PauseIcon } from 'hugeicons-
 import { computeCartSubTotal, computeLineUnitPrice, computeOrderTotals } from '@smo/shared/pricing';
 import api from '../../lib/api';
 import { usePos } from './pos-layout';
+import { useAuthStore } from '../../store/authStore';
+import { ComplimentaryDialog } from '../../components/pos/complimentary-dialog';
+import { canGiveComplimentary } from '../../lib/complimentary';
 import { usePosCartStore, toOrderItems } from '../../store/pos-cart-store';
 import { ModifierDialog } from '../../components/pos/modifier-dialog';
 import { apiErrorMessage } from '../../components/pos/pos-toasts';
@@ -22,10 +25,8 @@ import { printKitchenTicket, markPrinted, readPrintSettings } from '../../lib/ki
 const DIET_BORDER = { VEG: 'border-l-emerald-600', VEGAN: 'border-l-emerald-600', EGG: 'border-l-amber-500', NON_VEG: 'border-l-rose-600' };
 const PAY_METHODS = [
   { id: 'CASH', label: 'Cash' },
-  { id: 'CARD', label: 'Card' },
-  { id: 'UPI', label: 'UPI' },
+  { id: 'OTHER', label: 'Other' },
   { id: 'DUE', label: 'Due' },
-  { id: 'PART', label: 'Part' },
 ];
 const rupees = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
@@ -41,6 +42,8 @@ const writeHeld = (storeId, list) => {
 
 export const PosClassicPage = () => {
   const { storeId, store, data, toast, subscribe } = usePos();
+  const { user } = useAuthStore();
+  const [comping, setComping] = useState(null); // table bill getting complimentary food
   const navigate = useNavigate();
   const cart = usePosCartStore();
   const { lines, notes, orderType, tableId, customerName, promo } = cart;
@@ -109,14 +112,18 @@ export const PosClassicPage = () => {
   /* ---------- table & its running bill ---------- */
 
   const selectedTable = data.tables.find(t => t.id === tableId) || null;
+  // The table whose bill is wanted right now; answers for any other table are dropped
+  const runningTableRef = useRef(null);
   const loadRunning = useCallback(async () => {
-    if (!storeId || !tableId || orderType !== 'DINE_IN') { setRunning(null); return; }
+    const wanted = storeId && tableId && orderType === 'DINE_IN' ? tableId : null;
+    runningTableRef.current = wanted;
+    if (!wanted) { setRunning(null); return; }
+    let bill = null;
     try {
-      const res = await api.get(`/stores/${storeId}/orders/sessions/by-table/${tableId}`);
-      setRunning(res.data.data || null);
-    } catch {
-      setRunning(null);
-    }
+      const res = await api.get(`/stores/${storeId}/orders/sessions/by-table/${wanted}`);
+      bill = res.data.data || null;
+    } catch { /* shown as no running bill */ }
+    if (runningTableRef.current === wanted) setRunning(bill);
   }, [storeId, tableId, orderType]);
 
   useEffect(() => { loadRunning(); }, [loadRunning]);
@@ -131,14 +138,26 @@ export const PosClassicPage = () => {
       for (const it of o.items || []) {
         if (it.status === 'REJECTED') continue;
         const name = it.displayName || it.customName || it.menuItem?.name || 'Item';
-        const key = `${name}|${it.priceAtOrder}`;
-        const prev = map.get(key) || { name, quantity: 0, amount: 0 };
-        map.set(key, { name, quantity: prev.quantity + it.quantity, amount: prev.amount + it.priceAtOrder * it.quantity });
+        const free = it.compValue != null;
+        const key = `${name}|${it.priceAtOrder}|${free}`;
+        const prev = map.get(key) || { name, quantity: 0, amount: 0, free };
+        map.set(key, { ...prev, quantity: prev.quantity + it.quantity, amount: prev.amount + it.priceAtOrder * it.quantity });
       }
     }
     return [...map.values()];
   }, [running]);
   const runningTotal = running?.totalAmount || 0;
+  // Everything this table was served, as one order, for "Complimentary"
+  const compTarget = useMemo(() => {
+    const sent = (running?.orders || []).filter(o => canGiveComplimentary(user, o));
+    if (sent.length === 0) return null;
+    return {
+      id: sent[0].id,
+      status: sent[0].status,
+      table: selectedTable ? { tableNumber: selectedTable.tableNumber } : null,
+      items: sent.flatMap(o => o.items || []),
+    };
+  }, [running, user, selectedTable]);
 
   /* ---------- totals ---------- */
 
@@ -201,7 +220,6 @@ export const PosClassicPage = () => {
     cart.clear();
     setCustomerPhone('');
     data.refreshTables();
-    loadRunning();
     setTimeout(() => searchRef.current?.focus(), 50);
   };
 
@@ -500,10 +518,18 @@ export const PosClassicPage = () => {
         <div className="flex-1 min-h-0 overflow-y-auto">
           {runningLines.length > 0 && (
             <div className="bg-zinc-50 dark:bg-zinc-950/50">
-              <p className="px-3 pt-1.5 text-[10px] font-bold uppercase tracking-wide text-zinc-400">Already sent to kitchen</p>
+              <div className="px-3 pt-1.5 flex items-center justify-between gap-2">
+                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-400">Already sent to kitchen</p>
+                {compTarget && (
+                  <button type="button" onClick={() => setComping(compTarget)} title="Send free food in place of something that went wrong"
+                    className="text-[11px] font-semibold text-amber-700 dark:text-amber-400 underline underline-offset-2">
+                    Complimentary
+                  </button>
+                )}
+              </div>
               {runningLines.map((r, i) => (
                 <div key={i} className="grid grid-cols-[minmax(0,1fr)_92px_70px] px-3 py-1 text-xs text-zinc-500">
-                  <span className="truncate">{r.name}</span><span className="text-center tabular-nums">{r.quantity}</span><span className="text-right tabular-nums">{r.amount.toFixed(2)}</span>
+                  <span className="truncate">{r.name}</span><span className="text-center tabular-nums">{r.quantity}</span><span className="text-right tabular-nums">{r.free ? 'Free' : r.amount.toFixed(2)}</span>
                 </div>
               ))}
             </div>
@@ -558,7 +584,7 @@ export const PosClassicPage = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-5 gap-1 px-2 pb-2" role="radiogroup" aria-label="Payment method">
+          <div className="grid grid-cols-3 gap-2 px-2 pb-2" role="radiogroup" aria-label="Payment method">
             {PAY_METHODS.map(m => (
               <label key={m.id} className={`h-8 rounded-md flex items-center justify-center gap-1.5 text-xs font-bold cursor-pointer ${payMethod === m.id ? 'bg-white text-zinc-900' : 'bg-zinc-700 text-zinc-200 hover:bg-zinc-600'}`}>
                 <input type="radio" name="pay-method" value={m.id} checked={payMethod === m.id} onChange={() => setPayMethod(m.id)} className="accent-rose-600" />
@@ -622,6 +648,15 @@ export const PosClassicPage = () => {
         onClose={() => setModifierItem(null)}
         onConfirm={(item, mods) => { cart.addItem(item, mods); setModifierItem(null); searchRef.current?.focus(); }}
         onError={(msg) => toast(msg, 'error')}
+      />
+
+      <ComplimentaryDialog
+        storeId={storeId}
+        storeName={store?.name}
+        order={comping}
+        menu={data.menu}
+        onClose={() => setComping(null)}
+        onSent={() => { toast('Complimentary order sent to the kitchen', 'success'); loadRunning(); }}
       />
 
       {/* Rendered only while printing a bill */}

@@ -467,6 +467,64 @@ async function resolveCounterGuest(prisma, input) {
 }
 
 // 1. ORDER CREATION
+// Complimentary food: who may give it, and how long after the original order
+const COMPLIMENTARY_ROLES = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
+const COMPLIMENTARY_WINDOW_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Checks a request to send free food in place of something that went wrong on an earlier order
+ * (out of stock, dropped, bad quality...). The free food is its own order, linked to the original:
+ * it follows the original's type and, while that table's bill is still open, joins the same bill.
+ *
+ * @param {object} input
+ * @param {string} input.orderId The order something went wrong with
+ * @param {string} input.reason What went wrong
+ * @param {string[]} [input.itemIds] The lines of that order being made up for
+ */
+async function resolveComplimentary(prisma, storeId, actor, origin, input = {}) {
+  if (origin !== 'POS' || !actor || !COMPLIMENTARY_ROLES.includes(actor.role)) {
+    throw createHttpError(403, "Only cashiers and managers can give complimentary food");
+  }
+  const reason = typeof input.reason === 'string' ? input.reason.trim().slice(0, 200) : '';
+  if (reason.length < 3) throw createHttpError(400, "Please say what went wrong with the order");
+
+  const original = input.orderId ? await prisma.order.findUnique({
+    where: { id: String(input.orderId) },
+    include: { tableSession: { select: { status: true } }, items: { include: { menuItem: true } } }
+  }) : null;
+  if (!original || original.storeId !== storeId) throw createHttpError(404, "Order not found");
+  if (original.complimentaryOfId) {
+    throw createHttpError(400, "This order is already complimentary. Choose the order the guest first placed.");
+  }
+  if (['DRAFT', 'PENDING_VERIFICATION', 'PENDING_PAYMENT'].includes(original.status)) {
+    throw createHttpError(409, "This order hasn't reached the kitchen yet. Edit or cancel it instead.");
+  }
+  if (Date.now() - original.createdAt.getTime() > COMPLIMENTARY_WINDOW_MS) {
+    throw createHttpError(409, "Complimentary food can only be given within a day of the order");
+  }
+
+  // The lines being made up for may sit on other KOTs of the same table bill
+  const wanted = Array.isArray(input.itemIds) ? input.itemIds.map(String).slice(0, 50) : [];
+  const replacedLines = wanted.length === 0 ? [] : await prisma.orderItem.findMany({
+    where: {
+      id: { in: wanted },
+      order: { storeId, OR: [{ id: original.id }, ...(original.tableSessionId ? [{ tableSessionId: original.tableSessionId }] : [])] }
+    },
+    include: { menuItem: true }
+  });
+  const replaced = replacedLines.map(i => `${i.quantity}× ${serializeOrderItem(i).displayName}`);
+  const joinTable = Boolean(original.tableId) && original.tableSession?.status === 'ACTIVE';
+
+  return {
+    original,
+    reason,
+    replaced,
+    type: original.type,
+    tableId: joinTable ? original.tableId : null,
+    paymentModel: joinTable ? 'POSTPAID' : 'PREPAID'
+  };
+}
+
 async function createOrder(storeId, actor, origin, input) {
   const prisma = getPrismaClient();
   const { items: itemsInput, promoCode } = input;
@@ -481,6 +539,13 @@ async function createOrder(storeId, actor, origin, input) {
     type = 'TAKEAWAY';
     paymentModel = 'PREPAID';
     tableId = null;
+  }
+
+  const comp = input.complimentary ? await resolveComplimentary(prisma, storeId, actor, origin, input.complimentary) : null;
+  if (comp) {
+    type = comp.type;
+    paymentModel = comp.paymentModel;
+    tableId = comp.tableId;
   }
 
   if (!['PREPAID', 'POSTPAID'].includes(paymentModel)) {
@@ -505,7 +570,20 @@ async function createOrder(storeId, actor, origin, input) {
     }
   }
 
-  const { items, totalAmount: subTotal } = await buildCartItems(prisma, storeId, itemsInput, { allowCustom: isStaff });
+  const built = await buildCartItems(prisma, storeId, itemsInput, { allowCustom: isStaff });
+  const items = built.items;
+  let subTotal = built.totalAmount;
+  // Complimentary lines are billed at 0; what they would have cost is kept for the leakage report
+  let complimentaryValue = 0;
+  if (comp) {
+    complimentaryValue = subTotal;
+    for (const item of items) {
+      item.compValue = item.priceAtOrder;
+      item.priceAtOrder = 0;
+      for (const mod of item.modifiers.create) mod.priceAtOrder = 0;
+    }
+    subTotal = 0;
+  }
   // Guests can't order from a suspended or disabled store (staff at the counter still can)
   if (origin === 'QR_MENU' && store?.status !== 'ACTIVE') {
     throw createHttpError(403, "This store isn't taking orders right now. Please ask the staff.");
@@ -537,7 +615,7 @@ async function createOrder(storeId, actor, origin, input) {
   }
 
   let promo = null;
-  if (promoCode) {
+  if (promoCode && !comp) {
     promo = await prisma.promoCode.findUnique({
       where: { storeId_code: { storeId, code: String(promoCode).toUpperCase() } }
     });
@@ -551,7 +629,7 @@ async function createOrder(storeId, actor, origin, input) {
 
   // Store Loyalty Credit Wallet Redemption
   let walletCredits = 0;
-  if (input.applyWalletCredits) {
+  if (input.applyWalletCredits && !comp) {
     if (!actor) {
       throw createHttpError(401, "Please log in to redeem store credits.");
     }
@@ -601,10 +679,14 @@ async function createOrder(storeId, actor, origin, input) {
       tableId,
       tableSessionId: tableSession ? tableSession.id : null,
       staffId: origin === 'POS' && actor ? actor.id : null,
-      customerId: origin === 'QR_MENU' && actor ? actor.id : null,
-      sessionId: input.sessionId || null,
-      customerName: guest ? guest.name : posCustomerName,
-      customerPhone: guest ? guest.phone : posCustomerPhone,
+      // A complimentary order belongs to the same guest, so it shows on their phone too
+      customerId: comp ? comp.original.customerId : (origin === 'QR_MENU' && actor ? actor.id : null),
+      sessionId: comp ? comp.original.sessionId : (input.sessionId || null),
+      customerName: guest ? guest.name : (posCustomerName || comp?.original.customerName || null),
+      customerPhone: guest ? guest.phone : (posCustomerPhone || comp?.original.customerPhone || null),
+      complimentaryOfId: comp ? comp.original.id : null,
+      complimentaryReason: comp ? comp.reason : null,
+      complimentaryValue,
       guestPayMethod,
       guestContactId: guest ? guest.guestContactId : null,
       paymentModel,
@@ -654,6 +736,25 @@ async function createOrder(storeId, actor, origin, input) {
       walletDiscount: totals.walletDiscount || 0
     }
   });
+
+  if (comp) {
+    await logOrderEvent({
+      storeId,
+      orderId: order.id,
+      tableSessionId: tableSession ? tableSession.id : null,
+      type: 'COMPLIMENTARY_GIVEN',
+      actor,
+      reason: comp.reason,
+      amountBefore: complimentaryValue,
+      amountAfter: 0,
+      data: {
+        forOrderId: comp.original.id,
+        table: order.table?.tableNumber ?? null,
+        replaced: comp.replaced,
+        items: order.items.map(i => ({ name: serializeOrderItem(i).displayName, quantity: i.quantity, price: i.compValue }))
+      }
+    });
+  }
 
   // Deduct applied wallet credits from customer balance
   if (totals.walletDiscount > 0 && actor) {
@@ -1007,6 +1108,10 @@ async function updateOrderItems(actor, storeId, orderId, input) {
 
   if (['CANCELLED', 'SETTLED'].includes(order.status)) {
     throw createHttpError(400, `Cannot modify items in a ${order.status.toLowerCase()} order`);
+  }
+  // Editing would re-price the free lines
+  if (order.complimentaryOfId) {
+    throw createHttpError(400, "A complimentary order can't be edited. Cancel it and send a new one.");
   }
   // Once money has been taken against an order its total is locked
   const takenPayments = await prisma.payment.count({
@@ -1840,6 +1945,8 @@ async function getKdsOrders(actor, storeId) {
       customerPhone: true,
       estimatedReadyAt: true,
       guestPayMethod: true,
+      complimentaryOfId: true,
+      complimentaryReason: true,
       paidAt: true,
       readyAt: true,
       delayMinutes: true,
@@ -2070,7 +2177,7 @@ async function getTableSessionBill(storeId, tableSessionId, { includePin = false
       if (rawItem.status === 'REJECTED') continue;
       const item = serializeOrderItem(rawItem);
       const modifierNames = item.modifiers.map(m => m.modifierOption?.name).filter(Boolean);
-      const key = `${item.menuItemId}_${item.priceAtOrder}_${item.displayName}_${modifierNames.join(',')}`;
+      const key = `${item.menuItemId}_${item.priceAtOrder}_${item.compValue ?? ''}_${item.displayName}_${modifierNames.join(',')}`;
       if (itemsMap.has(key)) {
         itemsMap.get(key).quantity += item.quantity;
       } else {
@@ -2079,6 +2186,7 @@ async function getTableSessionBill(storeId, tableSessionId, { includePin = false
           price: item.priceAtOrder,
           quantity: item.quantity,
           dietary: item.menuItem?.dietary || 'VEG',
+          complimentary: item.compValue !== null && item.compValue !== undefined,
           modifiers: modifierNames
         });
       }

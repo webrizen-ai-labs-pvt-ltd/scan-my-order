@@ -22,6 +22,7 @@ export function sessionBillToReceipt(bill, payments) {
       quantity: i.quantity,
       priceAtOrder: i.price,
       customName: i.name,
+      complimentary: Boolean(i.complimentary),
       modifiers: (i.modifiers || []).map(m => ({ id: m, modifierOption: { name: m } })),
     })),
   };

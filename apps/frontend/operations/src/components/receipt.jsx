@@ -121,7 +121,7 @@ export const Receipt = React.forwardRef(({ order, storeData, payQr }, ref) => {
                   {item.isCustom && ' *'}
                 </span>
                 <span className="w-10 text-center">{item.quantity}</span>
-                <span className="w-16 text-right">{(itemTotal * item.quantity).toFixed(2)}</span>
+                <span className="w-16 text-right">{item.complimentary || item.compValue != null ? 'FREE' : (itemTotal * item.quantity).toFixed(2)}</span>
               </div>
               {item.modifiers?.length > 0 && (
                 <div className="text-xs pl-2 text-zinc-600">

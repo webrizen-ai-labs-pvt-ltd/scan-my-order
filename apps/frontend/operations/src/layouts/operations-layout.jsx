@@ -53,7 +53,8 @@ import {
   Invoice03Icon,
   NoteEditIcon,
   ChartIncreaseIcon,
-  Activity01Icon
+  Activity01Icon,
+  Alert02Icon
 } from 'hugeicons-react';
 import { StaffNotificationCenter } from '../components/staff-notification-center';
 
@@ -132,6 +133,7 @@ export const OperationsLayout = () => {
           { name: 'Table Analytics', path: '/dashboard/table-analytics', icon: Analytics01Icon, show: isSuperOrTenantAdmin },
           { name: 'Invoices', path: '/dashboard/invoices', icon: Invoice03Icon, show: isCashier },
           { name: 'Dues', path: '/dashboard/dues', icon: NoteEditIcon, show: isCashier },
+          { name: 'Leakages', path: '/dashboard/leakages', icon: Alert02Icon, show: isManager },
           { name: 'Audit Log', path: '/dashboard/audit', icon: Activity01Icon, show: isManager },
         ],
       },
@@ -181,6 +183,7 @@ export const OperationsLayout = () => {
     "sales": { label: "Sales", icon: ChartIncreaseIcon },
     "record-payment": { label: "Record payment" },
     "audit": { label: "Audit Log", icon: Activity01Icon },
+    "leakages": { label: "Leakages", icon: Alert02Icon },
   };
 
   const getBreadcrumbs = () => {

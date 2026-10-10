@@ -36,6 +36,7 @@ import { Employees } from './pages/employees';
 import { TableAnalytics } from './pages/table-analytics';
 import { Invoices } from './pages/invoices';
 import { AuditLog } from './pages/audit-log';
+import { Leakages } from './pages/leakages';
 import { Sales } from './pages/sales/sales-page';
 
 function App() {
@@ -100,6 +101,7 @@ function App() {
             <Route path="/dashboard/stores" element={<Stores />} />
             <Route path="/dashboard/stores/:id/edit" element={<StoreEdit />} />
             <Route path="/dashboard/audit" element={<AuditLog />} />
+            <Route path="/dashboard/leakages" element={<Leakages />} />
             <Route path="/dashboard/sales" element={<Sales />} />
           </Route>
 

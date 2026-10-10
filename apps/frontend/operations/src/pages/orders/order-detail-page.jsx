@@ -2,10 +2,12 @@ import React, { useRef, useState } from 'react';
 import { Button, Badge } from '@smo/ui';
 import {
   ArrowLeft01Icon, PrinterIcon, Edit02Icon, Shield01Icon, Loading03Icon, Invoice03Icon,
-  Building02Icon, Cancel01Icon, MoneyReceive01Icon, AlertCircleIcon, CheckmarkCircle02Icon,
+  Building02Icon, Cancel01Icon, MoneyReceive01Icon, AlertCircleIcon, CheckmarkCircle02Icon, GiftIcon,
 } from 'hugeicons-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
+import { ComplimentaryDialog } from '../../components/pos/complimentary-dialog';
+import { canGiveComplimentary } from '../../lib/complimentary';
 import { Receipt } from '../../components/receipt';
 import { printReceipt } from '../../lib/print-receipt';
 import { OrderActivity } from '../../components/audit/order-activity';
@@ -30,6 +32,7 @@ export const OrderDetailPage = () => {
   const isManager = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(user?.role);
   const { orderId, storeId, store, order, setOrder, error, query, detailPath, listPath, goBack, navigate } = useOrderPage();
   const [updating, setUpdating] = useState(false);
+  const [comping, setComping] = useState(false);
   const [feedback, setFeedback] = useState({ text: '', error: false });
   const receiptRef = useRef(null);
 
@@ -54,7 +57,7 @@ export const OrderDetailPage = () => {
 
   const paid = Boolean(order?.paidAt) || order?.status === 'SETTLED';
   const items = order?.items || [];
-  const canEdit = isManager && order && !['CANCELLED', 'SETTLED'].includes(order.status);
+  const canEdit = isManager && order && !order.complimentaryOfId && !['CANCELLED', 'SETTLED'].includes(order.status);
 
   return (
     <div className="flex flex-col gap-4 pb-12">
@@ -99,6 +102,16 @@ export const OrderDetailPage = () => {
                     {order.cancelledAt ? ` · ${new Date(order.cancelledAt).toLocaleString()}` : ''}
                   </span>
                 )}
+              </div>
+            )}
+
+            {order.complimentaryOfId && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-900 dark:text-amber-200">
+                <span className="font-semibold">Complimentary:</span> free food worth {money(order.complimentaryValue)}, in place of order{' '}
+                <button type="button" className="font-mono underline" onClick={() => navigate(`/dashboard/orders/${order.complimentaryOfId}${query}`)}>
+                  #{order.complimentaryOfId.slice(-6).toUpperCase()}
+                </button>
+                {order.complimentaryReason && <span className="block text-xs opacity-80">Reason: {order.complimentaryReason}</span>}
               </div>
             )}
 
@@ -220,6 +233,11 @@ export const OrderDetailPage = () => {
                     <Edit02Icon size={16} className="mr-2" /> Edit items
                   </Button>
                 )}
+                {canGiveComplimentary(user, order) && (
+                  <Button variant="outline" title="Send free food in place of something that went wrong" onClick={() => setComping(true)}>
+                    <GiftIcon size={16} className="mr-2" /> Complimentary
+                  </Button>
+                )}
                 {isManager && !['CANCELLED', 'SETTLED'].includes(order.status) && !order.paidAt && (
                   <Button variant="outline" className="text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/50" onClick={() => navigate(`/dashboard/orders/${orderId}/cancel${query}`)}>
                     <Cancel01Icon size={16} className="mr-2" /> Cancel order
@@ -252,6 +270,14 @@ export const OrderDetailPage = () => {
           </div>
         </div>
       )}
+
+      <ComplimentaryDialog
+        storeId={storeId}
+        storeName={store?.name}
+        order={comping ? order : null}
+        onClose={() => setComping(false)}
+        onSent={(created) => setFeedback({ text: `Complimentary order #${created.id.slice(-6).toUpperCase()} sent to the kitchen.`, error: false })}
+      />
 
       {/* Printed through print-receipt; never shown */}
       <div style={{ display: 'none' }}>

@@ -73,6 +73,7 @@ export function kitchenTicketHtml(order, { storeName = '', paper = 80, reprint =
 </style></head>
 <body>
   ${test ? '<div class="banner">TEST PRINT</div>' : reprint ? '<div class="banner">REPRINT</div>' : ''}
+  ${order.complimentaryOfId ? `<div class="banner">COMPLIMENTARY${order.complimentaryReason ? `<br>${esc(order.complimentaryReason)}` : ''}</div>` : ''}
   <div class="center">
     <div class="kicker">KITCHEN ORDER</div>
     <div class="where">${esc(where)}</div>

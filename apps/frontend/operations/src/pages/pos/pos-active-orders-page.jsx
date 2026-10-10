@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Skeleton } from '@smo/ui';
-import { Money01Icon, Search01Icon, Tick02Icon, Edit02Icon, LockKeyIcon, PlusSignIcon } from 'hugeicons-react';
+import { Money01Icon, Search01Icon, Tick02Icon, Edit02Icon, LockKeyIcon, PlusSignIcon, GiftIcon } from 'hugeicons-react';
 import api from '../../lib/api';
 import { usePos } from './pos-layout';
 import { useAuthStore } from '../../store/authStore';
 import { usePosCartStore } from '../../store/pos-cart-store';
 import { CancelOrderDialog } from '../../components/pos/cancel-order-dialog';
+import { ComplimentaryDialog } from '../../components/pos/complimentary-dialog';
+import { canGiveComplimentary } from '../../lib/complimentary';
 import { RefundDialog } from '../../components/pos/refund-dialog';
 import { apiErrorMessage } from '../../components/pos/pos-toasts';
 import { orderPlaceLabel, orderGuestLabel } from '../../lib/order-place';
@@ -23,7 +25,7 @@ const STATUS_DISPLAY = {
 const REFRESH_EVENTS = /^(ORDER_|PAYMENT_UPDATED|TABLE_SESSION_SETTLED|STREAM_RECONNECTED)/;
 
 export const PosActiveOrdersPage = () => {
-  const { storeId, subscribe, toast, data } = usePos();
+  const { storeId, store, subscribe, toast, data } = usePos();
   const setCartTable = usePosCartStore(s => s.setTableId);
   const cartLineCount = usePosCartStore(s => s.lines.length);
   const cartTableId = usePosCartStore(s => s.tableId);
@@ -35,6 +37,7 @@ export const PosActiveOrdersPage = () => {
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState(null);
   const [cancelling, setCancelling] = useState(null);
+  const [comping, setComping] = useState(null); // order getting complimentary food
   // Waiters only reject unapproved orders; cashiers and managers can cancel any unpaid order
   const canCancel = (order) => !order.paidAt && (user?.role !== 'WAITER' || order.status === 'PENDING_VERIFICATION');
 
@@ -222,6 +225,7 @@ export const PosActiveOrdersPage = () => {
                             {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                           <span className="flex items-center gap-1">
+                            {order.complimentaryOfId && <span title={order.complimentaryReason || ''} className="px-1.5 py-0.5 rounded border text-[9px] bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800">Complimentary</span>}
                             {order.refundDue > 0 && <span className="px-1.5 py-0.5 rounded border text-[9px] bg-rose-100 text-rose-800 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800">Refund due ₹{order.refundDue}</span>}
                             {order.paidAt && <span className="px-1.5 py-0.5 rounded border text-[9px] bg-emerald-100 text-emerald-800 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800">Paid</span>}
                             <span className={`px-1.5 py-0.5 rounded border text-[9px] ${status.tone}`}>{status.label}</span>
@@ -243,7 +247,7 @@ export const PosActiveOrdersPage = () => {
                               <span className="font-semibold text-zinc-500 w-6 inline-block">{item.quantity}×</span>
                               {item.displayName || item.customName || item.menuItem?.name}
                             </span>
-                            <span className="text-zinc-500 tabular-nums">₹{item.priceAtOrder * item.quantity}</span>
+                            <span className="text-zinc-500 tabular-nums">{item.compValue != null ? 'Free' : `₹${item.priceAtOrder * item.quantity}`}</span>
                           </div>
                         ))}
                         <div className="flex gap-1.5 mt-1.5 flex-wrap">
@@ -262,7 +266,12 @@ export const PosActiveOrdersPage = () => {
                               Cancel
                             </Button>
                           )}
-                          {isManager && !order.paidAt && ['PROCESSING', 'READY', 'SERVED', 'PENDING_PAYMENT'].includes(order.status) && (
+                          {canGiveComplimentary(user, order) && (
+                            <Button size="sm" variant="outline" className="h-7 text-[11px]" title="Send free food in place of something that went wrong" onClick={() => setComping({ ...order, table: group.table })}>
+                              <GiftIcon size={12} className="mr-1" /> Complimentary
+                            </Button>
+                          )}
+                          {isManager && !order.paidAt && !order.complimentaryOfId && ['PROCESSING', 'READY', 'SERVED', 'PENDING_PAYMENT'].includes(order.status) && (
                             <Button size="sm" variant="outline" className="h-7 text-[11px]" onClick={() => navigate(`/dashboard/pos/orders/${order.id}/edit`)}>
                               <Edit02Icon size={12} className="mr-1" /> Edit items
                             </Button>
@@ -303,6 +312,18 @@ export const PosActiveOrdersPage = () => {
         onChanged={(result) => {
           if (result.refundDue === 0) toast('Guest fully refunded', 'success');
           fetchRefunds();
+          fetchOrders();
+        }}
+      />
+
+      <ComplimentaryDialog
+        storeId={storeId}
+        storeName={store?.name}
+        order={comping}
+        menu={data.menu}
+        onClose={() => setComping(null)}
+        onSent={() => {
+          toast('Complimentary order sent to the kitchen', 'success');
           fetchOrders();
         }}
       />

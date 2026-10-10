@@ -644,6 +644,12 @@ model Order {
   // Old cancelled orders are archived (hidden from Order History), never deleted: they're financial records
   archivedAt      DateTime?
 
+  // Complimentary (free) food sent in place of something that went wrong on another order:
+  // the order it makes up for, why, and what the food would have cost on the menu
+  complimentaryOfId    String?
+  complimentaryReason  String?
+  complimentaryValue   Int       @default(0)
+
 
   paymentLinkId   String?
   paymentLinkUrl  String?
@@ -665,6 +671,7 @@ model Order {
   @@index([tableSessionId])
   @@index([tableId])
   @@index([guestContactId])
+  @@index([complimentaryOfId])
 }
 
 // One tender line against an order or a whole table session.
@@ -771,6 +778,8 @@ model OrderItem {
   rejectedAt      DateTime?
   rejectedById    String?
   rejectedBy      User?                @relation("RejectedOrderItems", fields: [rejectedById], references: [id], onDelete: SetNull)
+  // Complimentary line: billed at 0, this is the menu price it would have had (per unit)
+  compValue       Int?
   
   modifiers       OrderItemModifier[]
 
