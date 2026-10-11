@@ -21,6 +21,11 @@
       "name": "menu",
       "url": "http://localhost:5175",
       "port": 5175
+    },
+    {
+      "name": "admin",
+      "url": "http://localhost:5173",
+      "port": 5173
     }
   ]
 }

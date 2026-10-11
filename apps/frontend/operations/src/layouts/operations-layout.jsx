@@ -1,4 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useEntitlements, featureForPath } from '../lib/entitlements';
+import { UpgradeRequired, SubscriptionBanner } from '../components/plan/plan-gates';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   SidebarProvider,
@@ -56,12 +58,28 @@ import {
   Activity01Icon,
   Alert02Icon,
   UserMultiple02Icon,
-  Megaphone01Icon
+  Megaphone01Icon,
+  SquareLock02Icon
 } from 'hugeicons-react';
 import { StaffNotificationCenter } from '../components/staff-notification-center';
 
 export const OperationsLayout = () => {
   const { user, logout } = useAuthStore();
+  // What the brand's plan includes: loaded on entry, refreshed when the tab is opened again
+  const loadEntitlements = useEntitlements(s => s.load);
+  const planFeatures = useEntitlements(s => s.features);
+  const entitlementsLoaded = useEntitlements(s => s.loaded);
+  useEffect(() => {
+    loadEntitlements();
+    const onVisible = () => { if (document.visibilityState === 'visible') loadEntitlements(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [loadEntitlements, user?.id]);
+  // A page stays visible in the menu when its feature isn't in the plan; it shows a lock instead
+  const isLocked = (path) => {
+    const feature = featureForPath(path);
+    return Boolean(feature) && entitlementsLoaded && user?.role !== 'SUPER_ADMIN' && !planFeatures.includes(feature);
+  };
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -297,7 +315,8 @@ export const OperationsLayout = () => {
                                   <SidebarMenuSubButton asChild isActive={isActive} className="h-8 p-0">
                                     <Link to={item.path} title={item.name} className={`${rowClass(isActive)} h-8 gap-2 px-2`}>
                                       <item.icon size={16} variant={isActive ? 'solid' : 'stroke'} className="shrink-0" />
-                                      <span className="truncate">{item.name}</span>
+                                      <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                                      {isLocked(item.path) && <SquareLock02Icon size={13} className="shrink-0 text-zinc-400" aria-label="Not in your plan" />}
                                     </Link>
                                   </SidebarMenuSubButton>
                                 </SidebarMenuSubItem>
@@ -481,9 +500,10 @@ export const OperationsLayout = () => {
               )}
             </div>
           </header>
+          <SubscriptionBanner />
 
           <div className={`w-full z-0 ${location.pathname.startsWith('/dashboard/pos') || location.pathname.startsWith('/dashboard/kds') ? 'p-0 md:p-3 h-[calc(100vh-4.05rem)] overflow-hidden flex flex-col' : 'p-0 md:p-8'}`}>
-            <Outlet />
+            {isLocked(location.pathname) ? <UpgradeRequired feature={featureForPath(location.pathname)} /> : <Outlet />}
           </div>
         </SidebarInset>
       </div>

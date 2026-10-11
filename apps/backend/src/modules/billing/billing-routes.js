@@ -12,6 +12,8 @@ const {
   updatePlan,
   deletePlan,
   getTenantSubscription,
+  listTenantSubscriptions,
+  listPayments,
   assignPlanDirectly,
   sendPaymentLink,
   initiateSubscription,
@@ -22,6 +24,9 @@ const {
   saveGatewayKeys,
   getGateways
 } = require("./payment-gateway-service");
+
+const { PLAN_FEATURE_KEYS } = require("@smo/shared/plans");
+const { getEntitlements, assertTenantFeature } = require("./entitlements-service");
 
 const router = express.Router();
 
@@ -60,24 +65,46 @@ router.delete("/plans/:id", authenticate, requireSuperAdmin, asyncHandler(async 
 
 // Public/Auth get plans
 router.get("/plans", authenticate, asyncHandler(async (req, res) => {
-  const result = await getPlans();
+  // Tenants see the plans on sale; the super admin also sees retired ones
+  const result = await getPlans({ includeInactive: req.user.role === userRoles.superAdmin });
   res.json(createApiResponse(result));
 }));
 
 // --- Subscription Management (SUPER_ADMIN) ---
 
 router.post("/subscription/assign", authenticate, requireSuperAdmin, asyncHandler(async (req, res) => {
-  const { tenantId, planId } = req.body;
+  // No payment involved: the platform decides. Optional: periodEnd, trial, extraFeatures, maxStoresOverride, adminNote
+  const { tenantId, planId, ...options } = req.body;
   if (!tenantId || !planId) throw createHttpError(400, "tenantId and planId are required");
-  const result = await assignPlanDirectly(tenantId, planId);
+  const result = await assignPlanDirectly(tenantId, planId, options);
   res.json(createApiResponse(result));
+}));
+
+// Every tenant with its plan, state and usage
+router.get("/subscriptions", authenticate, requireSuperAdmin, asyncHandler(async (_req, res) => {
+  res.json(createApiResponse(await listTenantSubscriptions()));
+}));
+
+// Paid subscription payments across all tenants
+router.get("/payments", authenticate, requireSuperAdmin, asyncHandler(async (req, res) => {
+  res.json(createApiResponse(await listPayments({ tenantId: req.query.tenantId || null, limit: Number(req.query.limit) || 50 })));
 }));
 
 router.post("/subscription/send-link", authenticate, requireSuperAdmin, asyncHandler(async (req, res) => {
   const { tenantId, planId, sourceApp = 'admin' } = req.body;
   if (!tenantId || !planId) throw createHttpError(400, "tenantId and planId are required");
-  const result = await sendPaymentLink(tenantId, planId, sourceApp);
+  const result = await sendPaymentLink(tenantId, planId, sourceApp, req.user.id);
   res.json(createApiResponse(result));
+}));
+
+// --- What the signed-in user's brand may use (any staff member) ---
+
+// GET /api/billing/entitlements  → { state, plan, features, maxStores, periodEnd, graceEndsAt, daysLeft, isTrial }
+router.get("/entitlements", authenticate, asyncHandler(async (req, res) => {
+  if (req.user.role === userRoles.superAdmin || !req.user.tenantId) {
+    return res.json(createApiResponse({ state: "ACTIVE", plan: null, features: PLAN_FEATURE_KEYS, maxStores: null, periodEnd: null, graceEndsAt: null, daysLeft: null, isTrial: false }));
+  }
+  res.json(createApiResponse(await getEntitlements(req.user.tenantId)));
 }));
 
 // --- Tenant Subscription Routes (TENANT_ADMIN) ---
@@ -92,7 +119,7 @@ router.post("/subscription/initiate", authenticate, requireTenantAdmin, asyncHan
   if (!planId) {
     throw createHttpError(400, "planId is required");
   }
-  const result = await initiateSubscription(req.user.tenantId, planId, sourceApp);
+  const result = await initiateSubscription(req.user.tenantId, planId, sourceApp, req.user.id);
   res.json(createApiResponse(result));
 }));
 
@@ -104,6 +131,7 @@ router.get("/gateways", authenticate, requireTenantAdmin, asyncHandler(async (re
 }));
 
 router.post("/gateways", authenticate, requireTenantAdmin, asyncHandler(async (req, res) => {
+  await assertTenantFeature(req.user.tenantId, "ONLINE_PAYMENTS");
   const result = await saveGatewayKeys(req.user.tenantId, req.body);
   res.json(createApiResponse(result));
 }));
@@ -135,7 +163,7 @@ router.post("/webhooks/phonepe", express.raw({ type: 'application/json' }), asyn
   }
 
   const payload = JSON.parse(rawBody);
-  const result = await handleSubscriptionWebhook(payload, req.query);
+  const result = await handleSubscriptionWebhook(payload);
   res.json(createApiResponse(result));
 }));
 

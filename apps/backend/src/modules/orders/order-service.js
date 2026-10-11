@@ -562,6 +562,9 @@ async function createOrder(storeId, actor, origin, input) {
   if (origin === 'POS' && !isStaff) {
     throw createHttpError(403, "Only store staff can place POS orders");
   }
+  const { assertStoreFeature } = require("../billing/entitlements-service");
+  if (isStaff && actor.role === 'WAITER') await assertStoreFeature(storeId, 'WAITER_PANEL');
+  if (comp) await assertStoreFeature(storeId, 'COMPLIMENTARY');
 
   if (tableId) {
     const table = await prisma.table.findUnique({ where: { id: tableId }, select: { storeId: true, isActive: true } });

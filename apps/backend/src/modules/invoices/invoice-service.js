@@ -287,6 +287,8 @@ async function loadInvoiceRequest(prisma, ref) {
  */
 async function setInvoiceRequest(actor, storeId, input = {}) {
   await assertCanView(actor, storeId);
+  // Clearing a request is always allowed; asking for a company invoice needs the plan
+  if (input.billTo) await require("../billing/entitlements-service").assertStoreFeature(storeId, "CORPORATE_INVOICES");
   const prisma = getPrismaClient();
   const { orderId, tableSessionId } = input;
   if (Boolean(orderId) === Boolean(tableSessionId)) throw createHttpError(400, "Pass either an order or a table bill");
@@ -409,6 +411,7 @@ function startOfTodayIst() {
  */
 async function issueCorporateInvoice(actor, storeId, invoiceId, input = {}) {
   await assertCanView(actor, storeId);
+  await require("../billing/entitlements-service").assertStoreFeature(storeId, "CORPORATE_INVOICES");
   const prisma = getPrismaClient();
   const original = await prisma.invoice.findUnique({ where: { id: invoiceId } });
   if (!original || original.storeId !== storeId) throw createHttpError(404, "Invoice not found");

@@ -14,6 +14,7 @@ import { Brands } from './pages/brands';
 import { BrandCreate } from './pages/brand-create';
 import { BrandEdit } from './pages/brand-edit';
 import { Billing } from './pages/billing';
+import { Performance } from './pages/performance';
 import { Settings } from './pages/settings';
 import { Venues } from './pages/venues';
 import { VenueEdit } from './pages/venue-edit';
@@ -38,6 +39,7 @@ function App() {
           <Route path="/users/create" element={<UserCreate />} />
           <Route path="/users/:id/edit" element={<UserEdit />} />
           <Route path="/billing" element={<Billing />} />
+          <Route path="/performance" element={<Performance />} />
           <Route path="/settings" element={<Settings />} />
         </Route>
       </Route>

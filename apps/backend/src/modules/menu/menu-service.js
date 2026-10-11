@@ -161,6 +161,7 @@ async function createMenuItem(actor, storeId, input) {
   const prisma = getPrismaClient();
   const { categoryId, name, description, price, image, dietary, spiceLevel } = input;
   const videoUrl = cleanVideoUrl(input.videoUrl);
+  if (videoUrl) await require("../billing/entitlements-service").assertStoreFeature(storeId, "ITEM_VIDEOS");
   const shortCode = cleanShortCode(input.shortCode);
   
   if (!categoryId || !name || price == null) {
@@ -196,6 +197,7 @@ async function updateMenuItem(actor, storeId, id, input) {
   const prisma = getPrismaClient();
   const { categoryId, name, description, price, image, dietary, spiceLevel, isManuallyDisabled } = input;
   const videoUrl = cleanVideoUrl(input.videoUrl);
+  if (videoUrl) await require("../billing/entitlements-service").assertStoreFeature(storeId, "ITEM_VIDEOS");
   const shortCode = cleanShortCode(input.shortCode);
   
   const item = await prisma.menuItem.findUnique({ where: { id } });

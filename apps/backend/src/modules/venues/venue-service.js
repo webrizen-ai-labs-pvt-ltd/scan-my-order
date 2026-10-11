@@ -1,4 +1,5 @@
 const { getPrismaClient } = require("../../lib/prisma");
+const { GRACE_DAYS } = require("@smo/shared/plans");
 const { createHttpError } = require("../../middleware/error-handler");
 const { invalidateMenuCache, invalidateStoreCache } = require("../../lib/cache");
 
@@ -43,7 +44,10 @@ function cleanVenueInput(input = {}, { partial = false } = {}) {
 /** Same rule as the billing guard: can this brand's QR menus take orders? */
 function subscriptionAllowsOrders(sub) {
   if (!sub) return true;
-  if (sub.status === 'ACTIVE' || sub.status === 'TRIALING') return true;
+  if (sub.status === 'ACTIVE' || sub.status === 'TRIALING') {
+    // Past its end date and grace: locked, even if nothing has marked it past due yet
+    return !sub.currentPeriodEnd || Date.now() <= sub.currentPeriodEnd.getTime() + GRACE_DAYS * 86400000;
+  }
   if (sub.status === 'PAST_DUE') return Boolean(sub.gracePeriodEndsAt && new Date() <= sub.gracePeriodEndsAt);
   return false;
 }
@@ -64,7 +68,7 @@ async function getPublicVenue(slug) {
           tenant: {
             select: {
               name: true, slug: true, logo: true, brandColor: true, status: true, offlineUpiId: true,
-              subscription: { select: { status: true, gracePeriodEndsAt: true } },
+              subscription: { select: { status: true, gracePeriodEndsAt: true, currentPeriodEnd: true } },
               paymentGateways: { where: { provider: 'RAZORPAY', isActive: true }, select: { id: true } }
             }
           }

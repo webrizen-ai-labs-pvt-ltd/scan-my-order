@@ -24,6 +24,7 @@ const paymentRoutes = require("../payments/payment-routes");
 const auditRoutes = require("../audit/audit-routes");
 const invoiceRoutes = require("../invoices/invoice-routes");
 const { billingGuard } = require("../../middleware/billing-guard");
+const { requireFeature } = require("../billing/entitlements-service");
 
 const router = express.Router();
 
@@ -66,19 +67,19 @@ router.delete("/:id", asyncHandler(async (req, res) => {
 router.use("/:storeId", billingGuard);
 
 router.use("/:storeId/menu", menuRoutes);
-router.use("/:storeId/inventory", inventoryRoutes);
+router.use("/:storeId/inventory", requireFeature("INVENTORY", { writesOnly: true }), inventoryRoutes);
 router.use("/:storeId/tables", tableRoutes);
 router.use("/:storeId/orders", orderRoutes);
 router.use("/:storeId/kds", kdsRoutes);
 router.use("/:storeId/calls", waiterCallRoutes);
 router.use("/:storeId/waiter-calls", waiterCallRoutes);
 router.use("/:storeId/feedback", feedbackRoutes);
-router.use("/:storeId/promos", promoRoutes);
-router.use("/:storeId/reservations", reservationRoutes);
-router.use("/:storeId/loyalty", loyaltyRoutes);
+router.use("/:storeId/promos", requireFeature("PROMO_CODES", { writesOnly: true }), promoRoutes);
+router.use("/:storeId/reservations", requireFeature("RESERVATIONS", { writesOnly: true }), reservationRoutes);
+router.use("/:storeId/loyalty", requireFeature("LOYALTY", { writesOnly: true }), loyaltyRoutes);
 router.use("/:storeId/payments", paymentRoutes);
-router.use("/:storeId/audit", auditRoutes);
-router.use("/:storeId/marketing", require("../marketing/marketing-routes"));
+router.use("/:storeId/audit", requireFeature("LEAKAGES"), auditRoutes);
+router.use("/:storeId/marketing", requireFeature("CAMPAIGNS"), require("../marketing/marketing-routes"));
 router.use("/:storeId/invoices", invoiceRoutes);
 
 module.exports = router;

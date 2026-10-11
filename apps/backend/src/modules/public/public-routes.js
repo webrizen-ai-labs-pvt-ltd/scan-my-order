@@ -129,7 +129,8 @@ router.get("/resolve/:brandSlug/:storeSlug", asyncHandler(async (req, res) => {
     return res.status(403).json(createApiResponse(null, `${store.name} isn't taking orders right now. Please ask the staff.`));
   }
 
-  const razorpayGateway = store.tenant.paymentGateways?.[0];
+  const onlineInPlan = await require("../billing/entitlements-service").storeHasFeature(store.id, "ONLINE_PAYMENTS");
+  const razorpayGateway = onlineInPlan ? store.tenant.paymentGateways?.[0] : null;
   const responseData = {
     ...store,
     // How guests can pay upfront: online (Razorpay), UPI to the store's own ID (staff confirm),

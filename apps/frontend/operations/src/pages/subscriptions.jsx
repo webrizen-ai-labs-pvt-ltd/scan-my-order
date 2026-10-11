@@ -2,10 +2,12 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Button, Input, Label, Skeleton } from '@smo/ui';
 import {
-  FlashIcon, CheckmarkCircle02Icon, AlertCircleIcon, Store01Icon, QrCodeIcon, ComputerIcon,
+  FlashIcon, CheckmarkCircle02Icon, AlertCircleIcon, Store01Icon,
   CreditCardIcon, LinkSquare02Icon, Calendar01Icon, Loading03Icon, Copy01Icon, ViewIcon, ViewOffIcon,
 } from 'hugeicons-react';
+import { PLAN_FEATURES, PLAN_FEATURE_GROUPS } from '@smo/shared/plans';
 import api from '../lib/api';
+import { useEntitlements } from '../lib/entitlements';
 import { Notice, Panel, Row, SectionNav, SectionLayout, Stat } from '../components/settings-layout';
 
 const formatDate = (date) => {
@@ -16,17 +18,6 @@ const formatDate = (date) => {
 const rupees = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 const INTERVAL = { MONTHLY: 'month', YEARLY: 'year', QUARTERLY: 'quarter' };
 const perInterval = (interval) => INTERVAL[interval] || String(interval || '').toLowerCase();
-
-const STATUS_TONE = {
-  ACTIVE: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400',
-  TRIALING: 'bg-sky-500/10 text-sky-700 dark:text-sky-400',
-  PAST_DUE: 'bg-amber-500/10 text-amber-700 dark:text-amber-400',
-};
-const StatusPill = ({ status }) => (
-  <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${STATUS_TONE[status] || 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>
-    {String(status || 'NONE').replace('_', ' ')}
-  </span>
-);
 
 /** Small status line used in the gateway panel */
 const Check = ({ ok, children, detail }) => (
@@ -43,97 +34,168 @@ const Check = ({ ok, children, detail }) => (
 
 /* ---------- Plan ---------- */
 
-const PlanTab = ({ subscription, plans, storeCount, onUpgrade, busyPlanId }) => {
-  const active = plans.filter(p => p.isActive);
-  const current = subscription?.plan;
+const STATE = {
+  ACTIVE: { label: 'Active', tone: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400' },
+  TRIAL: { label: 'Free trial', tone: 'bg-sky-500/10 text-sky-700 dark:text-sky-400' },
+  GRACE: { label: 'Grace period', tone: 'bg-amber-500/10 text-amber-700 dark:text-amber-400' },
+  LOCKED: { label: 'Ended', tone: 'bg-red-500/10 text-red-600 dark:text-red-400' },
+};
+const StatePill = ({ state }) => (
+  <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${STATE[state]?.tone || STATE.LOCKED.tone}`}>{STATE[state]?.label || state}</span>
+);
+const daysText = (n) => `${n} ${n === 1 ? 'day' : 'days'}`;
+
+/** One sentence on where the subscription stands and what happens next */
+function standing(ent) {
+  if (ent.state === 'TRIAL') return `Every feature is unlocked for ${daysText(ent.daysLeft)} more, until ${formatDate(ent.periodEnd)}. Choose a plan before then to keep taking orders.`;
+  if (ent.state === 'GRACE') return `This ended on ${formatDate(ent.periodEnd)}. Everything still works for ${daysText(ent.daysLeft)}; after that new orders are switched off.`;
+  if (ent.state === 'LOCKED') return `This ended on ${formatDate(ent.periodEnd)}. New orders are switched off. Your menu, bills and reports are all still here; pay for a plan below to carry on.`;
+  return `Paid until ${formatDate(ent.periodEnd)} (${daysText(ent.daysLeft)} left). Renewing early adds the new period after this one.`;
+}
+
+const Tick = ({ on }) => (on
+  ? <CheckmarkCircle02Icon size={16} className="text-emerald-600 dark:text-emerald-400 mx-auto" aria-label="Included" />
+  : <span className="block text-center text-zinc-300 dark:text-zinc-700" aria-label="Not included">–</span>);
+
+const PlanTab = ({ subscription, plans, onUpgrade, busyPlanId }) => {
+  const ent = subscription?.entitlements;
+  const storesUsed = subscription?.storesUsed ?? 0;
+  const included = new Set(ent?.features || []);
+  const payments = subscription?.payments || [];
 
   return (
     <div className="flex flex-col gap-6">
-      <Panel title="Current plan" description="What your brand is subscribed to and when it renews.">
-        {subscription ? (
+      <Panel title="Your plan" description="What your brand has now and when it ends.">
+        {ent?.plan ? (
           <>
-            <Row label="Plan" hint="Includes the POS, QR menu ordering and the kitchen display.">
+            <Row label="Plan" hint={standing(ent)}>
               <div className="flex items-center gap-3">
                 <div className="size-10 rounded-lg border border-zinc-200 dark:border-zinc-800 flex items-center justify-center">
                   <FlashIcon size={20} className="text-amber-500" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">{current.name}</span>
-                    <StatusPill status={subscription.status} />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-zinc-900 dark:text-zinc-100">{ent.isTrial ? `Free trial (${ent.plan.name})` : ent.plan.name}</span>
+                    <StatePill state={ent.state} />
                   </div>
-                  <div className="text-sm text-zinc-500">{rupees(current.price)} / {perInterval(current.interval)}</div>
+                  <div className="text-sm text-zinc-500">{ent.isTrial ? 'Nothing to pay yet' : `${rupees(ent.plan.price)} / ${perInterval(ent.plan.interval)}`}</div>
                 </div>
               </div>
             </Row>
-            <Row label="Stores" hint="Stores you can run on this plan.">
-              <UsageBar used={storeCount} max={current.maxStores} />
+            <Row label="Stores" hint="How many stores this plan lets you run.">
+              <UsageBar used={storesUsed} max={ent.maxStores} />
             </Row>
-            <Row label="Billing period" hint="The plan renews at the end of each period.">
-              <div className="text-sm text-zinc-900 dark:text-zinc-100">Current period ends <strong>{formatDate(subscription.currentPeriodEnd)}</strong></div>
-              {subscription.gracePeriodEndsAt && (
-                <div className="mt-1 text-sm text-amber-700 dark:text-amber-400">Grace period until {formatDate(subscription.gracePeriodEndsAt)}. Renew to avoid interruption.</div>
+            <Row label="What’s included" hint={`${included.size} of ${PLAN_FEATURES.length} extras, on top of the POS, QR menu, kitchen screen and GST bills that every plan has.`}>
+              {included.size === 0 ? (
+                <p className="text-sm text-zinc-500">The essentials only. See the plans below for what an upgrade adds.</p>
+              ) : (
+                <ul className="flex flex-wrap gap-1.5">
+                  {PLAN_FEATURES.filter(f => included.has(f.key)).map(f => (
+                    <li key={f.key} title={f.description} className="rounded-md border border-zinc-200 dark:border-zinc-800 px-2 py-1 text-xs text-zinc-700 dark:text-zinc-300">{f.label}</li>
+                  ))}
+                </ul>
               )}
             </Row>
-            {subscription.providerSubId && (
-              <Row label="Payment reference" hint="Quote this if you contact support about a payment.">
-                <code className="text-xs font-mono text-zinc-600 dark:text-zinc-400 break-all">{subscription.providerSubId}</code>
-              </Row>
-            )}
           </>
         ) : (
-          <div className="px-6 py-8 flex items-center gap-4">
-            <div className="size-10 rounded-lg border border-dashed border-zinc-300 dark:border-zinc-700 flex items-center justify-center">
-              <CreditCardIcon size={18} className="text-zinc-400" />
-            </div>
-            <div>
-              <div className="font-medium text-zinc-900 dark:text-zinc-100">No active subscription</div>
-              <p className="text-sm text-zinc-500">Pick a plan below to unlock the full platform.</p>
-            </div>
+          <p className="px-6 py-6 text-sm text-zinc-500">No plans have been set up yet. Everything is switched on for now.</p>
+        )}
+      </Panel>
+
+      <Panel title="Compare plans" description="Payment is taken securely by PhonePe. A plan starts the moment it’s paid.">
+        {plans.length === 0 ? (
+          <p className="px-6 py-6 text-sm text-zinc-500">No plans are available right now.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
+              <thead>
+                <tr className="align-top border-b border-zinc-200 dark:border-zinc-800">
+                  <th className="w-[34%] px-6 py-4" />
+                  {plans.map(plan => {
+                    const isCurrent = ent?.plan?.id === plan.id && !ent.isTrial;
+                    const tooSmall = storesUsed > plan.maxStores;
+                    return (
+                      <th key={plan.id} className={`px-4 py-4 text-left font-normal ${isCurrent ? 'bg-zinc-50 dark:bg-zinc-900' : ''}`}>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-zinc-900 dark:text-zinc-100">{plan.name}</span>
+                          {isCurrent && <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900">Yours</span>}
+                        </div>
+                        <div className="mt-1">
+                          <span className="text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{rupees(plan.price)}</span>
+                          <span className="text-xs text-zinc-500"> / {perInterval(plan.interval)}</span>
+                        </div>
+                        {plan.description && <p className="mt-1 text-xs text-zinc-500 min-h-8">{plan.description}</p>}
+                        <Button
+                          size="sm"
+                          className={`mt-3 w-full ${isCurrent ? '' : '!bg-amber-400 hover:!bg-amber-500 !text-zinc-950'}`}
+                          variant={isCurrent ? 'outline' : 'default'}
+                          disabled={Boolean(busyPlanId) || tooSmall}
+                          onClick={() => onUpgrade(plan.id)}
+                        >
+                          {busyPlanId === plan.id ? <Loading03Icon size={15} className="animate-spin" /> : isCurrent ? 'Renew' : `Choose ${plan.name.replace(/ plan$/i, '')}`}
+                        </Button>
+                        {tooSmall && <p className="mt-1.5 text-[11px] text-zinc-500">You run {storesUsed} stores; this allows {plan.maxStores}.</p>}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                  <td className="px-6 py-2.5 text-zinc-700 dark:text-zinc-300">Stores</td>
+                  {plans.map(plan => <td key={plan.id} className="px-4 py-2.5 text-center font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{plan.maxStores}</td>)}
+                </tr>
+                <tr className="border-b border-zinc-100 dark:border-zinc-800">
+                  <td className="px-6 py-2.5 text-zinc-700 dark:text-zinc-300">POS, QR menu, kitchen screen, GST bills</td>
+                  {plans.map(plan => <td key={plan.id} className="px-4 py-2.5"><Tick on /></td>)}
+                </tr>
+                {PLAN_FEATURE_GROUPS.map(group => (
+                  <React.Fragment key={group}>
+                    <tr><td colSpan={plans.length + 1} className="px-6 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-zinc-500">{group}</td></tr>
+                    {PLAN_FEATURES.filter(f => f.group === group).map(f => (
+                      <tr key={f.key} className="border-b border-zinc-100 dark:border-zinc-800">
+                        <td className="px-6 py-2.5">
+                          <span className="block text-zinc-900 dark:text-zinc-100">{f.label}</span>
+                          <span className="block text-xs text-zinc-500">{f.description}</span>
+                        </td>
+                        {plans.map(plan => <td key={plan.id} className="px-4 py-2.5"><Tick on={(plan.features || []).includes(f.key)} /></td>)}
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Panel>
 
-      <Panel title={subscription ? 'Change plan' : 'Choose a plan'} description="Payment is taken securely by PhonePe. Your new plan starts as soon as it's paid.">
-        {active.length === 0 ? (
-          <p className="px-6 py-6 text-sm text-zinc-500">No plans are available right now.</p>
+      <Panel title="Payments" description="What you have paid for your subscription.">
+        {payments.length === 0 ? (
+          <p className="px-6 py-6 text-sm text-zinc-500">No payments yet.</p>
         ) : (
-          <div className="p-6 grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-            {active.map(plan => {
-              const isCurrent = subscription?.planId === plan.id;
-              const tooSmall = storeCount > plan.maxStores;
-              return (
-                <div key={plan.id} className={`rounded-xl border p-5 flex flex-col gap-4 ${isCurrent
-                  ? 'border-zinc-900 dark:border-zinc-100'
-                  : 'border-zinc-200 dark:border-zinc-800'}`}>
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <div className="font-semibold text-zinc-900 dark:text-zinc-100">{plan.name}</div>
-                      <div className="mt-1">
-                        <span className="text-2xl font-semibold tabular-nums text-zinc-900 dark:text-zinc-100">{rupees(plan.price)}</span>
-                        <span className="text-sm text-zinc-500"> / {perInterval(plan.interval)}</span>
-                      </div>
-                    </div>
-                    {isCurrent && <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900">Current</span>}
-                  </div>
-                  <ul className="flex flex-col gap-2 text-sm text-zinc-600 dark:text-zinc-400">
-                    <li className="flex items-center gap-2"><Store01Icon size={15} className="text-zinc-400" /> Up to {plan.maxStores} store{plan.maxStores === 1 ? '' : 's'}</li>
-                    <li className="flex items-center gap-2"><ComputerIcon size={15} className="text-zinc-400" /> POS and kitchen display</li>
-                    <li className="flex items-center gap-2"><QrCodeIcon size={15} className="text-zinc-400" /> QR menu ordering</li>
-                  </ul>
-                  <div className="mt-auto">
-                    {isCurrent ? (
-                      <Button variant="outline" className="w-full" disabled>Your plan</Button>
-                    ) : (
-                      <Button className="w-full" variant={subscription ? 'outline' : 'default'} disabled={Boolean(busyPlanId) || tooSmall} onClick={() => onUpgrade(plan.id)}>
-                        {busyPlanId === plan.id ? <Loading03Icon size={15} className="animate-spin" /> : subscription ? `Switch to ${plan.name}` : 'Choose plan'}
-                      </Button>
-                    )}
-                    {tooSmall && !isCurrent && <p className="mt-2 text-xs text-zinc-500">You have {storeCount} stores; this plan allows {plan.maxStores}.</p>}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-zinc-500 border-b border-zinc-200 dark:border-zinc-800">
+                  <th className="px-6 py-2 font-medium">Paid on</th>
+                  <th className="px-3 py-2 font-medium">Plan</th>
+                  <th className="px-3 py-2 font-medium">Covers</th>
+                  <th className="px-3 py-2 font-medium text-right">Amount</th>
+                  <th className="px-6 py-2 font-medium">Reference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map(p => (
+                  <tr key={p.id} className="border-b last:border-0 border-zinc-100 dark:border-zinc-800">
+                    <td className="px-6 py-2.5 whitespace-nowrap text-zinc-900 dark:text-zinc-100">{formatDate(p.paidAt)}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap">{p.planName}</td>
+                    <td className="px-3 py-2.5 whitespace-nowrap text-zinc-500">{formatDate(p.periodStart)} to {formatDate(p.periodEnd)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">{rupees(p.amount)}</td>
+                    <td className="px-6 py-2.5"><code className="text-xs font-mono text-zinc-500">{p.transactionId}</code></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </Panel>
@@ -142,7 +204,8 @@ const PlanTab = ({ subscription, plans, storeCount, onUpgrade, busyPlanId }) => 
 };
 
 const UsageBar = ({ used, max }) => {
-  const pct = max > 0 ? Math.min(100, Math.round((used / max) * 100)) : 0;
+  if (!max) return <span className="text-sm text-zinc-900 dark:text-zinc-100"><strong className="tabular-nums">{used}</strong> in use</span>;
+  const pct = Math.min(100, Math.round((used / max) * 100));
   const full = used >= max;
   return (
     <div className="max-w-sm">
@@ -161,7 +224,7 @@ const UsageBar = ({ used, max }) => {
 
 const EMPTY_FORM = { merchantId: '', apiKey: '', secretKey: '', webhookSecret: '' };
 
-const GatewayTab = ({ gateway, onSaved }) => {
+const GatewayTab = ({ gateway, onSaved, inPlan }) => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [showSecrets, setShowSecrets] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -221,6 +284,11 @@ const GatewayTab = ({ gateway, onSaved }) => {
           </>
         )}
       >
+        {!inPlan && (
+          <div className="px-6 py-3">
+            <Notice msg={{ text: 'Online payments aren’t part of your plan, so guests can’t pay online and these keys can’t be changed. Upgrade under Plan to switch them on.', error: true }} />
+          </div>
+        )}
         {msg.text && <div className="px-6 py-3"><Notice msg={msg} /></div>}
 
         <Row label="Status" hint="Online POS payments use single-use UPI QR codes, confirmed automatically.">
@@ -295,8 +363,8 @@ export const Subscriptions = () => {
   const [plans, setPlans] = useState([]);
   const [subscription, setSubscription] = useState(null);
   const [gateways, setGateways] = useState([]);
-  const [storeCount, setStoreCount] = useState(0);
   const [busyPlanId, setBusyPlanId] = useState(null);
+  const refreshEntitlements = useEntitlements(st => st.load);
 
   // Result of the PhonePe checkout redirect
   useEffect(() => {
@@ -311,22 +379,22 @@ export const Subscriptions = () => {
   const load = useCallback(async () => {
     setError('');
     try {
-      const [plansRes, subRes, gatewaysRes, storesRes] = await Promise.all([
+      const [plansRes, subRes, gatewaysRes] = await Promise.all([
         api.get('/billing/plans'),
         api.get('/billing/subscription'),
         api.get('/billing/gateways'),
-        api.get('/stores').catch(() => ({ data: { data: [] } })),
       ]);
+      // The sidebar locks and the banner follow the same plan
+      refreshEntitlements();
       setPlans(Array.isArray(plansRes.data.data) ? plansRes.data.data : []);
       setSubscription(subRes.data.data || null);
       setGateways(Array.isArray(gatewaysRes.data.data) ? gatewaysRes.data.data : []);
-      setStoreCount(Array.isArray(storesRes.data.data) ? storesRes.data.data.length : 0);
     } catch (err) {
       setError(err.response?.data?.error?.message || 'Could not load billing details');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [refreshEntitlements]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -344,8 +412,10 @@ export const Subscriptions = () => {
   };
 
   const gateway = gateways.find(g => g.provider === 'RAZORPAY');
+  const ent = subscription?.entitlements;
+  const storeCount = subscription?.storesUsed ?? 0;
   const tabs = [
-    { id: 'plan', label: 'Plan', hint: 'Subscription and upgrades', icon: CreditCardIcon },
+    { id: 'plan', label: 'Plan', hint: 'Your plan, upgrades, payments', icon: CreditCardIcon },
     { id: 'gateway', label: 'Payment gateway', hint: 'Razorpay keys and QR', icon: LinkSquare02Icon },
   ];
   const active = tabs.some(t => t.id === params.get('tab')) ? params.get('tab') : 'plan';
@@ -372,16 +442,16 @@ export const Subscriptions = () => {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Billing & Subscriptions</h1>
-            {subscription && <StatusPill status={subscription.status} />}
+            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Subscription</h1>
+            {ent?.plan && <StatePill state={ent.state} />}
           </div>
           <p className="text-sm text-zinc-500">
-            {subscription ? `${subscription.plan.name} · ${rupees(subscription.plan.price)} / ${perInterval(subscription.plan.interval)}` : 'No active plan'}
+            {!ent?.plan ? 'No plan yet' : ent.isTrial ? `Free trial · ${daysText(ent.daysLeft)} left` : `${ent.plan.name} · ${rupees(ent.plan.price)} / ${perInterval(ent.plan.interval)}`}
           </p>
         </div>
         <dl className="grid grid-cols-3 sm:flex gap-x-8 gap-y-2 text-sm">
-          <Stat icon={Store01Icon} label="Stores">{subscription ? `${storeCount} / ${subscription.plan.maxStores}` : storeCount}</Stat>
-          <Stat icon={Calendar01Icon} label="Renews">{subscription ? formatDate(subscription.currentPeriodEnd) : '—'}</Stat>
+          <Stat icon={Store01Icon} label="Stores">{ent?.maxStores ? `${storeCount} / ${ent.maxStores}` : storeCount}</Stat>
+          <Stat icon={Calendar01Icon} label={ent?.state === 'ACTIVE' ? 'Paid until' : ent?.state === 'TRIAL' ? 'Trial ends' : 'Ended'}>{ent?.periodEnd ? formatDate(ent.periodEnd) : '—'}</Stat>
           <Stat icon={LinkSquare02Icon} label="Razorpay">{gateway?.hasKeys && gateway?.isActive ? 'Connected' : 'Not connected'}</Stat>
         </dl>
       </div>
@@ -391,9 +461,9 @@ export const Subscriptions = () => {
 
       <SectionLayout nav={<SectionNav tabs={tabs} active={active} onChange={setTab} label="Billing sections" />}>
         {active === 'plan' && (
-          <PlanTab subscription={subscription} plans={plans} storeCount={storeCount} onUpgrade={upgrade} busyPlanId={busyPlanId} />
+          <PlanTab subscription={subscription} plans={plans} onUpgrade={upgrade} busyPlanId={busyPlanId} />
         )}
-        {active === 'gateway' && <GatewayTab gateway={gateway} onSaved={load} />}
+        {active === 'gateway' && <GatewayTab gateway={gateway} onSaved={load} inPlan={!ent || ent.features.includes('ONLINE_PAYMENTS')} />}
       </SectionLayout>
     </div>
   );

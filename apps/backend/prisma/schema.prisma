@@ -232,6 +232,7 @@ model Tenant {
   stores           Store[]
   users            User[]
   subscription     TenantSubscription?
+  subscriptionPayments SubscriptionPayment[]
   paymentGateways  TenantPaymentGateway[]
   corporateClients CorporateClient[]
   duesAccounts     DuesAccount[]
@@ -374,8 +375,14 @@ model SubscriptionPlan {
   maxStores   Int
   interval    PlanInterval
   isActive    Boolean  @default(true)
+  // One line shown under the plan name on pricing screens
+  description String?
+  // Feature keys this plan switches on (see @smo/shared/plans); everything else is in every plan
+  features    String[] @default([])
+  sortOrder   Int      @default(0)
   
   subscriptions TenantSubscription[]
+  payments      SubscriptionPayment[]
 }
 
 model TenantSubscription {
@@ -388,8 +395,35 @@ model TenantSubscription {
   currentPeriodEnd DateTime
   providerSubId    String?
   gracePeriodEndsAt DateTime?
+  // Granted by the platform on top of the plan: extra features and a different store limit
+  extraFeatures    String[] @default([])
+  maxStoresOverride Int?
+  // Why the platform set this up the way it is (shown to super admins only)
+  adminNote        String?
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+// One attempt to pay for a plan. A plan is only switched on from a row here that the payment
+// provider confirmed for the same amount, and each row can do that once.
+model SubscriptionPayment {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId         String
+  plan           SubscriptionPlan @relation(fields: [planId], references: [id])
+  planName       String   // as it was called when paid
+  amount         Int      // rupees
+  transactionId  String   @unique
+  status         String   @default("PENDING") // PENDING | PAID | FAILED
+  sourceApp      String?
+  initiatedById  String?
+  periodStart    DateTime?
+  periodEnd      DateTime?
+  paidAt         DateTime?
+  createdAt      DateTime @default(now())
+
+  @@index([tenantId, createdAt])
 }
 
 model TenantPaymentGateway {

@@ -10,7 +10,8 @@
     "./assets/*": "./assets/*",
     "./pricing": "./src/pricing.mjs",
     "./gst": "./src/gst.mjs",
-    "./phone": "./src/phone.mjs"
+    "./phone": "./src/phone.mjs",
+    "./plans": "./src/plans.mjs"
   },
   "files": [
     "assets",

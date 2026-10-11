@@ -435,6 +435,7 @@ async function putBillOnDues(actor, storeId, ref, input = {}) {
     throw createHttpError(403, "Only cashiers and managers can put a bill on dues");
   }
   await verifyStoreAccess(actor, storeId);
+  await require("../billing/entitlements-service").assertStoreFeature(storeId, "DUES");
   const note = String(input.note || "").trim().slice(0, 200);
   if (note.length < 3) throw createHttpError(400, "Add a note: why is this bill going on dues?");
   const guest = cleanGuest(input.guest);
@@ -595,14 +596,16 @@ async function refreshPendingForTarget(target) {
 // Which ways this store can take money right now. Depends only on the store's
 // settings, so the POS can ask before a bill exists (paying for a cart being built).
 async function resolvePaymentChannels(store) {
-  const rp = await getTenantRazorpay(store.tenantId);
+  const { getEntitlements } = require("../billing/entitlements-service");
+  const inPlan = (await getEntitlements(store.tenantId)).features.includes("ONLINE_PAYMENTS");
+  const rp = inPlan ? await getTenantRazorpay(store.tenantId) : null;
   const qrStatus = rp ? await getQrCodesStatus(store.tenantId, rp) : null;
   const offlineUpi = resolveOfflineUpi(store);
 
   return {
     RAZORPAY: {
       enabled: Boolean(rp && qrStatus?.enabled),
-      reason: !rp ? 'Razorpay keys are not set up for this brand.' : qrStatus?.reason || null
+      reason: !inPlan ? "Online payments aren't part of your plan." : !rp ? 'Razorpay keys are not set up for this brand.' : qrStatus?.reason || null
     },
     UPI_OFFLINE: { enabled: Boolean(offlineUpi), vpa: offlineUpi?.vpa || null, payeeName: offlineUpi?.payeeName || null },
     CASH: { enabled: true },

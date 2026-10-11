@@ -28,6 +28,7 @@ import {
   Store01Icon, 
   UserGroupIcon, 
   Invoice01Icon, 
+  ChartIncreaseIcon,
   Settings01Icon, 
   Building04Icon, 
   Home01Icon, 
@@ -51,6 +52,7 @@ export const AdminLayout = () => {
     { name: 'Stores', path: '/stores', icon: Store01Icon },
     { name: 'Venues', path: '/venues', icon: QrCodeIcon },
     { name: 'Users', path: '/users', icon: UserGroupIcon },
+    { name: 'Performance', path: '/performance', icon: ChartIncreaseIcon },
     { name: 'Billing', path: '/billing', icon: Invoice01Icon },
     { name: 'Settings', path: '/settings', icon: Settings01Icon },
   ];
@@ -63,6 +65,7 @@ export const AdminLayout = () => {
     "venues": { label: "Venues", icon: QrCodeIcon },
     "settings": { label: "Settings", icon: Settings01Icon },
     "billing": { label: "Billing", icon: Invoice01Icon },
+    "performance": { label: "Performance", icon: ChartIncreaseIcon },
   };
 
   const getBreadcrumbs = () => {

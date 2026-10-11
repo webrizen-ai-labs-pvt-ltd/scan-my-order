@@ -15,6 +15,7 @@ const {
 // Brand-wide dues. ?storeId= narrows to one store (store staff always see only their own).
 const router = express.Router();
 router.use(authenticate);
+router.use(require("../billing/entitlements-service").requireFeature("DUES"));
 
 // GET /api/dues/summary?storeId=
 router.get("/summary", asyncHandler(async (req, res) => {

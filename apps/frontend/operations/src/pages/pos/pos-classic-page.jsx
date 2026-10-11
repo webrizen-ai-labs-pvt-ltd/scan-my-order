@@ -6,6 +6,7 @@ import { computeCartSubTotal, computeLineUnitPrice, computeOrderTotals } from '@
 import api from '../../lib/api';
 import { usePos } from './pos-layout';
 import { useAuthStore } from '../../store/authStore';
+import { useEntitlements } from '../../lib/entitlements';
 import { ComplimentaryDialog } from '../../components/pos/complimentary-dialog';
 import { canGiveComplimentary } from '../../lib/complimentary';
 import { usePosCartStore, toOrderItems } from '../../store/pos-cart-store';
@@ -70,6 +71,9 @@ export const PosClassicPage = () => {
   const { storeId, store, data, toast, subscribe } = usePos();
   const { user } = useAuthStore();
   const [comping, setComping] = useState(null); // table bill getting complimentary food
+  // "Due" is only offered when dues are part of the brand's plan
+  const duesInPlan = useEntitlements(s => !s.loaded || s.features.includes('DUES'));
+  const payMethods = PAY_METHODS.filter(m => m.id !== 'DUE' || duesInPlan);
   const navigate = useNavigate();
   const cart = usePosCartStore();
   const { lines, notes, orderType, tableId, customerName, promo } = cart;
@@ -383,7 +387,7 @@ export const PosClassicPage = () => {
   /* ---------- layout ---------- */
 
   const btn = 'relative h-12 rounded-lg text-[13px] font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5';
-  const primaryBtn = `${btn} bg-amber-400 hover:bg-amber-500 text-zinc-950`;
+  const primaryBtn = `${btn} !bg-amber-400 hover:!bg-amber-500 !text-zinc-950`;
   const kitchenBtn = `${btn} bg-zinc-800 hover:bg-zinc-700 text-white dark:bg-zinc-700 dark:hover:bg-zinc-600`;
   const quietBtn = `${btn} border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800`;
   const spinner = <Loading03Icon size={16} className="animate-spin" />;
@@ -626,8 +630,8 @@ export const PosClassicPage = () => {
 
           <div className="px-3 pb-2">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Paid by</p>
-            <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${PAY_METHODS.length}, minmax(0, 1fr))` }} role="radiogroup" aria-label="Payment method">
-              {PAY_METHODS.map(m => (
+            <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${payMethods.length}, minmax(0, 1fr))` }} role="radiogroup" aria-label="Payment method">
+              {payMethods.map(m => (
                 <label key={m.id} className={`h-9 rounded-md border flex items-center justify-center text-[13px] font-semibold cursor-pointer ${payMethod === m.id
                   ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
                   : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>

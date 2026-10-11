@@ -36,6 +36,17 @@ async function createStore(actor, input) {
     throw createHttpError(403, "Only Super Admins or Tenant Admins can create stores");
   }
 
+  // The plan sets how many stores a brand may have (the platform can raise it per brand)
+  const { getEntitlements } = require("../billing/entitlements-service");
+  const entitlements = await getEntitlements(tenantId);
+  if (entitlements.maxStores !== null) {
+    const storeCount = await prisma.store.count({ where: { tenantId } });
+    if (storeCount >= entitlements.maxStores) {
+      const limit = `${entitlements.maxStores} ${entitlements.maxStores === 1 ? "store" : "stores"}`;
+      throw createHttpError(403, `${entitlements.plan?.name || "This plan"} allows ${limit}, and this brand already has ${storeCount}. Upgrade the plan to add another.`, { code: "STORE_LIMIT_REACHED", maxStores: entitlements.maxStores });
+    }
+  }
+
   // Check if store slug is already used in this tenant
   const existingStore = await prisma.store.findUnique({
     where: {

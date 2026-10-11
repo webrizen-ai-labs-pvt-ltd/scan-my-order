@@ -22,6 +22,7 @@ const {
   announceOrderDelay
 } = require("./order-service");
 const { verifyStoreAccess } = require("../menu/menu-service");
+const { requireFeature } = require("../billing/entitlements-service");
 const { getRefundOptions, createRefund } = require("../payments/refund-service");
 const { getOrderAudit } = require("../audit/audit-service");
 const { getInvoiceForOrder } = require("../invoices/invoice-service");
@@ -74,12 +75,12 @@ router.get("/refunds-due", asyncHandler(async (req, res) => {
 }));
 
 // GET /api/stores/:storeId/orders/customers?q= (POS customer directory)
-router.get("/customers", asyncHandler(async (req, res) => {
+router.get("/customers", requireFeature("CUSTOMERS"), asyncHandler(async (req, res) => {
   res.json(createApiResponse(await searchCustomers(req.user, req.params.storeId, req.query.q)));
 }));
 
 // GET /api/stores/:storeId/orders/customers/directory?q=&sort=&page=&limit= (customer directory page)
-router.get("/customers/directory", asyncHandler(async (req, res) => {
+router.get("/customers/directory", requireFeature("CUSTOMERS"), asyncHandler(async (req, res) => {
   res.json(createApiResponse(await listCustomers(req.user, req.params.storeId, req.query)));
 }));
 

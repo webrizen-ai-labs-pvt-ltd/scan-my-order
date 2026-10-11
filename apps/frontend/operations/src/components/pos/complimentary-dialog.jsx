@@ -262,7 +262,7 @@ export const ComplimentaryDialog = ({ storeId, storeName, order, menu, onClose, 
             <Button type="button" variant="outline" disabled={!valid || busy} onClick={() => send(false)}>
               {busy ? <Loading03Icon size={16} className="animate-spin" /> : 'Send'}
             </Button>
-            <Button type="button" disabled={!valid || busy} onClick={() => send(true)} className="bg-amber-500 hover:bg-amber-600 text-zinc-950">
+            <Button type="button" disabled={!valid || busy} onClick={() => send(true)} className="!bg-amber-500 hover:!bg-amber-600 !text-zinc-950">
               Send & print KOT
             </Button>
           </div>

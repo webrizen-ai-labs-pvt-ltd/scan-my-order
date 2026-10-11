@@ -1,80 +1,34 @@
 const { createHttpError } = require("./error-handler");
-const { getPrismaClient } = require("../lib/prisma");
-const { storeTenantCache, tenantSubscriptionCache } = require("../lib/cache");
+const { getEntitlements, tenantOfStore } = require("../modules/billing/entitlements-service");
+
+// Placing an order, from the POS, a waiter or the QR menu
+const NEW_ORDER = /\/stores\/[^/]+\/orders\/?$/;
 
 /**
- * Middleware that intercepts requests if a Tenant's SaaS subscription is PAST_DUE
- * and the 3-day grace period has expired (The "Kill Switch").
- * Bypassed for SUPER_ADMIN.
+ * What an ended subscription stops. After the plan (or trial) and its grace period run out the
+ * tenant is "locked": no new orders can be placed anywhere. Everything else keeps working, so
+ * open bills can still be settled and the owner can sign in, see their data and renew.
+ * Super admins are never stopped.
  */
-async function billingGuard(req, res, next) {
+async function billingGuard(req, _res, next) {
   try {
-    // If user is SUPER_ADMIN, bypass
-    if (req.user && req.user.role === 'SUPER_ADMIN') {
-      return next();
-    }
+    if (req.user?.role === "SUPER_ADMIN") return next();
+    if (req.method !== "POST" || !NEW_ORDER.test(req.originalUrl.split("?")[0])) return next();
 
-    // Determine the Tenant ID
-    // 1. If it's a Staff request, Tenant ID is on `req.user.tenantId`
-    // 2. If it's a Public QR request, `storeId` is in `req.params`. We must lookup tenantId.
-    let tenantId = req.user?.tenantId;
-    const prisma = getPrismaClient();
+    const tenantId = req.params.storeId ? await tenantOfStore(req.params.storeId) : req.user?.tenantId;
+    if (!tenantId) return next();
 
-    if (!tenantId && req.params.storeId) {
-      const cachedTenantId = storeTenantCache.get(req.params.storeId);
-      if (cachedTenantId) {
-        tenantId = cachedTenantId;
-      } else {
-        const store = await prisma.store.findUnique({
-          where: { id: req.params.storeId },
-          select: { tenantId: true }
-        });
-        if (!store) {
-          throw createHttpError(404, "Store not found");
-        }
-        tenantId = store.tenantId;
-        storeTenantCache.set(req.params.storeId, tenantId);
-      }
-    }
+    const entitlements = await getEntitlements(tenantId);
+    if (entitlements.state !== "LOCKED") return next();
 
-    if (!tenantId) {
-      // If no tenant context is found, it's either an invalid route or super admin
-      return next();
-    }
-
-    let subscription = tenantSubscriptionCache.get(tenantId);
-    if (subscription === undefined || subscription === null) {
-      subscription = await prisma.tenantSubscription.findUnique({
-        where: { tenantId }
-      });
-      tenantSubscriptionCache.set(tenantId, subscription || { status: 'NOT_FOUND' });
-    }
-
-    // If no subscription, let them pass or fail downstream if they have no active plan.
-    if (!subscription || subscription.status === 'NOT_FOUND') {
-      return next();
-    }
-
-    const { status, gracePeriodEndsAt } = subscription;
-
-    if (status === 'PAST_DUE') {
-      if (!gracePeriodEndsAt) {
-        // Should logically have a grace period if past due. Let's assume passed grace if null here, 
-        // but typically gracePeriodEndsAt is set instantly. 
-        throw createHttpError(402, "Payment Required to Resume Service");
-      }
-      
-      const now = new Date();
-      if (now > gracePeriodEndsAt) {
-        // Kill switch activated
-        throw createHttpError(402, "Payment Required to Resume Service");
-      }
-    } else if (status !== 'ACTIVE' && status !== 'TRIALING') {
-       // CANCELED or other statuses
-       throw createHttpError(402, "Payment Required to Resume Service");
-    }
-
-    next();
+    const forGuest = !req.user || req.user.role === "CUSTOMER";
+    throw createHttpError(
+      402,
+      forGuest
+        ? "This restaurant isn't taking orders here right now. Please order with the staff."
+        : `Your ${entitlements.isTrial ? "free trial" : "subscription"} has ended, so new orders are switched off. Ask the owner to renew it under Subscription.`,
+      { code: "SUBSCRIPTION_LOCKED" }
+    );
   } catch (err) {
     next(err);
   }

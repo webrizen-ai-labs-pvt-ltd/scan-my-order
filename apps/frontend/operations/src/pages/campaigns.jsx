@@ -151,13 +151,13 @@ export const Campaigns = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm text-zinc-900 dark:text-zinc-100 mr-auto">Send this to <strong className="tabular-nums">{reach}</strong> {reach === 1 ? 'phone' : 'phones'} now? It can’t be undone.</p>
                   <Button variant="outline" disabled={busy} onClick={() => setConfirming(false)}>Go back</Button>
-                  <Button disabled={busy} onClick={send} className="bg-amber-400 hover:bg-amber-500 text-zinc-950">
+                  <Button disabled={busy} onClick={send} className="!bg-amber-400 hover:!bg-amber-500 !text-zinc-950">
                     {busy ? <Loading03Icon size={16} className="animate-spin" /> : 'Yes, send'}
                   </Button>
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button disabled={!valid} onClick={() => setConfirming(true)} className="bg-amber-400 hover:bg-amber-500 text-zinc-950">
+                  <Button disabled={!valid} onClick={() => setConfirming(true)} className="!bg-amber-400 hover:!bg-amber-500 !text-zinc-950">
                     <Megaphone01Icon size={16} className="mr-2" /> Send to {reach} {reach === 1 ? 'phone' : 'phones'}
                   </Button>
                   <span className="text-xs text-zinc-500">One campaign per day, so guests don’t switch offers off.</span>
