@@ -2028,17 +2028,22 @@ async function searchCustomers(actor, storeId, q) {
 }
 
 const CUSTOMER_LIST_ROLES = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
+const CUSTOMER_SOURCES = ['COUNTER', 'QR_MENU', 'WAITER'];
 const CUSTOMER_SORTS = {
-  recent: { _max: { createdAt: 'desc' } },
-  visits: { _count: { customerPhone: 'desc' } },
-  spend: { _sum: { totalAmount: 'desc' } }
+  recent: (a, b) => b.lastVisitAt - a.lastVisitAt,
+  visits: (a, b) => b.visits - a.visits || b.lastVisitAt - a.lastVisitAt,
+  spend: (a, b) => b.totalSpent - a.totalSpent || b.lastVisitAt - a.lastVisitAt
 };
 
 /**
- * The customer directory page: everyone who gave a mobile number at any of this brand's stores,
- * with how often they came and what they spent (cancelled and unpaid-abandoned orders left out).
+ * The customer directory page: everyone this brand can recognise again, from every way of ordering.
+ * - a mobile number written on a bill (counter POS or a waiter's order), or given by a QR-menu guest
+ * - a signed-in QR-menu customer (Google login), even without a number
+ * One person is one row: a signed-in customer who also gave a number is merged with that number.
+ * Only orders that went ahead count (not cancelled, not still waiting for payment).
  *
- * @param {object} query q (name or number), sort (recent | visits | spend), page, limit
+ * @param {object} query q (name, number or email), source (COUNTER | QR_MENU | WAITER),
+ *                       notifications (OFFERS | ALERTS | NONE), sort (recent | visits | spend), page, limit
  */
 async function listCustomers(actor, storeId, query = {}) {
   if (!CUSTOMER_LIST_ROLES.includes(actor.role)) throw createHttpError(403, "Only cashiers and managers can open the customer directory");
@@ -2047,64 +2052,127 @@ async function listCustomers(actor, storeId, query = {}) {
   const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
   if (!store) throw createHttpError(404, "Store not found");
 
-  const term = String(query.q || '').trim().slice(0, 40);
-  const digits = term.replace(/\D/g, '');
-  const byPhone = digits.length >= 3 && /^[\d\s+-]+$/.test(term);
-  // Only orders that went ahead count as visits: not cancelled, and not still waiting for payment
-  const scope = { store: { tenantId: store.tenantId }, status: { in: ['PROCESSING', 'READY', 'SERVED', 'SETTLED'] }, customerPhone: { not: null } };
-  // Which customers match; their figures below always cover all of their orders
-  let phoneFilter = {};
-  if (term) {
-    const matching = await prisma.order.findMany({
-      where: {
-        ...scope,
-        ...(byPhone
-          ? { customerPhone: { contains: (term.startsWith('+91') ? digits.slice(2) : digits).slice(-10) } }
-          : { customerName: { contains: term, mode: 'insensitive' } })
-      },
+  const scope = {
+    store: { tenantId: store.tenantId },
+    status: { in: ['PROCESSING', 'READY', 'SERVED', 'SETTLED'] },
+    OR: [{ customerPhone: { not: null } }, { customerId: { not: null } }]
+  };
+  const figures = { _count: { _all: true }, _sum: { totalAmount: true }, _max: { createdAt: true }, _min: { createdAt: true } };
+  const [groups, waiterGroups, named] = await Promise.all([
+    prisma.order.groupBy({ by: ['customerPhone', 'customerId', 'origin'], where: scope, ...figures }),
+    // Orders punched by a waiter are POS orders too; these are told apart by who placed them
+    prisma.order.groupBy({ by: ['customerPhone', 'customerId'], where: { ...scope, origin: 'POS', staff: { role: 'WAITER' } }, _count: { _all: true } }),
+    prisma.order.findMany({
+      where: { ...scope, customerPhone: { not: null }, customerName: { not: null } },
+      orderBy: { createdAt: 'desc' },
       distinct: ['customerPhone'],
-      select: { customerPhone: true },
-      take: 2000
-    });
-    phoneFilter = { customerPhone: { in: matching.map(m => m.customerPhone) } };
-  }
-  const where = { ...scope, ...phoneFilter };
-  const page = Math.max(1, parseInt(query.page, 10) || 1);
-  const limit = Math.min(100, Math.max(10, parseInt(query.limit, 10) || 25));
-
-  const [everyone, rows] = await Promise.all([
-    prisma.order.findMany({ where, distinct: ['customerPhone'], select: { customerPhone: true } }),
-    prisma.order.groupBy({
-      by: ['customerPhone'],
-      where,
-      _count: { customerPhone: true },
-      _sum: { totalAmount: true },
-      _max: { createdAt: true },
-      _min: { createdAt: true },
-      orderBy: [CUSTOMER_SORTS[query.sort] || CUSTOMER_SORTS.recent, { customerPhone: 'asc' }],
-      skip: (page - 1) * limit,
-      take: limit
+      select: { customerPhone: true, customerName: true }
     })
   ]);
-  const phones = rows.map(r => r.customerPhone);
-  const named = phones.length === 0 ? [] : await prisma.order.findMany({
-    where: { ...scope, customerPhone: { in: phones }, customerName: { not: null } },
-    orderBy: { createdAt: 'desc' },
-    distinct: ['customerPhone'],
-    select: { customerPhone: true, customerName: true }
+
+  // A signed-in customer who gave a number on any order is the same person as that number
+  const phoneOfUser = new Map();
+  for (const g of groups) if (g.customerId && g.customerPhone && !phoneOfUser.has(g.customerId)) phoneOfUser.set(g.customerId, g.customerPhone);
+  const keyFor = (g) => {
+    const phone = g.customerPhone || (g.customerId ? phoneOfUser.get(g.customerId) : null);
+    return phone ? `p:${phone}` : `u:${g.customerId}`;
+  };
+
+  const people = new Map();
+  const personFor = (g) => {
+    const key = keyFor(g);
+    if (!people.has(key)) {
+      people.set(key, { key, phone: key.startsWith('p:') ? key.slice(2) : null, userId: null, devices: 0, offerDevices: 0, visits: 0, totalSpent: 0, firstVisitAt: null, lastVisitAt: null, counts: { COUNTER: 0, QR_MENU: 0, WAITER: 0 } });
+    }
+    const person = people.get(key);
+    if (g.customerId && !person.userId) person.userId = g.customerId;
+    return person;
+  };
+  for (const g of groups) {
+    const person = personFor(g);
+    person.visits += g._count._all;
+    person.totalSpent += g._sum.totalAmount || 0;
+    if (!person.firstVisitAt || g._min.createdAt < person.firstVisitAt) person.firstVisitAt = g._min.createdAt;
+    if (!person.lastVisitAt || g._max.createdAt > person.lastVisitAt) person.lastVisitAt = g._max.createdAt;
+    person.counts[g.origin === 'QR_MENU' ? 'QR_MENU' : 'COUNTER'] += g._count._all;
+  }
+  for (const g of waiterGroups) {
+    const person = personFor(g);
+    person.counts.WAITER += g._count._all;
+    person.counts.COUNTER -= g._count._all;
+  }
+
+  // Phones that allowed notifications at this brand's stores, matched to their owner by sign-in
+  // or by the browser session they ordered with
+  const devices = await prisma.pushSubscription.findMany({
+    where: { userType: 'CUSTOMER', store: { tenantId: store.tenantId } },
+    select: { userId: true, sessionId: true, marketingOptIn: true }
   });
+  const deviceSessions = [...new Set(devices.map(d => d.sessionId).filter(Boolean))];
+  const sessionOrders = deviceSessions.length === 0 ? [] : await prisma.order.findMany({
+    where: { ...scope, sessionId: { in: deviceSessions } },
+    distinct: ['sessionId'],
+    select: { sessionId: true, customerPhone: true, customerId: true }
+  });
+  const keyOfSession = new Map(sessionOrders.map(o => [o.sessionId, keyFor(o)]));
+  const keyOfUser = new Map([...people.values()].filter(p => p.userId).map(p => [p.userId, p.key]));
+  for (const device of devices) {
+    const person = people.get(keyOfUser.get(device.userId)) || people.get(keyOfSession.get(device.sessionId));
+    if (!person) continue;
+    person.devices += 1;
+    if (device.marketingOptIn) person.offerDevices += 1;
+  }
+
+  const userIds = [...people.values()].map(p => p.userId).filter(Boolean);
+  const users = userIds.length === 0 ? [] : await prisma.user.findMany({
+    where: { id: { in: userIds } },
+    select: { id: true, name: true, email: true, phone: true, profilePhoto: true }
+  });
+  const userById = new Map(users.map(u => [u.id, u]));
   const nameByPhone = new Map(named.map(n => [n.customerPhone, n.customerName]));
 
+  let list = [...people.values()].map(p => {
+    const user = p.userId ? userById.get(p.userId) : null;
+    return {
+      key: p.key,
+      name: (p.phone && nameByPhone.get(p.phone)) || user?.name || null,
+      phone: p.phone || user?.phone || null,
+      email: user?.email || null,
+      photo: user?.profilePhoto || null,
+      signedIn: Boolean(user),
+      // OFFERS: agreed to offers; ALERTS: order alerts only; NONE: no phone has allowed notifications
+      notifications: p.offerDevices > 0 ? 'OFFERS' : p.devices > 0 ? 'ALERTS' : 'NONE',
+      visits: p.visits,
+      totalSpent: p.totalSpent,
+      firstVisitAt: p.firstVisitAt,
+      lastVisitAt: p.lastVisitAt,
+      sources: CUSTOMER_SOURCES.filter(s => p.counts[s] > 0)
+    };
+  });
+
+  const bySource = Object.fromEntries(CUSTOMER_SOURCES.map(s => [s, list.filter(c => c.sources.includes(s)).length]));
+  const everyone = list.length;
+  const byNotifications = { OFFERS: 0, ALERTS: 0, NONE: 0 };
+  for (const c of list) byNotifications[c.notifications] += 1;
+  if (CUSTOMER_SOURCES.includes(query.source)) list = list.filter(c => c.sources.includes(query.source));
+  if (byNotifications[query.notifications] !== undefined) list = list.filter(c => c.notifications === query.notifications);
+
+  const term = String(query.q || '').trim().toLowerCase().slice(0, 40);
+  if (term) {
+    const digits = term.replace(/\D/g, '');
+    const asPhone = digits.length >= 3 && /^[\d\s+-]+$/.test(term) ? (term.startsWith('+91') ? digits.slice(2) : digits).slice(-10) : null;
+    list = list.filter(c => (asPhone
+      ? (c.phone || '').includes(asPhone)
+      : (c.name || '').toLowerCase().includes(term) || (c.email || '').toLowerCase().includes(term)));
+  }
+
+  list.sort(CUSTOMER_SORTS[query.sort] || CUSTOMER_SORTS.recent);
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(10, parseInt(query.limit, 10) || 25));
   return {
-    customers: rows.map(r => ({
-      phone: r.customerPhone,
-      name: nameByPhone.get(r.customerPhone) || null,
-      visits: r._count.customerPhone,
-      totalSpent: r._sum.totalAmount || 0,
-      firstVisitAt: r._min.createdAt,
-      lastVisitAt: r._max.createdAt
-    })),
-    pagination: { total: everyone.length, page, limit, pages: Math.max(1, Math.ceil(everyone.length / limit)) }
+    customers: list.slice((page - 1) * limit, page * limit),
+    counts: { all: everyone, ...bySource, notifications: byNotifications },
+    pagination: { total: list.length, page, limit, pages: Math.max(1, Math.ceil(list.length / limit)) }
   };
 }
 

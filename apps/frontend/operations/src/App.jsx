@@ -38,6 +38,7 @@ import { Invoices } from './pages/invoices';
 import { AuditLog } from './pages/audit-log';
 import { Leakages } from './pages/leakages';
 import { Customers } from './pages/customers';
+import { Campaigns } from './pages/campaigns';
 import { Sales } from './pages/sales/sales-page';
 
 function App() {
@@ -103,6 +104,7 @@ function App() {
             <Route path="/dashboard/stores" element={<Stores />} />
             <Route path="/dashboard/stores/:id/edit" element={<StoreEdit />} />
             <Route path="/dashboard/audit" element={<AuditLog />} />
+            <Route path="/dashboard/campaigns" element={<Campaigns />} />
             <Route path="/dashboard/leakages" element={<Leakages />} />
             <Route path="/dashboard/sales" element={<Sales />} />
           </Route>

@@ -78,6 +78,7 @@ router.use("/:storeId/reservations", reservationRoutes);
 router.use("/:storeId/loyalty", loyaltyRoutes);
 router.use("/:storeId/payments", paymentRoutes);
 router.use("/:storeId/audit", auditRoutes);
+router.use("/:storeId/marketing", require("../marketing/marketing-routes"));
 router.use("/:storeId/invoices", invoiceRoutes);
 
 module.exports = router;

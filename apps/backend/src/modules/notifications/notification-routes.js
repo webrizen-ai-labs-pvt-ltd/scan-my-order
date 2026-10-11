@@ -5,6 +5,7 @@ const { createApiResponse } = require("@smo/shared");
 const { getVapidPublicKey } = require("./vapid-service");
 const {
   saveSubscription,
+  setMarketingOptIn,
   removeSubscription,
   sendNotification,
   getStaffNotifications,
@@ -116,7 +117,7 @@ publicNotificationRouter.get("/vapid-public-key", (req, res) => {
 
 // POST /api/public/notifications/subscribe
 publicNotificationRouter.post("/subscribe", asyncHandler(async (req, res) => {
-  const { endpoint, keys, storeId, sessionId, token } = req.body;
+  const { endpoint, keys, storeId, sessionId, token, offers } = req.body;
   let customerId = null;
 
   if (token) {
@@ -135,10 +136,22 @@ publicNotificationRouter.post("/subscribe", asyncHandler(async (req, res) => {
     storeId,
     userId: customerId,
     sessionId: sessionId || null,
-    role: "CUSTOMER"
+    role: "CUSTOMER",
+    // Offers from the store are a separate yes/no from order updates
+    marketingOptIn: typeof offers === "boolean" ? offers : undefined
   });
 
   res.json(createApiResponse(subscription, "Customer push subscription saved"));
+}));
+
+// PATCH /api/public/notifications/offers  { endpoint, offers }  (guest turns store offers on or off)
+publicNotificationRouter.patch("/offers", asyncHandler(async (req, res) => {
+  const { endpoint, offers } = req.body;
+  if (!endpoint || typeof offers !== "boolean") {
+    return res.status(400).json(createApiResponse(null, "endpoint and offers are required"));
+  }
+  const known = await setMarketingOptIn(endpoint, offers);
+  res.json(createApiResponse({ offers: known ? offers : false }));
 }));
 
 // DELETE /api/public/notifications/subscribe

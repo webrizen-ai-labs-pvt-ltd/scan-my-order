@@ -5,7 +5,7 @@ const { broadcastToStore, broadcastToCustomer } = require("../orders/sse-service
 /**
  * Save or update a Web Push subscription
  */
-async function saveSubscription({ endpoint, keys, userType, storeId, userId, sessionId, role }) {
+async function saveSubscription({ endpoint, keys, userType, storeId, userId, sessionId, role, marketingOptIn }) {
   if (!endpoint || !keys?.p256dh || !keys?.auth) {
     throw new Error("Invalid push subscription payload");
   }
@@ -22,7 +22,8 @@ async function saveSubscription({ endpoint, keys, userType, storeId, userId, ses
       storeId: storeId || null,
       userId: userId || null,
       sessionId: sessionId || null,
-      role: role || (userType === "STAFF" ? "STORE_MANAGER" : "CUSTOMER")
+      role: role || (userType === "STAFF" ? "STORE_MANAGER" : "CUSTOMER"),
+      marketingOptIn: marketingOptIn === true
     },
     update: {
       p256dh: keys.p256dh,
@@ -32,9 +33,23 @@ async function saveSubscription({ endpoint, keys, userType, storeId, userId, ses
       userId: userId !== undefined ? userId : undefined,
       sessionId: sessionId !== undefined ? sessionId : undefined,
       role: role !== undefined ? role : undefined,
+      // Only changed when the guest says so; a plain re-subscribe keeps their choice
+      marketingOptIn: typeof marketingOptIn === "boolean" ? marketingOptIn : undefined,
       updatedAt: new Date()
     }
   });
+}
+
+/**
+ * A guest turns offers from the store on or off for one device.
+ * @returns {Promise<boolean>} false when the device isn't known
+ */
+async function setMarketingOptIn(endpoint, optIn) {
+  const result = await getPrismaClient().pushSubscription.updateMany({
+    where: { endpoint, userType: "CUSTOMER" },
+    data: { marketingOptIn: Boolean(optIn) }
+  });
+  return result.count > 0;
 }
 
 /**
@@ -308,6 +323,7 @@ async function getCustomerNotifications({ customerId, sessionId, storeId, limit 
 module.exports = {
   saveSubscription,
   removeSubscription,
+  setMarketingOptIn,
   sendNotification,
   getStaffNotifications,
   markNotificationAsRead,

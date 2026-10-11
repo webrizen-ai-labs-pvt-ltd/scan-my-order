@@ -300,6 +300,7 @@ model Store {
   loyaltyRules Json?       @default("null")
   customerWallets CustomerStoreWallet[]
   pushSubscriptions PushSubscription[]
+  marketingCampaigns MarketingCampaign[]
   notifications     Notification[]
 
   createdAt    DateTime    @default(now())
@@ -978,6 +979,25 @@ model CustomerWalletTransaction {
   @@index([orderId])
 }
 
+// A promotional push message a store sent to guests who agreed to get offers
+model MarketingCampaign {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  title       String
+  body        String
+  promoCode   String?
+  audience    String   // ALL | REGULARS | LAPSED
+  sentById    String?
+  sentByName  String?
+  targeted    Int      @default(0) // devices it was sent to
+  delivered   Int      @default(0) // accepted by the push service
+  failed      Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([storeId, createdAt])
+}
+
 model PushSubscription {
   id          String    @id @default(cuid())
   endpoint    String    @unique
@@ -990,6 +1010,8 @@ model PushSubscription {
   user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
   sessionId   String?   // For anonymous table QR customers
   role        String?   // 'WAITER' | 'KITCHEN' | 'STORE_MANAGER' | 'CUSTOMER'
+  // The guest agreed to get offers from this store on this device (order updates need no opt-in)
+  marketingOptIn Boolean @default(false)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 

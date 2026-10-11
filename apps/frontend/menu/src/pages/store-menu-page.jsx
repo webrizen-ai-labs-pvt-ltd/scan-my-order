@@ -10,6 +10,7 @@ import { GoogleLogin } from '@react-oauth/google';
 import { Skeleton, Button, Input, AnimatedThemeToggler, Sheet, SheetContent, SheetTitle } from '@smo/ui';
 import { UserProfile } from '../components/user-profile';
 import { LiveOrders } from '../components/live-orders';
+import { NotificationSettings } from '../components/notification-settings';
 import {
   ShoppingCart01Icon,
   PlusSignIcon,
@@ -968,6 +969,7 @@ export const StoreMenuPage = () => {
                 )}
               </button>
             )}
+            <NotificationSettings storeId={store.id} storeName={store.name} />
             <AnimatedThemeToggler className="!size-8" />
             <UserProfile
               walletBalance={walletData?.wallet?.balance}

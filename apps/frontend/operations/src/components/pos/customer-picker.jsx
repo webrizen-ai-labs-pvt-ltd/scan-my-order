@@ -13,9 +13,10 @@ const visitText = (c) => {
  * Customer mobile + name for a bill, with the customer directory behind it: typing part of a
  * number or a name lists people who ordered before, and picking one fills both fields.
  *
- * @param {{ storeId: string, name: string, phone: string, onName: (v: string) => void, onPhone: (v: string) => void }} props
+ * @param {{ storeId: string, name: string, phone: string, onName: (v: string) => void, onPhone: (v: string) => void, dropUp?: boolean }} props
+ *        dropUp opens the list above the fields (for use near the bottom of the screen)
  */
-export const CustomerPicker = ({ storeId, name, phone, onName, onPhone }) => {
+export const CustomerPicker = ({ storeId, name, phone, onName, onPhone, dropUp = false }) => {
   const [search, setSearch] = useState(''); // what the directory is asked for
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -103,7 +104,7 @@ export const CustomerPicker = ({ storeId, name, phone, onName, onPhone }) => {
 
       {showList && (
         <ul id="customer-directory" role="listbox" aria-label="Customers who ordered before"
-          className="absolute left-0 right-0 top-full z-40 mt-1 max-h-64 overflow-y-auto rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 py-1">
+          className={`absolute left-0 right-0 z-40 max-h-64 ${dropUp ? 'bottom-full mb-1' : 'top-full mt-1'} overflow-y-auto rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 py-1`}>
           <li className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">Customers who ordered before</li>
           {matches.map((c, i) => (
             <li key={c.phone} role="option" aria-selected={i === active}>

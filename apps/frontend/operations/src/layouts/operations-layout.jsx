@@ -55,7 +55,8 @@ import {
   ChartIncreaseIcon,
   Activity01Icon,
   Alert02Icon,
-  UserMultiple02Icon
+  UserMultiple02Icon,
+  Megaphone01Icon
 } from 'hugeicons-react';
 import { StaffNotificationCenter } from '../components/staff-notification-center';
 
@@ -98,7 +99,6 @@ export const OperationsLayout = () => {
           { name: 'POS', path: '/dashboard/pos', icon: Store01Icon, show: isCashier },
           { name: 'Reservations', path: '/dashboard/reservations', icon: Calendar01Icon, show: isCashier || isWaiter },
           { name: 'Order History', path: '/dashboard/orders', icon: Invoice01Icon, show: isCashier },
-          { name: 'Customers', path: '/dashboard/customers', icon: UserMultiple02Icon, show: isCashier },
         ],
       },
       {
@@ -110,6 +110,16 @@ export const OperationsLayout = () => {
           { name: 'KDS & KOT', path: '/dashboard/kds', icon: Pot02Icon, show: isKitchen },
           { name: 'Waiter Panel', path: '/dashboard/waiter', icon: Dish01Icon, show: isWaiter },
           { name: 'Inventory', path: '/dashboard/inventory', icon: DeliveryTruck01Icon, show: isManager },
+        ],
+      },
+      {
+        key: 'marketing',
+        label: 'Marketing',
+        icon: Megaphone01Icon,
+        collapsible: true,
+        items: [
+          { name: 'Customers', path: '/dashboard/customers', icon: UserMultiple02Icon, show: isCashier },
+          { name: 'Campaigns', path: '/dashboard/campaigns', icon: Megaphone01Icon, show: isManager },
         ],
       },
       {
@@ -187,6 +197,7 @@ export const OperationsLayout = () => {
     "audit": { label: "Audit Log", icon: Activity01Icon },
     "leakages": { label: "Leakages", icon: Alert02Icon },
     "customers": { label: "Customers", icon: UserMultiple02Icon },
+    "campaigns": { label: "Campaigns", icon: Megaphone01Icon },
   };
 
   const getBreadcrumbs = () => {

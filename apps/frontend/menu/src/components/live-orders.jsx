@@ -65,7 +65,8 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
   const [showBillModal, setShowBillModal] = useState(false);
   const [toastNotification, setToastNotification] = useState(null);
   const [isMuted, setIsMuted] = useState(getAudioMuted());
-  const { isSupported, permission, isSubscribed, subscribe } = usePushNotifications(storeId);
+  const { isSupported, permission, isSubscribed, subscribe, offers, setOffers } = usePushNotifications(storeId);
+  const [wantOffers, setWantOffers] = useState(true); // the tick on the "allow notifications" card
 
   useEffect(() => {
     initAudioUnlock();
@@ -304,23 +305,39 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
             <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {/* Push Permission Prompt Card */}
               {isSupported && !isSubscribed && permission === 'default' && (
-                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white">
-                      <Notification03Icon size={16} />
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500 text-white">
+                        <Notification03Icon size={16} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-amber-950 dark:text-amber-100">Order alerts</p>
+                        <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">Get notified when your food is cooking and ready</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-bold text-amber-950 dark:text-amber-100">Background Alerts</p>
-                      <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80">Get notified when food is cooking & ready</p>
-                    </div>
+                    <button
+                      onClick={() => subscribe({ offers: wantOffers })}
+                      className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-600 transition"
+                    >
+                      Enable
+                    </button>
                   </div>
-                  <button
-                    onClick={() => subscribe()}
-                    className="shrink-0 px-3 py-1.5 rounded-xl bg-amber-500 text-white text-xs font-bold shadow-sm hover:bg-amber-600 transition"
-                  >
-                    Enable
-                  </button>
+                  <label className="mt-2 flex items-center gap-2 text-[11px] text-amber-900 dark:text-amber-200 cursor-pointer">
+                    <input type="checkbox" checked={wantOffers} onChange={e => setWantOffers(e.target.checked)} className="size-3.5 accent-amber-600" />
+                    Also send me offers from this restaurant (you can turn this off any time)
+                  </label>
                 </div>
+              )}
+              {/* Already getting order alerts: offers stay the guest's own choice */}
+              {isSupported && isSubscribed && permission === 'granted' && (
+                <label className="rounded-2xl border border-zinc-200 dark:border-zinc-800 px-3 py-2.5 flex items-center justify-between gap-3 cursor-pointer">
+                  <span>
+                    <span className="block text-xs font-bold text-zinc-900 dark:text-zinc-100">Offers from this restaurant</span>
+                    <span className="block text-[11px] text-zinc-500">{offers ? 'You’ll get deals and news here. Order alerts stay on either way.' : 'Off. You only get alerts about your orders.'}</span>
+                  </span>
+                  <input type="checkbox" role="switch" checked={offers} onChange={e => setOffers(e.target.checked)} className="size-4 accent-amber-600 shrink-0" aria-label="Offers from this restaurant" />
+                </label>
               )}
               {activeOrders.map(order => {
                 const conf = STATUS_MAPPING[order.status] || STATUS_MAPPING.PROCESSING;

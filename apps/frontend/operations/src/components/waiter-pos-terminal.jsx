@@ -7,6 +7,7 @@ import { computeCartSubTotal, computeOrderTotals } from '@smo/shared/pricing';
 import { Receipt } from './receipt';
 import { PaymentCollectorSheet } from './payments/payment-collector-sheet';
 import { printReceipt } from '../lib/print-receipt';
+import { CustomerPicker } from './pos/customer-picker';
 
 export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
   const [menu, setMenu] = useState([]);
@@ -26,6 +27,9 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
   const [selectedTableId, setSelectedTableId] = useState('');
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [appliedPromo, setAppliedPromo] = useState(null);
+  // Optional: who the order is for, so they show up in the customer directory
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
 
   // Modifier Modal State
   const [modifierItem, setModifierItem] = useState(null);
@@ -194,6 +198,8 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
     setSelectedTableId('');
     setAppliedPromo(null);
     setPromoCodeInput('');
+    setCustomerName('');
+    setCustomerPhone('');
     setIsCartOpen(false);
   };
 
@@ -214,6 +220,8 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
         paymentModel,
         tableId: orderType === 'DINE_IN' ? selectedTableId : undefined,
         promoCode: appliedPromo ? appliedPromo.code : undefined,
+        customerName: customerName.trim() || undefined,
+        customerPhone: customerPhone.trim() || undefined,
         items: cart.map(c => ({
           menuItemId: c.menuItem.id,
           quantity: c.quantity,
@@ -492,6 +500,11 @@ export const WaiterPOSTerminal = ({ selectedStoreId, token }) => {
                 </div>
               ))
             )}
+          </div>
+
+          {/* Customer (optional) */}
+          <div className="px-3 pt-2 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+            <CustomerPicker storeId={selectedStoreId} name={customerName} phone={customerPhone} onName={setCustomerName} onPhone={setCustomerPhone} dropUp />
           </div>
 
           {/* Promo Input */}
