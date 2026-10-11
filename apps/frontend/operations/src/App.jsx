@@ -37,6 +37,7 @@ import { TableAnalytics } from './pages/table-analytics';
 import { Invoices } from './pages/invoices';
 import { AuditLog } from './pages/audit-log';
 import { Leakages } from './pages/leakages';
+import { Customers } from './pages/customers';
 import { Sales } from './pages/sales/sales-page';
 
 function App() {
@@ -77,6 +78,7 @@ function App() {
             <Route path="/dashboard/orders/:orderId/cancel" element={<OrderCancelPage />} />
             <Route path="/dashboard/invoices" element={<Invoices />} />
             <Route path="/dashboard/dues" element={<Dues />} />
+            <Route path="/dashboard/customers" element={<Customers />} />
             <Route path="/dashboard/dues/record-payment" element={<DuesPaymentPage />} />
             <Route path="/dashboard/dues/accounts/new" element={<DuesAccountPage />} />
             <Route path="/dashboard/dues/accounts/:accountId" element={<DuesAccountPage />} />

@@ -7,6 +7,8 @@ const {
   getActiveOrders,
   getOrderStats,
   getKdsOrders,
+  searchCustomers,
+  listCustomers,
   updateOrderStatus,
   updateOrderItems,
   getOrderById,
@@ -69,6 +71,16 @@ router.get("/history", asyncHandler(async (req, res) => {
 router.get("/refunds-due", asyncHandler(async (req, res) => {
   const result = await getRefundsDue(req.user, req.params.storeId);
   res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/orders/customers?q= (POS customer directory)
+router.get("/customers", asyncHandler(async (req, res) => {
+  res.json(createApiResponse(await searchCustomers(req.user, req.params.storeId, req.query.q)));
+}));
+
+// GET /api/stores/:storeId/orders/customers/directory?q=&sort=&page=&limit= (customer directory page)
+router.get("/customers/directory", asyncHandler(async (req, res) => {
+  res.json(createApiResponse(await listCustomers(req.user, req.params.storeId, req.query)));
 }));
 
 // GET /api/stores/:storeId/orders/kds

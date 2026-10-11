@@ -672,6 +672,7 @@ model Order {
   @@index([tableId])
   @@index([guestContactId])
   @@index([complimentaryOfId])
+  @@index([customerPhone])
 }
 
 // One tender line against an order or a whole table session.

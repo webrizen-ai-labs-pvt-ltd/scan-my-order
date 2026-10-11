@@ -610,7 +610,8 @@ async function createOrder(storeId, actor, origin, input) {
   let posCustomerPhone = null;
   if (origin === 'POS' && typeof input.customerPhone === 'string' && input.customerPhone.trim()) {
     const checked = checkIndianMobile(input.customerPhone);
-    if (checked.error) throw createHttpError(400, checked.error);
+    // The shared check words its errors for guests; staff get a plain one
+    if (checked.error) throw createHttpError(400, "The customer's mobile number isn't valid. Enter a 10-digit number, or leave it empty.");
     posCustomerPhone = checked.phone;
   }
 
@@ -1972,6 +1973,141 @@ async function getKdsOrders(actor, storeId) {
   return orders.map(serializeOrder);
 }
 
+/**
+ * Customer directory for the POS: people who ordered before at any of this brand's stores,
+ * found by part of their mobile number or name. Built from past orders, newest visitors first.
+ *
+ * @param {string} q At least 2 characters of a name, or 3 digits of a mobile number
+ * @returns {Promise<Array<{ phone: string, name: string | null, visits: number, lastVisitAt: Date }>>}
+ */
+async function searchCustomers(actor, storeId, q) {
+  if (!STAFF_ROLES.includes(actor.role)) throw createHttpError(403, "Only store staff can look up customers");
+  await verifyStoreAccess(actor, storeId);
+  const term = String(q || '').trim().slice(0, 40);
+  const digits = term.replace(/\D/g, '');
+  const byPhone = digits.length >= 3 && /^[\d\s+-]+$/.test(term);
+  if (!byPhone && term.length < 2) return [];
+
+  const prisma = getPrismaClient();
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
+  if (!store) throw createHttpError(404, "Store not found");
+  const scope = { store: { tenantId: store.tenantId }, status: { not: 'CANCELLED' } };
+
+  const found = await prisma.order.groupBy({
+    by: ['customerPhone'],
+    where: {
+      ...scope,
+      ...(byPhone
+        ? { customerPhone: { contains: (term.startsWith('+91') ? digits.slice(2) : digits).slice(-10) } }
+        : { customerPhone: { not: null }, customerName: { contains: term, mode: 'insensitive' } })
+    },
+    _max: { createdAt: true },
+    orderBy: { _max: { createdAt: 'desc' } },
+    take: 8
+  });
+  const phones = found.map(f => f.customerPhone).filter(Boolean);
+  if (phones.length === 0) return [];
+
+  const [visits, named] = await Promise.all([
+    prisma.order.groupBy({ by: ['customerPhone'], where: { ...scope, customerPhone: { in: phones } }, _count: { _all: true }, _max: { createdAt: true } }),
+    prisma.order.findMany({
+      where: { ...scope, customerPhone: { in: phones }, customerName: { not: null } },
+      orderBy: { createdAt: 'desc' },
+      distinct: ['customerPhone'],
+      select: { customerPhone: true, customerName: true }
+    })
+  ]);
+  const visitsByPhone = new Map(visits.map(v => [v.customerPhone, v]));
+  const nameByPhone = new Map(named.map(n => [n.customerPhone, n.customerName]));
+  return phones.map(phone => ({
+    phone,
+    name: nameByPhone.get(phone) || null,
+    visits: visitsByPhone.get(phone)?._count._all || 1,
+    lastVisitAt: visitsByPhone.get(phone)?._max.createdAt || null
+  }));
+}
+
+const CUSTOMER_LIST_ROLES = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
+const CUSTOMER_SORTS = {
+  recent: { _max: { createdAt: 'desc' } },
+  visits: { _count: { customerPhone: 'desc' } },
+  spend: { _sum: { totalAmount: 'desc' } }
+};
+
+/**
+ * The customer directory page: everyone who gave a mobile number at any of this brand's stores,
+ * with how often they came and what they spent (cancelled and unpaid-abandoned orders left out).
+ *
+ * @param {object} query q (name or number), sort (recent | visits | spend), page, limit
+ */
+async function listCustomers(actor, storeId, query = {}) {
+  if (!CUSTOMER_LIST_ROLES.includes(actor.role)) throw createHttpError(403, "Only cashiers and managers can open the customer directory");
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+  const store = await prisma.store.findUnique({ where: { id: storeId }, select: { tenantId: true } });
+  if (!store) throw createHttpError(404, "Store not found");
+
+  const term = String(query.q || '').trim().slice(0, 40);
+  const digits = term.replace(/\D/g, '');
+  const byPhone = digits.length >= 3 && /^[\d\s+-]+$/.test(term);
+  // Only orders that went ahead count as visits: not cancelled, and not still waiting for payment
+  const scope = { store: { tenantId: store.tenantId }, status: { in: ['PROCESSING', 'READY', 'SERVED', 'SETTLED'] }, customerPhone: { not: null } };
+  // Which customers match; their figures below always cover all of their orders
+  let phoneFilter = {};
+  if (term) {
+    const matching = await prisma.order.findMany({
+      where: {
+        ...scope,
+        ...(byPhone
+          ? { customerPhone: { contains: (term.startsWith('+91') ? digits.slice(2) : digits).slice(-10) } }
+          : { customerName: { contains: term, mode: 'insensitive' } })
+      },
+      distinct: ['customerPhone'],
+      select: { customerPhone: true },
+      take: 2000
+    });
+    phoneFilter = { customerPhone: { in: matching.map(m => m.customerPhone) } };
+  }
+  const where = { ...scope, ...phoneFilter };
+  const page = Math.max(1, parseInt(query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(10, parseInt(query.limit, 10) || 25));
+
+  const [everyone, rows] = await Promise.all([
+    prisma.order.findMany({ where, distinct: ['customerPhone'], select: { customerPhone: true } }),
+    prisma.order.groupBy({
+      by: ['customerPhone'],
+      where,
+      _count: { customerPhone: true },
+      _sum: { totalAmount: true },
+      _max: { createdAt: true },
+      _min: { createdAt: true },
+      orderBy: [CUSTOMER_SORTS[query.sort] || CUSTOMER_SORTS.recent, { customerPhone: 'asc' }],
+      skip: (page - 1) * limit,
+      take: limit
+    })
+  ]);
+  const phones = rows.map(r => r.customerPhone);
+  const named = phones.length === 0 ? [] : await prisma.order.findMany({
+    where: { ...scope, customerPhone: { in: phones }, customerName: { not: null } },
+    orderBy: { createdAt: 'desc' },
+    distinct: ['customerPhone'],
+    select: { customerPhone: true, customerName: true }
+  });
+  const nameByPhone = new Map(named.map(n => [n.customerPhone, n.customerName]));
+
+  return {
+    customers: rows.map(r => ({
+      phone: r.customerPhone,
+      name: nameByPhone.get(r.customerPhone) || null,
+      visits: r._count.customerPhone,
+      totalSpent: r._sum.totalAmount || 0,
+      firstVisitAt: r._min.createdAt,
+      lastVisitAt: r._max.createdAt
+    })),
+    pagination: { total: everyone.length, page, limit, pages: Math.max(1, Math.ceil(everyone.length / limit)) }
+  };
+}
+
 // 5. STAFF INBOX & POS ACTIVE ORDERS
 async function getActiveOrders(actor, storeId, statuses = []) {
   await verifyStoreAccess(actor, storeId);
@@ -2392,6 +2528,8 @@ module.exports = {
   updateOrderStatus,
   updateOrderItems,
   getKdsOrders,
+  searchCustomers,
+  listCustomers,
   getActiveOrders,
   getOrderStats,
   getOrderById,
