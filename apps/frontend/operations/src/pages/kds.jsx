@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore';
 import { Button, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
 import { Store01Icon, Clock01Icon, Tick02Icon, Cancel01Icon, Alert01Icon, CheckmarkBadge01Icon, PrinterIcon } from 'hugeicons-react';
 import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
+import { useStoreSound } from '../hooks/use-store-sound';
 import { KitchenRejectDialog } from '../components/kds/kitchen-reject-dialog';
 import { KdsPrintPanel } from '../components/kds/kds-print-panel';
 import { subscribeStore } from '../lib/live-stream';
@@ -244,6 +245,8 @@ export const KDS = () => {
     }
   };
 
+  useStoreSound(selectedStoreId);
+
   const toggleItemReady = async (order, item) => {
     const ready = !item.readyAt;
     // Optimistic tick; the stream refresh confirms it
@@ -447,7 +450,9 @@ export const KDS = () => {
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
                   <h3 className={`font-semibold text-lg leading-tight text-white ${item.readyAt ? 'line-through decoration-green-500' : ''}`}>{item.customName || item.menuItem?.name}</h3>
-                  {item.readyAt && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-600/30 text-green-300 border border-green-600/40">READY</span>}
+                  {item.servedAt
+                    ? <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-700 text-zinc-200 border border-zinc-600">SERVED</span>
+                    : item.readyAt && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-600/30 text-green-300 border border-green-600/40">READY</span>}
                   {item.isCustom && (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
                       CUSTOM DISH

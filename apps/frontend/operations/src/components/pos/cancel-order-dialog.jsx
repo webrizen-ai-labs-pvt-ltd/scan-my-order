@@ -11,6 +11,13 @@ const PRESET_REASONS = [
   'Customer left',
   'Kitchen issue',
 ];
+// For food that was already served: it was eaten, so the reasons are different
+const SERVED_REASONS = [
+  'Guest left without paying',
+  'Test order',
+  'Complaint: not charging',
+  'Billed by mistake',
+];
 
 const errorText = (err) => err?.response?.data?.error?.message || err?.message || 'Could not cancel the order';
 
@@ -81,14 +88,20 @@ export const CancelOrderDialog = ({ storeId, order, onClose, onCancelled, asPage
         </div>
 
         <div className="px-5 pb-4 flex flex-col gap-3">
-          <p className="text-xs text-zinc-600 dark:text-zinc-400">
-            The kitchen is notified, used ingredients go back to inventory, and any QR shown to the guest is withdrawn. Paid orders can’t be cancelled here.
-          </p>
+          {order.status === 'SERVED' ? (
+            <p className="rounded-xl border border-rose-200 bg-rose-50 dark:border-rose-900 dark:bg-rose-950/30 px-3 py-2 text-xs text-rose-800 dark:text-rose-200">
+              This food was already served. Cancelling means{order.totalAmount ? <> <strong>₹{order.totalAmount}</strong></> : ' the bill'} will <strong>not be collected</strong>. It is recorded under Leakages with your name, and the ingredients stay used. If the guest is paying, collect the payment instead.
+            </p>
+          ) : (
+            <p className="text-xs text-zinc-600 dark:text-zinc-400">
+              The kitchen is notified, used ingredients go back to inventory, and any QR shown to the guest is withdrawn. Paid orders can’t be cancelled here.
+            </p>
+          )}
 
           <fieldset>
             <legend className="text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-2">Reason <span className="text-rose-600">*</span></legend>
             <div className="flex flex-wrap gap-1.5">
-              {[...PRESET_REASONS, 'Other'].map(r => (
+              {[...(order.status === 'SERVED' ? SERVED_REASONS : PRESET_REASONS), 'Other'].map(r => (
                 <button
                   key={r}
                   type="button"

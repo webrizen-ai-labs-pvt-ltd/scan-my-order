@@ -4,6 +4,8 @@ import api from '../lib/api';
 import { menuUrlFor, menuUrlIsLocalOnly } from '../lib/menu-url';
 import { renderTableQrCard, CARD_WIDTH, CARD_HEIGHT, DEFAULT_QR_LOGO } from '../lib/table-qr-card';
 import { useAuthStore } from '../store/authStore';
+import { ReleaseTablesDialog } from './tables/release-tables-dialog';
+import { tableIsBusy } from '../lib/tables';
 import { QRCodeSVG } from 'qrcode.react';
 import { jsPDF } from 'jspdf';
 import { Card, CardContent, Button, Input, Skeleton } from '@smo/ui';
@@ -68,6 +70,10 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName, b
   const qrLogo = useQrLogo(brandLogoSrc);
   const { user } = useAuthStore();
   const isSuperOrTenantAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'TENANT_ADMIN';
+  const isManager = isSuperOrTenantAdmin || user?.role === 'STORE_MANAGER';
+  // Release dialog: null = closed, otherwise the table ids ticked when it opens
+  const [releasing, setReleasing] = useState(null);
+  const [notice, setNotice] = useState('');
   // `tables === null` means "never loaded" → only then do we show skeletons.
   const [tables, setTables] = useState(null);
   const [error, setError] = useState('');
@@ -213,6 +219,8 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName, b
      TERMINATE SESSION — manager releases table session immediately
   ───────────────────────────────────────────────────────────── */
   const handleTerminateSession = async (table) => {
+    // Managers get the full release dialog: it also handles tables with unpaid orders
+    if (isManager) { setReleasing([table.id]); return; }
     if (!window.confirm(`Are you sure you want to terminate the active session on Table ${table.tableNumber}? This will release the table and reset the PIN.`)) {
       return;
     }
@@ -334,6 +342,13 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName, b
             </Link>
           )}
 
+          {isManager && !isInitialLoading && tables.some(tableIsBusy) && (
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/50 dark:hover:bg-rose-950/30"
+              onClick={() => setReleasing([])} title="Free one or more tables that are in use or stuck">
+              <Cancel01Icon size={14} /> Release tables
+            </Button>
+          )}
+
           {!isInitialLoading && tables.length > 0 && (
             <Button
               variant="link"
@@ -414,6 +429,26 @@ export const StoreTablesManager = ({ storeId, storeSlug, brandSlug, storeName, b
       )}
 
       {/* ── Error banner (dismissible) ── */}
+      {notice && (
+        <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30 px-3 py-2 text-sm text-emerald-800 dark:text-emerald-300">{notice}</p>
+      )}
+      {releasing && (
+        <ReleaseTablesDialog
+          storeId={storeId}
+          tables={(tables || []).filter(tableIsBusy).sort(sortByNumber)}
+          initialIds={releasing}
+          onClose={() => setReleasing(null)}
+          onDone={(result) => {
+            const cancelled = result.released.reduce((n, r) => n + r.cancelledOrders, 0);
+            const names = result.released.map(r => r.tableNumber).join(', ');
+            setNotice(result.released.length === 0
+              ? 'Those tables were already free.'
+              : `Released table ${names}.${cancelled ? ` ${cancelled} unpaid ${cancelled === 1 ? 'order was' : 'orders were'} cancelled.` : ''}`);
+            setReleasing(null);
+            fetchTables({ silent: true });
+          }}
+        />
+      )}
       {error && (
         <div
           role="alert"

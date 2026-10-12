@@ -267,7 +267,90 @@ async function terminateTableSession(actor, storeId, tableId) {
   return { success: true, message: "Table session terminated and table released successfully", session };
 }
 
+const RELEASE_ROLES = ['STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
+const OPEN_ORDER_STATUSES = ['DRAFT', 'PENDING_VERIFICATION', 'PENDING_PAYMENT', 'PROCESSING', 'READY', 'SERVED'];
+
+/**
+ * A manager frees one or more tables no matter what state they are stuck in, so service can go on.
+ * - the table's open bill is closed and its PIN reset
+ * - unpaid orders still on the table are cancelled with the manager's reason (they show under
+ *   Leakages); paid orders and recorded payments are left exactly as they are
+ * - half-finished payment attempts (an open QR) are withdrawn
+ * A reason is required whenever something unpaid would be cancelled.
+ *
+ * @param {object} input
+ * @param {string[]} input.tableIds
+ * @param {string} [input.reason]
+ * @returns {Promise<{ released: Array<{ tableId: string, tableNumber: number, cancelledOrders: number, cancelledAmount: number }> }>}
+ */
+async function releaseTables(actor, storeId, input = {}) {
+  if (!actor || !RELEASE_ROLES.includes(actor.role)) throw createHttpError(403, "Only managers can release tables");
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+
+  const tableIds = [...new Set(Array.isArray(input.tableIds) ? input.tableIds.map(String) : [])].slice(0, 200);
+  if (tableIds.length === 0) throw createHttpError(400, "Choose at least one table to release");
+  const reason = typeof input.reason === 'string' ? input.reason.trim().slice(0, 160) : '';
+
+  const [tables, sessions, unpaid] = await Promise.all([
+    prisma.table.findMany({ where: { storeId, id: { in: tableIds } }, select: { id: true, tableNumber: true } }),
+    prisma.tableSession.findMany({ where: { storeId, tableId: { in: tableIds }, status: 'ACTIVE' }, select: { id: true, tableId: true } }),
+    // Every unpaid open order at these tables, including ones left behind on a bill that was already closed
+    prisma.order.findMany({
+      where: { storeId, tableId: { in: tableIds }, paidAt: null, status: { in: OPEN_ORDER_STATUSES } },
+      select: { id: true, tableId: true, totalAmount: true }
+    })
+  ]);
+  if (tables.length === 0) throw createHttpError(404, "Those tables aren't in this store");
+  if (unpaid.length > 0 && reason.length < 3) {
+    const due = unpaid.reduce((sum, o) => sum + o.totalAmount, 0);
+    throw createHttpError(400, `${unpaid.length} unpaid ${unpaid.length === 1 ? 'order' : 'orders'} worth ₹${due} would be cancelled. Give a reason to release anyway.`, { code: "REASON_REQUIRED" });
+  }
+
+  const { updateOrderStatus } = require("../orders/order-service");
+  const { cancelPendingPaymentsFor } = require("../payments/payment-service");
+  const { logOrderEvent } = require("../audit/audit-service");
+
+  const released = [];
+  for (const table of tables) {
+    const mine = unpaid.filter(o => o.tableId === table.id);
+    let cancelledOrders = 0;
+    let cancelledAmount = 0;
+    for (const order of mine) {
+      // As the system, so an order in any state can be closed; the manager is still recorded as who did it
+      await updateOrderStatus(actor, storeId, order.id, 'CANCELLED', true, { reason: `Table released: ${reason}` });
+      await prisma.order.updateMany({ where: { id: order.id, cancelledById: null }, data: { cancelledById: actor.id } });
+      cancelledOrders += 1;
+      cancelledAmount += order.totalAmount;
+    }
+
+    const tableSessions = sessions.filter(s => s.tableId === table.id);
+    for (const session of tableSessions) {
+      await cancelPendingPaymentsFor(storeId, { tableSessionId: session.id }).catch(() => {});
+      await prisma.tableSession.updateMany({ where: { id: session.id, status: 'ACTIVE' }, data: { status: 'SETTLED' } });
+      await logOrderEvent({
+        storeId,
+        tableSessionId: session.id,
+        type: 'TABLE_RELEASED',
+        actor,
+        reason: reason || null,
+        amountBefore: cancelledAmount,
+        amountAfter: 0,
+        data: { table: table.tableNumber, cancelledOrders }
+      });
+    }
+
+    if (tableSessions.length > 0 || cancelledOrders > 0) {
+      released.push({ tableId: table.id, tableNumber: table.tableNumber, cancelledOrders, cancelledAmount });
+      broadcastToStore(storeId, 'TABLE_UPDATED', { tableId: table.id });
+    }
+  }
+  invalidateTablesCache(storeId);
+  return { released };
+}
+
 module.exports = {
+  releaseTables,
   getTables,
   createTable,
   updateTable,

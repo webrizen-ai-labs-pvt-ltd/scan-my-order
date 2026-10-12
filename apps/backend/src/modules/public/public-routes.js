@@ -9,7 +9,6 @@ const { createOrder } = require("../orders/order-service");
 const { verifyCheckoutPayment, handleRazorpayWebhook } = require("../payments/payment-service");
 const { rateLimit } = require("../../lib/rate-limit");
 const { createWaiterCall, getTableCallStatus, cancelWaiterCall } = require("../waiter-calls/waiter-call-service");
-const { createFeedback } = require("../feedback/feedback-service");
 const { createHttpError } = require("../../middleware/error-handler");
 const { publicNotificationRouter } = require("../notifications/notification-routes");
 
@@ -192,8 +191,10 @@ router.get("/stores/:storeId/menu", asyncHandler(async (req, res) => {
     }
   });
 
-  // Filter out categories that end up with no items after filtering
-  const populatedCategories = categories.filter(category => category.items.length > 0);
+  // Filter out categories that end up with no items after filtering; dishes carry their
+  // average rating when the store shows ratings and enough guests have rated them
+  const { decorateMenuRatings } = require("../reviews/review-service");
+  const populatedCategories = await decorateMenuRatings(storeId, categories.filter(category => category.items.length > 0));
 
   publicMenuCache.set(storeId, populatedCategories);
   res.set("Cache-Control", "public, max-age=30, s-maxage=60, stale-while-revalidate=120");
@@ -384,10 +385,48 @@ router.post("/stores/:storeId/calls/:id/cancel", asyncHandler(async (req, res) =
   res.json(createApiResponse(result));
 }));
 
-// POST /api/public/stores/:storeId/feedback
-router.post("/stores/:storeId/feedback", asyncHandler(async (req, res) => {
-  const result = await createFeedback(req.params.storeId, req.body);
-  res.status(201).json(createApiResponse(result));
+/**
+ * Who is asking, for guest-only routes: the signed-in customer if there is one, otherwise the
+ * browser session the menu app sends. Either is enough to find that guest's own orders.
+ */
+async function guestFrom(req) {
+  const sessionId = String(req.query.sessionId || req.body?.sessionId || "").slice(0, 100) || null;
+  const header = req.headers.authorization;
+  if (header && header.startsWith("Bearer ")) {
+    try {
+      const { verifyJwt } = require("../../lib/jwt");
+      const decoded = verifyJwt(header.split(" ")[1]);
+      const user = decoded?.sub ? await getPrismaClient().user.findUnique({ where: { id: decoded.sub }, select: { id: true, name: true, role: true } }) : null;
+      if (user?.role === "CUSTOMER") return { customerId: user.id, name: user.name, sessionId };
+    } catch (err) { /* not signed in: fall back to the session */ }
+  }
+  return { customerId: null, sessionId };
+}
+
+// GET /api/public/reviews/bill/:token  (the page behind the QR on a printed bill)
+router.get("/reviews/bill/:token", asyncHandler(async (req, res) => {
+  const { getBillReview } = require("../reviews/review-service");
+  res.json(createApiResponse(await getBillReview(req.params.token)));
+}));
+
+// POST /api/public/reviews/bill/:token  { rating, comment?, items? }
+router.post("/reviews/bill/:token", orderLimiter, asyncHandler(async (req, res) => {
+  const { submitBillReview } = require("../reviews/review-service");
+  res.status(201).json(createApiResponse(await submitBillReview(req.params.token, req.body)));
+}));
+
+// GET /api/public/stores/:storeId/reviews/pending  (is there a served order of mine to rate?)
+router.get("/stores/:storeId/reviews/pending", asyncHandler(async (req, res) => {
+  const { getPendingReview } = require("../reviews/review-service");
+  res.json(createApiResponse(await getPendingReview(req.params.storeId, await guestFrom(req))));
+}));
+
+// POST /api/public/stores/:storeId/reviews  { rating, comment?, items?: [{ menuItemId, rating }] }
+router.post("/stores/:storeId/reviews", orderLimiter, asyncHandler(async (req, res) => {
+  const { submitReview } = require("../reviews/review-service");
+  const guest = await guestFrom(req);
+  if (!guest.customerId && !guest.sessionId) return res.status(401).json(createApiResponse(null, "Unauthorized"));
+  res.status(201).json(createApiResponse(await submitReview(req.params.storeId, guest, req.body)));
 }));
 
 // POST /api/public/stores/:storeId/validate-promo

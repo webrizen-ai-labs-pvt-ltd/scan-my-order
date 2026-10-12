@@ -18,6 +18,7 @@ export function sessionBillToReceipt(bill, payments) {
     totalAmount: bill.totalAmount,
     payments: (payments || []).filter(p => p.status === 'PAID'),
     invoice: bill.invoice || null,
+    reviewUrl: bill.reviewUrl || null,
     items: bill.aggregatedItems.map(i => ({
       quantity: i.quantity,
       priceAtOrder: i.price,

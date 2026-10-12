@@ -3,11 +3,14 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, Input, Label } from '@smo/ui';
 import {
   Store01Icon, Clock01Icon, PercentIcon, SmartPhone01Icon, UserGroupIcon, ViewIcon, Loading03Icon,
-  Delete02Icon, PlusSignIcon, Copy01Icon, LinkSquare02Icon, CheckmarkCircle02Icon, ShoppingBag01Icon, ComputerIcon,
+  Delete02Icon, PlusSignIcon, Copy01Icon, LinkSquare02Icon, CheckmarkCircle02Icon, ShoppingBag01Icon, ComputerIcon, VolumeHighIcon, PlayIcon, StarIcon,
 } from 'hugeicons-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
 import { Notice, Panel, Row, SectionNav, SectionLayout } from '../settings-layout';
+import { NOTIFICATION_SOUNDS } from '@smo/shared/sounds';
+import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
+import { rememberStoreSound } from '../../hooks/use-store-sound';
 import { menuUrlFor } from '../../lib/menu-url';
 
 const DAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -46,6 +49,9 @@ function editableFrom(store) {
     startBeforeUpiConfirmed: Boolean(store.startBeforeUpiConfirmed),
     payAtCounter: Boolean(store.payAtCounter),
     posLayout: store.posLayout === 'MODERN' ? 'MODERN' : 'CLASSIC',
+    notificationSound: store.notificationSound || 'classic',
+    googleReviewUrl: store.googleReviewUrl || '',
+    showRatings: store.showRatings !== false,
   };
 }
 
@@ -344,6 +350,9 @@ export const StoreSettings = ({ store, onSaved }) => {
       startBeforeUpiConfirmed: form.startBeforeUpiConfirmed,
       payAtCounter: form.payAtCounter,
       posLayout: form.posLayout,
+      notificationSound: form.notificationSound,
+      googleReviewUrl: form.googleReviewUrl.trim(),
+      showRatings: form.showRatings,
       // Only brand owners decide where UPI money goes; the API refuses it for others
       ...(isOwner ? { offlineUpiId: form.offlineUpiId.trim(), offlineUpiPayeeName: form.offlineUpiPayeeName.trim() } : {}),
     };
@@ -353,6 +362,8 @@ export const StoreSettings = ({ store, onSaved }) => {
       setSaved(next);
       setForm(next);
       setMsg({ text: 'Store saved.', error: false });
+      // Screens already open for this store switch to the new sound straight away
+      rememberStoreSound(store.id, form.notificationSound);
       onSaved?.(res.data.data);
     } catch (err) {
       setMsg({ text: err.response?.data?.error?.message || 'Could not save the store', error: true });
@@ -372,6 +383,8 @@ export const StoreSettings = ({ store, onSaved }) => {
     { id: 'taxes', label: 'Taxes', hint: 'GST on bills', icon: PercentIcon },
     ...(isOwner ? [{ id: 'payments', label: 'Payments', hint: 'Store UPI ID', icon: SmartPhone01Icon }] : []),
     { id: 'pos', label: 'POS', hint: 'Billing screen', icon: ComputerIcon },
+    { id: 'sounds', label: 'Sounds', hint: 'Notification tone', icon: VolumeHighIcon },
+    { id: 'reviews', label: 'Reviews', hint: 'Ratings & Google link', icon: StarIcon },
     { id: 'ordering', label: 'Guest ordering', hint: 'UPI & pay at counter', icon: ShoppingBag01Icon },
     { id: 'managers', label: 'Managers', hint: 'Who runs it', icon: UserGroupIcon },
     { id: 'visibility', label: 'Visibility', hint: 'Status', icon: ViewIcon },
@@ -392,6 +405,8 @@ export const StoreSettings = ({ store, onSaved }) => {
     payments: form.offlineUpiId !== saved.offlineUpiId || form.offlineUpiPayeeName !== saved.offlineUpiPayeeName,
     visibility: form.status !== saved.status,
     pos: form.posLayout !== saved.posLayout,
+    sounds: form.notificationSound !== saved.notificationSound,
+    reviews: form.googleReviewUrl.trim() !== saved.googleReviewUrl || form.showRatings !== saved.showRatings,
     ordering: form.startBeforeUpiConfirmed !== saved.startBeforeUpiConfirmed || form.payAtCounter !== saved.payAtCounter,
   };
   const navTabs = sections.map(s => ({ ...s, label: changed[s.id] ? `${s.label} •` : s.label }));
@@ -509,6 +524,61 @@ export const StoreSettings = ({ store, onSaved }) => {
         )}
 
         {active === 'managers' && <ManagersPanel storeId={store.id} canManage={isOwner} />}
+
+        {active === 'reviews' && (
+          <Panel title="Reviews" description="Guests are invited to rate their order, and each dish, once their food has been served.">
+            <Row label="Google review link" hint="After rating, every guest is offered this link to review you on Google. In your Google Business Profile, choose “Ask for reviews” and copy the link.">
+              <div className="flex flex-col gap-1.5 max-w-xl">
+                <Input value={form.googleReviewUrl} onChange={set('googleReviewUrl')} placeholder="https://g.page/r/…/review" autoComplete="off" inputMode="url" />
+                <p className="text-xs text-zinc-500">
+                  {form.googleReviewUrl.trim()
+                    ? 'This store uses its own link.'
+                    : store.tenant?.googleReviewUrl
+                      ? 'Empty: this store uses the brand’s link, set under Brand Setup.'
+                      : 'Empty, and the brand has no link either: guests won’t be asked for a Google review.'}
+                </p>
+                <p className="text-xs text-zinc-500">The link is shown to everyone who rates, whatever they scored. Asking only happy guests is against Google’s rules and can get reviews removed.</p>
+              </div>
+            </Row>
+            <Row label="Ratings on the menu" hint="Guests see a dish’s average once at least 5 guests have rated it, so one early rating can’t label a dish.">
+              <ToggleRow
+                checked={form.showRatings}
+                onChange={set('showRatings')}
+                title="Show dish ratings to guests"
+                hint="Off: ratings are still collected and you still see them under Marketing → Reviews; guests just don’t."
+              />
+            </Row>
+          </Panel>
+        )}
+
+        {active === 'sounds' && (
+          <Panel title="Sounds" description="The tone staff hear at this store for new orders, ready food, table calls and payments.">
+            <Row label="Notification sound" hint="Tap Play to hear one. It plays on the POS, kitchen screen and waiter phones for this store; each device keeps its own volume and mute.">
+              <div className="flex flex-col gap-1.5 max-w-xl" role="radiogroup" aria-label="Notification sound">
+                {NOTIFICATION_SOUNDS.map(sound => {
+                  const picked = form.notificationSound === sound.key;
+                  return (
+                    <div key={sound.key} className={`flex items-center gap-2 rounded-lg border pl-3 pr-1.5 py-1.5 ${picked ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-200 dark:border-zinc-800'}`}>
+                      <button type="button" role="radio" aria-checked={picked} onClick={() => set('notificationSound')(sound.key)} className="flex flex-1 min-w-0 items-center gap-3 text-left py-1">
+                        <span className={`size-4 shrink-0 rounded-full border-2 flex items-center justify-center ${picked ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-300 dark:border-zinc-600'}`}>
+                          {picked && <span className="size-2 rounded-full bg-zinc-900 dark:bg-zinc-100" />}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">{sound.label}</span>
+                          <span className="block text-xs text-zinc-500">{sound.description}</span>
+                        </span>
+                      </button>
+                      <Button type="button" variant="outline" size="sm" aria-label={`Play ${sound.label}`}
+                        onClick={() => { initAudioUnlock(); playNotificationChime({ sound: sound.key, force: true, haptic: false }); }}>
+                        <PlayIcon size={13} className="mr-1.5" /> Play
+                      </Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </Row>
+          </Panel>
+        )}
 
         {active === 'pos' && (
           <Panel title="POS" description="How the counter takes orders on this store's POS.">

@@ -17,6 +17,7 @@ import { getSessionId } from '../lib/session';
 import { openCustomerStream } from '../lib/customer-stream';
 import { initAudioUnlock, playNotificationChime, getAudioMuted, setAudioMuted } from '@smo/shared/audio';
 import { usePushNotifications } from '../hooks/use-push-notifications';
+import { announceOrderFinished } from '../lib/review-events';
 import { UpiPaySheet } from './upi-pay-sheet';
 
 const STATUS_MAPPING = {
@@ -155,6 +156,8 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
         } else if (data.type?.startsWith('ORDER_') && data.data?.id) {
           playNotificationChime({ haptic: true });
           const status = data.data?.status;
+          // Food has reached the guest: this is the moment to ask how it was
+          if (status === 'SERVED' || status === 'SETTLED') announceOrderFinished();
           const statusLabel = STATUS_MAPPING[status]?.label || 'Order Update';
           setToastNotification({
             title: `Order Update: ${statusLabel}`,

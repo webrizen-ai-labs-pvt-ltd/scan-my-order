@@ -17,6 +17,7 @@ import { useStoreStream } from '../../hooks/use-store-stream';
 import { PosToasts, usePosToasts } from '../../components/pos/pos-toasts';
 import { GuestUpiConfirmations } from '../../components/pos/guest-upi-confirmations';
 import { playNotificationChime } from '@smo/shared/audio';
+import { useStoreSound } from '../../hooks/use-store-sound';
 
 // Who confirms guests' UPI payments to the store's own ID (the API enforces the same)
 const GUEST_UPI_CONFIRM_ROLES = ['CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
@@ -94,6 +95,7 @@ export const PosLayout = () => {
   const { subscribe, status: streamStatus } = useStoreStream(selectedStoreId, token);
 
   useEffect(() => { if (selectedStoreId) bindStore(selectedStoreId); }, [selectedStoreId, bindStore]);
+  useStoreSound(selectedStoreId, data.store?.notificationSound);
 
   /* Store list (multi-store users only) */
   useEffect(() => {

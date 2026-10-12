@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useEntitlements, featureForPath } from '../lib/entitlements';
+import { useStoreSound } from '../hooks/use-store-sound';
 import { UpgradeRequired, SubscriptionBanner } from '../components/plan/plan-gates';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -59,12 +60,15 @@ import {
   Alert02Icon,
   UserMultiple02Icon,
   Megaphone01Icon,
-  SquareLock02Icon
+  SquareLock02Icon,
+  StarIcon
 } from 'hugeicons-react';
 import { StaffNotificationCenter } from '../components/staff-notification-center';
 
 export const OperationsLayout = () => {
   const { user, logout } = useAuthStore();
+  // Staff tied to one store hear that store's notification sound on every page
+  useStoreSound(user?.store?.id || null, user?.store?.notificationSound);
   // What the brand's plan includes: loaded on entry, refreshed when the tab is opened again
   const loadEntitlements = useEntitlements(s => s.load);
   const planFeatures = useEntitlements(s => s.features);
@@ -137,6 +141,7 @@ export const OperationsLayout = () => {
         collapsible: true,
         items: [
           { name: 'Customers', path: '/dashboard/customers', icon: UserMultiple02Icon, show: isCashier },
+          { name: 'Reviews', path: '/dashboard/reviews', icon: StarIcon, show: isManager },
           { name: 'Campaigns', path: '/dashboard/campaigns', icon: Megaphone01Icon, show: isManager },
         ],
       },
@@ -216,6 +221,7 @@ export const OperationsLayout = () => {
     "leakages": { label: "Leakages", icon: Alert02Icon },
     "customers": { label: "Customers", icon: UserMultiple02Icon },
     "campaigns": { label: "Campaigns", icon: Megaphone01Icon },
+    "reviews": { label: "Reviews", icon: StarIcon },
   };
 
   const getBreadcrumbs = () => {

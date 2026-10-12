@@ -11,7 +11,8 @@
     "./pricing": "./src/pricing.mjs",
     "./gst": "./src/gst.mjs",
     "./phone": "./src/phone.mjs",
-    "./plans": "./src/plans.mjs"
+    "./plans": "./src/plans.mjs",
+    "./sounds": "./src/sounds.mjs"
   },
   "files": [
     "assets",

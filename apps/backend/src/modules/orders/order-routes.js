@@ -18,6 +18,7 @@ const {
   rejectOrderItems,
   getRefundsDue,
   setOrderItemReady,
+  serveOrderItem,
   recallOrder,
   announceOrderDelay
 } = require("./order-service");
@@ -120,6 +121,12 @@ router.post("/:id/reject", asyncHandler(async (req, res) => {
 router.post("/:id/items/:itemId/ready", asyncHandler(async (req, res) => {
   const ready = req.body?.ready !== false;
   const result = await setOrderItemReady(req.user, req.params.storeId, req.params.id, req.params.itemId, ready);
+  res.json(createApiResponse(result));
+}));
+
+// POST /api/stores/:storeId/orders/:id/items/:itemId/served  (waiter or cashier carries one ready line out)
+router.post("/:id/items/:itemId/served", asyncHandler(async (req, res) => {
+  const result = await serveOrderItem(req.user, req.params.storeId, req.params.id, req.params.itemId);
   res.json(createApiResponse(result));
 }));
 

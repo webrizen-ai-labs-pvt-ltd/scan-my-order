@@ -18,6 +18,7 @@ import { PaymentCollectorSheet } from '../components/payments/payment-collector-
 import { sessionBillToReceipt } from '../lib/session-receipt';
 import { CancelOrderDialog } from '../components/pos/cancel-order-dialog';
 import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
+import { useStoreSound } from '../hooks/use-store-sound';
 
 const playChime = () => {
   playNotificationChime({ haptic: true });
@@ -190,7 +191,7 @@ export const WaiterTasks = () => {
     if (!silent) setLoading(true);
     setError('');
     try {
-      const res = await api.get(`/stores/${storeIdToFetch}/orders?statuses=PENDING_VERIFICATION,READY,SERVED`);
+      const res = await api.get(`/stores/${storeIdToFetch}/orders?statuses=PENDING_VERIFICATION,PROCESSING,READY,SERVED`);
       if (res.data.success) setOrders(res.data.data);
     } catch (err) {
       setError('Failed to fetch orders. Please try again.');
@@ -240,7 +241,7 @@ export const WaiterTasks = () => {
         return;
       }
 
-      if (['ORDER_PENDING_VERIFICATION', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_PROCESSING', 'ORDER_CANCELLED', 'ORDER_SETTLED', 'ORDER_ITEMS_REJECTED', 'ORDER_ITEM_READY', 'ORDER_RECALLED', 'ORDER_DELAYED'].includes(data.type)) {
+      if (['ORDER_PENDING_VERIFICATION', 'ORDER_READY', 'ORDER_SERVED', 'ORDER_PROCESSING', 'ORDER_CANCELLED', 'ORDER_SETTLED', 'ORDER_ITEMS_REJECTED', 'ORDER_ITEM_READY', 'ORDER_ITEM_SERVED', 'ORDER_RECALLED', 'ORDER_DELAYED'].includes(data.type)) {
         fetchOrders(selectedStoreId, true);
 
         if (data.type === 'ORDER_READY') {
@@ -325,13 +326,30 @@ export const WaiterTasks = () => {
     }
   };
 
+  /** Carry one ready line to the table while the rest of the order is still cooking */
+  const serveItem = async (order, item) => {
+    setActionLoading(item.id);
+    try {
+      await api.post(`/stores/${selectedStoreId}/orders/${order.id}/items/${item.id}/served`);
+      showToast(`${item.quantity}× ${item.customName || item.menuItem?.name} served`, 'success');
+      fetchOrders(selectedStoreId, true);
+    } catch (err) {
+      showToast(err.response?.data?.error?.message || 'Could not mark it served', 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+  useStoreSound(selectedStoreId);
+
   const handleStoreChange = (storeId) => {
     setSelectedStoreId(storeId);
     setOrders([]);
   };
 
   const pendingOrders = orders.filter((o) => o.status === 'PENDING_VERIFICATION');
-  const readyOrders = orders.filter((o) => o.status === 'READY');
+  // Ready orders, plus orders still cooking that have at least one line waiting at the pass
+  const waitingToServe = (o) => o.items.filter((i) => i.status !== 'REJECTED' && !i.servedAt && (i.readyAt || o.status === 'READY'));
+  const readyOrders = orders.filter((o) => o.status === 'READY' || (o.status === 'PROCESSING' && waitingToServe(o).length > 0));
 
   const servedGroups = useMemo(() => {
     const postPaidServed = orders.filter((o) => o.status === 'SERVED' && o.paymentModel === 'POSTPAID');
@@ -696,17 +714,40 @@ export const WaiterTasks = () => {
                       <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">₹{order.totalAmount}</span>
                     </div>
 
-                    <p className="mb-4 truncate text-sm text-zinc-500 dark:text-zinc-400">
-                      {order.items.map((i) => `${i.quantity}× ${i.menuItem?.name}`).join(', ')}
-                    </p>
+                    {order.status === 'PROCESSING' && (
+                      <p className="mb-2 text-xs font-semibold text-amber-600 dark:text-amber-400">Part of this order is ready. The rest is still cooking.</p>
+                    )}
+                    <ul className="mb-4 flex flex-col divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {order.items.filter((i) => i.status !== 'REJECTED').map((i) => {
+                        const canServe = !i.servedAt && (i.readyAt || order.status === 'READY');
+                        return (
+                          <li key={i.id} className="flex items-center justify-between gap-3 py-2">
+                            <span className={`min-w-0 text-sm ${i.servedAt ? 'text-zinc-400 line-through' : 'text-zinc-900 dark:text-zinc-100'}`}>
+                              <span className="font-semibold">{i.quantity}×</span> {i.customName || i.menuItem?.name}
+                            </span>
+                            {i.servedAt ? (
+                              <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"><Tick02Icon size={13} /> Served</span>
+                            ) : canServe ? (
+                              <Button size="sm" variant="outline" className="h-8 shrink-0 rounded-full" disabled={actionLoading === i.id || actionLoading === order.id} onClick={() => serveItem(order, i)}>
+                                Serve
+                              </Button>
+                            ) : (
+                              <span className="shrink-0 text-xs text-zinc-400">Cooking</span>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
 
-                    <Button
-                      className={`h-12 w-full rounded-full text-[15px] text-white active:scale-[0.98] ${BRAND}`}
-                      onClick={() => updateStatus(order.id, 'SERVED')}
-                      disabled={actionLoading === order.id}
-                    >
-                      Mark as served
-                    </Button>
+                    {order.status === 'READY' && (
+                      <Button
+                        className={`h-12 w-full rounded-full text-[15px] text-white active:scale-[0.98] ${BRAND}`}
+                        onClick={() => updateStatus(order.id, 'SERVED')}
+                        disabled={actionLoading === order.id}
+                      >
+                        {order.items.some((i) => i.servedAt) ? 'Mark the rest as served' : 'Mark all as served'}
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ))

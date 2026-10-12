@@ -21,6 +21,7 @@ export const PLAN_FEATURES = [
 
   { key: 'PROMO_CODES', group: 'Marketing', label: 'Promo codes', description: 'Discount codes for guests' },
   { key: 'CUSTOMERS', group: 'Marketing', label: 'Customer directory', description: 'Everyone who ordered, with visits and spend' },
+  { key: 'REVIEWS', group: 'Marketing', label: 'Ratings & reviews', description: 'Guests rate their order and each dish, and are asked for a Google review' },
   { key: 'CAMPAIGNS', group: 'Marketing', label: 'Campaigns', description: 'Send offers to guests’ phones' },
   { key: 'LOYALTY', group: 'Marketing', label: 'Loyalty wallet', description: 'Store credits that bring guests back' },
   { key: 'ITEM_VIDEOS', group: 'Marketing', label: 'Dish videos', description: 'A short video on a dish in the QR menu' },

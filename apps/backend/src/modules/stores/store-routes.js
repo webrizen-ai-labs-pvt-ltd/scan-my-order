@@ -82,4 +82,10 @@ router.use("/:storeId/audit", requireFeature("LEAKAGES"), auditRoutes);
 router.use("/:storeId/marketing", requireFeature("CAMPAIGNS"), require("../marketing/marketing-routes"));
 router.use("/:storeId/invoices", invoiceRoutes);
 
+// GET /api/stores/:storeId/reviews?days=&filter=&page=  (guest ratings: score, dishes, comments)
+router.get("/:storeId/reviews", requireFeature("REVIEWS"), asyncHandler(async (req, res) => {
+  const { listReviews } = require("../reviews/review-service");
+  res.json(createApiResponse(await listReviews(req.user, req.params.storeId, req.query)));
+}));
+
 module.exports = router;

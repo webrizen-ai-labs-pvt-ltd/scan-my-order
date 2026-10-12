@@ -253,6 +253,18 @@ export const Receipt = React.forwardRef(({ order, storeData, payQr }, ref) => {
 
       {payQr && !isPaid && <PayQr qr={payQr} />}
 
+      {/* Small "rate your order" code: about 23 mm, the smallest that still scans reliably off thermal paper */}
+      {order.reviewUrl && order.status !== 'CANCELLED' && (
+        <div className="border-t border-dashed border-black pt-2 mb-2" style={{ display: 'flex', alignItems: 'center', gap: 10, breakInside: 'avoid' }}>
+          <QRCodeSVG value={order.reviewUrl} size={88} level="M" marginSize={2} style={{ flexShrink: 0 }} />
+          <div style={{ fontSize: '0.75rem', lineHeight: 1.3 }}>
+            <div className="font-bold" style={{ fontSize: '0.85rem' }}>How was it?</div>
+            <div>Scan to rate your order.</div>
+            <div>It takes a few seconds.</div>
+          </div>
+        </div>
+      )}
+
       <div className="text-center">
         <p>Thank you for visiting!</p>
         <p>Have a great day.</p>

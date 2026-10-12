@@ -120,7 +120,7 @@ async function createTenant(actor, input) {
   const prisma = getPrismaClient();
 
   // Top-level menu links the menu app uses itself (/v/<venue> is the mall / food court page)
-  if (["v", "api", "admin", "login", "menu", "venues"].includes(String(slug).toLowerCase())) {
+  if (["v", "rate", "api", "admin", "login", "menu", "venues"].includes(String(slug).toLowerCase())) {
     throw createHttpError(400, "That link name is reserved. Pick another one.");
   }
 
@@ -242,6 +242,11 @@ async function updateTenant(actor, id, input) {
   if (input.offlineUpiId !== undefined) {
     updateData.offlineUpiId = normalizeUpiId(input.offlineUpiId);
     updateData.offlineUpiPayeeName = input.offlineUpiPayeeName ? String(input.offlineUpiPayeeName).trim().slice(0, 50) : null;
+  }
+
+  // The brand's Google review link, used by every store that hasn't set its own
+  if (input.googleReviewUrl !== undefined) {
+    updateData.googleReviewUrl = require("../reviews/review-service").cleanGoogleReviewUrl(input.googleReviewUrl);
   }
 
   if (actor.role === 'SUPER_ADMIN' && status) {

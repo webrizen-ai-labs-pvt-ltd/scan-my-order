@@ -38,6 +38,20 @@ export const PosActiveOrdersPage = () => {
   const [busyId, setBusyId] = useState(null);
   const [cancelling, setCancelling] = useState(null);
   const [comping, setComping] = useState(null); // order getting complimentary food
+  const canServe = user?.role !== 'KITCHEN_STAFF';
+  /** Hand one ready line to the guest while the rest of the order is still cooking */
+  const serveItem = async (order, item) => {
+    setBusyId(item.id);
+    try {
+      await api.post(`/stores/${storeId}/orders/${order.id}/items/${item.id}/served`);
+      toast(`${item.quantity}× ${item.displayName || item.menuItem?.name} served`, 'success');
+      fetchOrders();
+    } catch (err) {
+      toast(apiErrorMessage(err, 'Could not mark it served'), 'error');
+    } finally {
+      setBusyId(null);
+    }
+  };
   // Waiters only reject unapproved orders; cashiers and managers can cancel any unpaid order
   const canCancel = (order) => !order.paidAt && (user?.role !== 'WAITER' || order.status === 'PENDING_VERIFICATION');
 
@@ -185,7 +199,9 @@ export const PosActiveOrdersPage = () => {
             const unpaid = group.orders.filter(o => !o.paidAt);
             const dueTotal = unpaid.reduce((s, o) => s + o.totalAmount, 0);
             const pendingApproval = group.orders.filter(o => o.status === 'PENDING_VERIFICATION');
-            const collectHref = group.tableSessionId
+            // A bill that was already closed can't take payments: collect on the order itself
+            const tableBillOpen = group.tableSessionId && group.tableSession?.status !== 'SETTLED' && group.tableSession?.status !== 'CANCELLED';
+            const collectHref = tableBillOpen
               ? `/dashboard/pos/checkout/table/${group.tableSessionId}`
               : `/dashboard/pos/checkout/order/${group.orders[0].id}`;
 
@@ -242,10 +258,19 @@ export const PosActiveOrdersPage = () => {
                             </span>
                           </div>
                         ) : (
-                          <div key={item.id || i} className="flex justify-between text-sm mb-1">
-                            <span className="leading-tight">
+                          <div key={item.id || i} className="flex justify-between items-center gap-2 text-sm mb-1">
+                            <span className={`leading-tight ${item.servedAt && order.status !== 'SERVED' ? 'text-zinc-400' : ''}`}>
                               <span className="font-semibold text-zinc-500 w-6 inline-block">{item.quantity}×</span>
                               {item.displayName || item.customName || item.menuItem?.name}
+                              {['PROCESSING', 'READY'].includes(order.status) && (item.servedAt ? (
+                                <span className="ml-1.5 text-[10px] font-bold text-emerald-600 dark:text-emerald-400">Served</span>
+                              ) : (item.readyAt || order.status === 'READY') && canServe ? (
+                                <button type="button" disabled={busyId === item.id} onClick={() => serveItem(order, item)}
+                                  className="ml-1.5 rounded border border-emerald-300 dark:border-emerald-700 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 disabled:opacity-50"
+                                  title="This item is ready. Mark it served.">
+                                  Ready · Serve
+                                </button>
+                              ) : null)}
                             </span>
                             <span className="text-zinc-500 tabular-nums">{item.compValue != null ? 'Free' : `₹${item.priceAtOrder * item.quantity}`}</span>
                           </div>
@@ -261,7 +286,7 @@ export const PosActiveOrdersPage = () => {
                               Mark served
                             </Button>
                           )}
-                          {canCancel(order) && order.status !== 'SERVED' && (
+                          {canCancel(order) && (order.status !== 'SERVED' || isManager) && (
                             <Button size="sm" variant="outline" className="h-7 text-[11px] text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900/50 dark:hover:bg-rose-950/30" onClick={() => setCancelling({ ...order, table: group.table })}>
                               Cancel
                             </Button>

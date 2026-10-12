@@ -14,7 +14,7 @@ const storeChanged = (storeId) => { invalidateMenuCache(storeId); invalidateStor
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 // Slugs the menu app already uses at the top level
-const RESERVED_SLUGS = new Set(['v', 'api', 'admin', 'login', 'menu', 'venues']);
+const RESERVED_SLUGS = new Set(['v', 'rate', 'api', 'admin', 'login', 'menu', 'venues']);
 
 function cleanVenueInput(input = {}, { partial = false } = {}) {
   const out = {};

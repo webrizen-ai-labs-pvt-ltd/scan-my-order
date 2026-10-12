@@ -15,6 +15,8 @@ const EVENT_LABELS = {
   COMPLIMENTARY_GIVEN: "Complimentary food given",
   ITEM_READY: "Item marked ready",
   ITEM_UNREADY: "Item ready undone",
+  ITEM_SERVED: "Item served",
+  TABLE_RELEASED: "Table released by manager",
   DELAY_ANNOUNCED: "Delay announced",
   PAYMENT_STARTED: "Payment started",
   PAYMENT_RECEIVED: "Payment received",

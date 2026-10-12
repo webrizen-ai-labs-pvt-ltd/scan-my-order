@@ -858,6 +858,10 @@ async function createOrder(storeId, actor, origin, input) {
   if (tableSession?.promoCodeId) await syncTablePromo(tableSession.id);
 
   const finalOrder = payNowSummary || tableSession?.promoCodeId ? await getOrderById(storeId, order.id) : serializeOrder(order);
+  // Receipts printed straight from this response (the waiter's quick receipt) carry the rating QR too
+  if (origin === 'POS' && finalOrder.reviewUrl === undefined) {
+    finalOrder.reviewUrl = await require("../reviews/review-service").billReviewUrl(storeId, 'o', order.id);
+  }
 
   return {
     order: finalOrder,
@@ -1275,7 +1279,7 @@ const STATUS_TRANSITIONS = {
   PENDING_PAYMENT: ['CANCELLED'],
   PROCESSING: ['READY', 'CANCELLED'],
   READY: ['SERVED', 'CANCELLED'],
-  SERVED: ['SETTLED'],
+  SERVED: ['SETTLED', 'CANCELLED'],
   SETTLED: [],
   CANCELLED: []
 };
@@ -1296,6 +1300,10 @@ function assertStaffTransition(actor, order, newStatus) {
   const roleTargets = ROLE_ALLOWED_TARGETS[actor.role];
   if (actor.role === 'CUSTOMER' || (roleTargets && !roleTargets.includes(newStatus))) {
     throw createHttpError(403, `Your role cannot mark orders as ${newStatus}`);
+  }
+  // Food that was served and never paid for is a loss: only a manager may write it off
+  if (order.status === 'SERVED' && newStatus === 'CANCELLED' && !['STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'].includes(actor.role)) {
+    throw createHttpError(403, "Only a manager can cancel an order that was already served");
   }
   // Waiters may only reject orders that haven't been accepted yet
   if (actor.role === 'WAITER' && newStatus === 'CANCELLED' && order.status !== 'PENDING_VERIFICATION') {
@@ -1346,6 +1354,7 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
     }
   }
 
+  const servingAll = newStatus === 'SERVED';
   // A paid order is finished once it has been served
   if (newStatus === 'SERVED' && order.paidAt) {
     newStatus = 'SETTLED';
@@ -1370,8 +1379,16 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
   const changed = await prisma.$transaction(async (tx) => {
     const claim = await tx.order.updateMany({ where: { id: orderId, status: order.status }, data: updateData });
     if (claim.count === 0) return false;
+    if (servingAll) {
+      await tx.orderItem.updateMany({
+        where: { orderId, status: 'ACTIVE', servedAt: null },
+        data: { servedAt: new Date(), servedById: !isSystem && actor ? actor.id : null }
+      });
+    }
     // Both only act if the stock marker allows it (see deductInventory)
-    if (newStatus === 'CANCELLED') {
+    if (newStatus === 'CANCELLED' && order.status === 'SERVED') {
+      // Served food was eaten: its ingredients stay used
+    } else if (newStatus === 'CANCELLED') {
       await revertInventoryDeduction(tx, order.id);
     } else if (willBeDeducted) {
       await deductInventory(tx, order);
@@ -1822,7 +1839,7 @@ async function setOrderItemReady(actor, storeId, orderId, itemId, ready = true) 
       title: `${orderPlace(order)}: ready to serve`,
       body: `${label} is ready at the pass.`,
       data: { orderId, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/waiter' },
-      target: { roles: ['WAITER', 'STORE_MANAGER'], storeId }
+      target: { roles: ['WAITER', 'CASHIER', 'STORE_MANAGER'], storeId }
     }).catch(() => {});
   }
 
@@ -1833,6 +1850,44 @@ async function setOrderItemReady(actor, storeId, orderId, itemId, ready = true) 
 
   const updated = await getOrderById(storeId, orderId);
   broadcastToStore(storeId, 'ORDER_UPDATED', updated);
+  return updated;
+}
+
+const SERVE_ROLES = ['WAITER', 'CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN', 'SUPER_ADMIN'];
+
+/**
+ * A waiter or cashier carries one ready line to the guest while the rest of the order is still
+ * cooking (starters before mains). When the last line of a ready order is served this way, the
+ * order itself becomes served, exactly as if "Mark as served" had been pressed.
+ */
+async function serveOrderItem(actor, storeId, orderId, itemId) {
+  if (!actor || !SERVE_ROLES.includes(actor.role)) throw createHttpError(403, "Only waiters, cashiers and managers can mark items served");
+  await verifyStoreAccess(actor, storeId);
+  const prisma = getPrismaClient();
+  const order = await loadKitchenOrder(prisma, storeId, orderId);
+  if (!['PROCESSING', 'READY'].includes(order.status)) throw createHttpError(409, "This order isn't waiting to be served");
+
+  const item = order.items.find(i => i.id === itemId);
+  if (!item || item.status !== 'ACTIVE') throw createHttpError(404, "Item not found on this order");
+  if (!item.readyAt && order.status !== 'READY') throw createHttpError(409, "The kitchen hasn't marked this item ready yet");
+
+  const label = `${item.quantity}× ${serializeOrderItem(item).displayName}`;
+  // Only the first tap counts: a double tap or two people serving the same line changes nothing
+  const claim = await prisma.orderItem.updateMany({ where: { id: itemId, servedAt: null }, data: { servedAt: new Date(), servedById: actor.id } });
+  if (claim.count > 0) {
+    await logOrderEvent({ storeId, orderId, tableSessionId: order.tableSessionId, type: 'ITEM_SERVED', actor, data: { item: label } });
+    broadcastToStore(storeId, 'ORDER_ITEM_SERVED', { orderId, itemId, label, tableNumber: order.table?.tableNumber ?? null });
+  }
+
+  const unserved = order.items.filter(i => i.status === 'ACTIVE' && i.id !== itemId && !i.servedAt);
+  if (order.status === 'READY' && unserved.length === 0) {
+    return updateOrderStatus(actor, storeId, orderId, 'SERVED');
+  }
+
+  const updated = await getOrderById(storeId, orderId);
+  broadcastToStore(storeId, 'ORDER_UPDATED', updated);
+  if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_UPDATED', updated);
+  if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_UPDATED', updated);
   return updated;
 }
 
@@ -1960,6 +2015,7 @@ async function getKdsOrders(actor, storeId) {
           status: true,
           rejectReason: true,
           readyAt: true,
+          servedAt: true,
           quantity: true,
           kitchenNotes: true,
           menuItem: { select: { name: true, dietary: true } },
@@ -2035,7 +2091,9 @@ const CUSTOMER_SOURCES = ['COUNTER', 'QR_MENU', 'WAITER'];
 const CUSTOMER_SORTS = {
   recent: (a, b) => b.lastVisitAt - a.lastVisitAt,
   visits: (a, b) => b.visits - a.visits || b.lastVisitAt - a.lastVisitAt,
-  spend: (a, b) => b.totalSpent - a.totalSpent || b.lastVisitAt - a.lastVisitAt
+  spend: (a, b) => b.totalSpent - a.totalSpent || b.lastVisitAt - a.lastVisitAt,
+  // Least happy first, so they can be won back; customers who never rated go last
+  rating: (a, b) => (a.averageRating ?? 99) - (b.averageRating ?? 99) || b.lastVisitAt - a.lastVisitAt
 };
 
 /**
@@ -2046,7 +2104,7 @@ const CUSTOMER_SORTS = {
  * Only orders that went ahead count (not cancelled, not still waiting for payment).
  *
  * @param {object} query q (name, number or email), source (COUNTER | QR_MENU | WAITER),
- *                       notifications (OFFERS | ALERTS | NONE), sort (recent | visits | spend), page, limit
+ *                       notifications (OFFERS | ALERTS | NONE), sort (recent | visits | spend | rating), page, limit
  */
 async function listCustomers(actor, storeId, query = {}) {
   if (!CUSTOMER_LIST_ROLES.includes(actor.role)) throw createHttpError(403, "Only cashiers and managers can open the customer directory");
@@ -2085,7 +2143,7 @@ async function listCustomers(actor, storeId, query = {}) {
   const personFor = (g) => {
     const key = keyFor(g);
     if (!people.has(key)) {
-      people.set(key, { key, phone: key.startsWith('p:') ? key.slice(2) : null, userId: null, devices: 0, offerDevices: 0, visits: 0, totalSpent: 0, firstVisitAt: null, lastVisitAt: null, counts: { COUNTER: 0, QR_MENU: 0, WAITER: 0 } });
+      people.set(key, { key, phone: key.startsWith('p:') ? key.slice(2) : null, userId: null, devices: 0, offerDevices: 0, ratingSum: 0, ratingCount: 0, visits: 0, totalSpent: 0, firstVisitAt: null, lastVisitAt: null, counts: { COUNTER: 0, QR_MENU: 0, WAITER: 0 } });
     }
     const person = people.get(key);
     if (g.customerId && !person.userId) person.userId = g.customerId;
@@ -2126,6 +2184,20 @@ async function listCustomers(actor, storeId, query = {}) {
     if (device.marketingOptIn) person.offerDevices += 1;
   }
 
+  // What each customer thought: the reviews that cover their orders (one review can cover several orders)
+  const ratedOrders = await prisma.order.findMany({
+    where: { ...scope, reviewId: { not: null } },
+    select: { reviewId: true, customerPhone: true, customerId: true, review: { select: { rating: true } } }
+  });
+  const countedReviews = new Set();
+  for (const order of ratedOrders) {
+    const person = people.get(keyFor(order));
+    if (!person || !order.review || countedReviews.has(`${person.key}|${order.reviewId}`)) continue;
+    countedReviews.add(`${person.key}|${order.reviewId}`);
+    person.ratingSum += order.review.rating;
+    person.ratingCount += 1;
+  }
+
   const userIds = [...people.values()].map(p => p.userId).filter(Boolean);
   const users = userIds.length === 0 ? [] : await prisma.user.findMany({
     where: { id: { in: userIds } },
@@ -2145,6 +2217,9 @@ async function listCustomers(actor, storeId, query = {}) {
       signedIn: Boolean(user),
       // OFFERS: agreed to offers; ALERTS: order alerts only; NONE: no phone has allowed notifications
       notifications: p.offerDevices > 0 ? 'OFFERS' : p.devices > 0 ? 'ALERTS' : 'NONE',
+      // Average of the stars they gave across their visits; null when they never rated
+      averageRating: p.ratingCount > 0 ? Math.round((p.ratingSum / p.ratingCount) * 10) / 10 : null,
+      ratingCount: p.ratingCount,
       visits: p.visits,
       totalSpent: p.totalSpent,
       firstVisitAt: p.firstVisitAt,
@@ -2322,7 +2397,9 @@ async function getOrderById(storeId, orderId) {
     throw createHttpError(404, "Order not found");
   }
   const [withInvoice] = await attachInvoices(prisma, storeId, [order]);
-  return serializeOrder(withInvoice);
+  // Printed on the bill as a small "rate your order" QR, until the order has been rated
+  const reviewUrl = order.reviewId || order.status === 'CANCELLED' ? null : await require("../reviews/review-service").billReviewUrl(storeId, 'o', order.id);
+  return { ...serializeOrder(withInvoice), reviewUrl };
 }
 
 // 6. TABLE SESSION BILLING
@@ -2439,6 +2516,8 @@ async function getTableSessionBill(storeId, tableSessionId, { includePin = false
       createdAt: o.createdAt
     })),
     aggregatedItems: Array.from(itemsMap.values()),
+    // Printed on the bill as a small "rate your order" QR
+    reviewUrl: await require("../reviews/review-service").billReviewUrl(session.storeId, 't', session.id),
     // A code on the whole table bill, or codes guests used on their own orders
     tablePromo: session.promoCode ? { code: session.promoCode.code } : null,
     orderPromoCodes: [...new Set(validOrders.filter(o => o.promoCode).map(o => o.promoCode.code))],
@@ -2612,6 +2691,7 @@ module.exports = {
   rejectOrderItems,
   getRefundsDue,
   setOrderItemReady,
+  serveOrderItem,
   recallOrder,
   announceOrderDelay,
   serializeOrder

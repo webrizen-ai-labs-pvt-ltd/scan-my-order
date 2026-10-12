@@ -275,6 +275,21 @@ async function updateStore(actor, storeId, input) {
   for (const key of ["startBeforeUpiConfirmed", "payAtCounter"]) {
     if (input[key] !== undefined) contactExtras[key] = Boolean(input[key]);
   }
+  // Reviews: this store's own Google review link, and whether guests see dish ratings
+  if (input.googleReviewUrl !== undefined) {
+    contactExtras.googleReviewUrl = require("../reviews/review-service").cleanGoogleReviewUrl(input.googleReviewUrl);
+  }
+  if (input.showRatings !== undefined) {
+    contactExtras.showRatings = Boolean(input.showRatings);
+    // The guest menu is cached; the switch should show straight away
+    require("../../lib/cache").invalidateMenuCache(storeId);
+  }
+  // The sound staff screens play for this store's notifications
+  if (input.notificationSound !== undefined) {
+    const { isNotificationSound } = require("@smo/shared/sounds");
+    if (!isNotificationSound(input.notificationSound)) throw createHttpError(400, "That notification sound doesn't exist");
+    contactExtras.notificationSound = input.notificationSound;
+  }
   // Which POS billing screen this store uses
   if (input.posLayout !== undefined) {
     if (!["CLASSIC", "MODERN"].includes(input.posLayout)) throw createHttpError(400, "posLayout must be CLASSIC or MODERN");

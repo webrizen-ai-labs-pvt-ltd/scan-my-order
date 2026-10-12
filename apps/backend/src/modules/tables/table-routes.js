@@ -32,6 +32,12 @@ router.delete("/:id", asyncHandler(async (req, res) => {
   res.json(createApiResponse(result));
 }));
 
+// POST /api/stores/:storeId/tables/release  { tableIds: [], reason }  (manager frees stuck tables, one or many)
+router.post("/release", asyncHandler(async (req, res) => {
+  const { releaseTables } = require("./table-service");
+  res.json(createApiResponse(await releaseTables(req.user, req.params.storeId, req.body)));
+}));
+
 // POST /api/stores/:storeId/tables/:id/terminate-session
 router.post("/:id/terminate-session", asyncHandler(async (req, res) => {
   const { terminateTableSession } = require("./table-service");

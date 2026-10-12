@@ -233,6 +233,8 @@ model Tenant {
   users            User[]
   subscription     TenantSubscription?
   subscriptionPayments SubscriptionPayment[]
+  // Default Google review link for every store of this brand (a store may set its own)
+  googleReviewUrl  String?
   paymentGateways  TenantPaymentGateway[]
   corporateClients CorporateClient[]
   duesAccounts     DuesAccount[]
@@ -268,7 +270,10 @@ model Store {
   waiterCalls  WaiterCall[]
   waiterPresence WaiterPresence[]
   feedbacks    Feedback[]
+  // Where guests are sent to leave a Google review; empty means the brand's link is used
   googleReviewUrl String?
+  // Show each dish's average rating on the guest menu
+  showRatings     Boolean @default(true)
   // Overrides Tenant.offlineUpiId for this location when set
   offlineUpiId        String?
   offlineUpiPayeeName String?
@@ -293,6 +298,8 @@ model Store {
   payAtCounter            Boolean @default(false)
 
   // POS "New order" screen: CLASSIC (single-screen billing, like other Indian POS) or MODERN (picture menu)
+  // Which sound staff screens play for this store (see @smo/shared/sounds)
+  notificationSound String @default("classic")
   posLayout               String  @default("CLASSIC")
 
   // Array of { name: string, rate: number } e.g. [{"name": "CGST", "rate": 2.5}]
@@ -302,6 +309,7 @@ model Store {
   customerWallets CustomerStoreWallet[]
   pushSubscriptions PushSubscription[]
   marketingCampaigns MarketingCampaign[]
+  reviews            Review[]
   notifications     Notification[]
 
   createdAt    DateTime    @default(now())
@@ -471,6 +479,10 @@ model MenuItem {
   videoUrl           String?
   // Optional code the cashier types to add it fast on the POS (e.g. "12" or "PT")
   shortCode          String?
+  // Running totals of guests' star ratings for this dish (average = ratingSum / ratingCount)
+  ratingSum          Int      @default(0)
+  ratingCount        Int      @default(0)
+  ratings            ItemRating[]
   dietary            DietaryPreference @default(VEG)
   spiceLevel         SpiceLevel        @default(NONE)
   
@@ -692,6 +704,9 @@ model Order {
   items           OrderItem[]
   payments        Payment[]
   refunds         Refund[]
+  // The guest review that covered this order (one review can cover every round of a visit)
+  reviewId        String?
+  review          Review?        @relation(fields: [reviewId], references: [id], onDelete: SetNull)
   events          OrderEvent[]
   invoices        Invoice[]
   feedbacks       Feedback[]
@@ -707,6 +722,7 @@ model Order {
   @@index([tableId])
   @@index([guestContactId])
   @@index([complimentaryOfId])
+  @@index([reviewId])
   @@index([customerPhone])
 }
 
@@ -814,6 +830,9 @@ model OrderItem {
   rejectedAt      DateTime?
   rejectedById    String?
   rejectedBy      User?                @relation("RejectedOrderItems", fields: [rejectedById], references: [id], onDelete: SetNull)
+  // Carried to the guest. Lines can be served one by one while the rest of the order is still cooking.
+  servedAt        DateTime?
+  servedById      String?
   // Complimentary line: billed at 0, this is the menu price it would have had (per unit)
   compValue       Int?
   
@@ -903,6 +922,42 @@ enum TableSessionStatus {
   ACTIVE
   SETTLED
   CANCELLED
+}
+
+// What a guest thought of a visit: overall stars, an optional comment, and stars per dish.
+// Only the guest who placed the orders can leave one, once, after the food was served.
+model Review {
+  id           String   @id @default(cuid())
+  storeId      String
+  store        Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  rating       Int      // 1-5
+  comment      String?
+  customerId   String?  // signed-in guest
+  sessionId    String?  // guest's browser session
+  customerName String?
+  customerPhone String?
+  tableNumber  Int?
+  orderTotal   Int      @default(0)
+  orders       Order[]
+  items        ItemRating[]
+  createdAt    DateTime @default(now())
+
+  @@index([storeId, createdAt])
+}
+
+model ItemRating {
+  id         String   @id @default(cuid())
+  reviewId   String
+  review     Review   @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  storeId    String
+  menuItemId String
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  rating     Int      // 1-5
+  createdAt  DateTime @default(now())
+
+  @@unique([reviewId, menuItemId])
+  @@index([menuItemId])
+  @@index([storeId, createdAt])
 }
 
 model TableSession {

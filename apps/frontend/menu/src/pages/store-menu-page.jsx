@@ -11,6 +11,8 @@ import { Skeleton, Button, Input, AnimatedThemeToggler, Sheet, SheetContent, She
 import { UserProfile } from '../components/user-profile';
 import { LiveOrders } from '../components/live-orders';
 import { NotificationSettings } from '../components/notification-settings';
+import { ReviewPrompt } from '../components/review-prompt';
+import { DishRating } from '../components/review-form';
 import {
   ShoppingCart01Icon,
   PlusSignIcon,
@@ -113,8 +115,9 @@ const MenuItemCard = ({ item, cartItem, onAdd, onUpdateQuantity, onPlayVideo, br
         <h3 className="text-[15px] font-bold leading-snug text-zinc-900 dark:text-zinc-50">
           {item.name}
         </h3>
-        <p className="mt-1 text-sm font-bold text-zinc-900 dark:text-zinc-100">
-          ₹{item.price}
+        <p className="mt-1 flex items-center gap-2.5 text-sm font-bold text-zinc-900 dark:text-zinc-100">
+          <span>₹{item.price}</span>
+          <DishRating rating={item.rating} count={item.ratingCount} />
         </p>
         {item.description && (
           <p className="mt-1.5 line-clamp-2 text-xs leading-relaxed text-zinc-400 dark:text-zinc-500">
@@ -977,6 +980,9 @@ export const StoreMenuPage = () => {
             />
           </div>
         </header>
+
+        {/* Rate a finished order: the sheet opens by itself once the food is served */}
+        <ReviewPrompt storeId={store.id} storeName={store.name} />
 
         {/* ── Part of a mall / food court: back to every counter ───────── */}
         {store.venue?.isActive && (

@@ -45,7 +45,8 @@ export const BrandForm = ({ initialData, onSuccess }) => {
     companyLegalName: initialData?.companyLegalName || '',
     registeredAddress: initialData?.registeredAddress || '',
     offlineUpiId: initialData?.offlineUpiId || '',
-    offlineUpiPayeeName: initialData?.offlineUpiPayeeName || ''
+    offlineUpiPayeeName: initialData?.offlineUpiPayeeName || '',
+    googleReviewUrl: initialData?.googleReviewUrl || ''
   });
 
   const handleSubmit = async (e) => {
@@ -262,6 +263,31 @@ export const BrandForm = ({ initialData, onSuccess }) => {
                     maxLength={50}
                   />
                 </div>
+              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <section>
+          <Card className="border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-none">
+            <CardContent className="p-6 space-y-4">
+              <div>
+                <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Google reviews</h3>
+                <p className="text-sm text-zinc-500">
+                  After guests rate their order they are offered this link to review you on Google. It applies to every store that hasn’t set its own under Store Setup → Reviews.
+                </p>
+              </div>
+              <div className="space-y-1.5 max-w-xl">
+                <Label htmlFor="googleReviewUrl" className="text-zinc-600 dark:text-zinc-400">Google review link</Label>
+                <Input
+                  id="googleReviewUrl"
+                  value={formData.googleReviewUrl}
+                  onChange={e => setFormData(p => ({ ...p, googleReviewUrl: e.target.value.trim() }))}
+                  placeholder="https://g.page/r/…/review"
+                  inputMode="url"
+                  autoComplete="off"
+                />
+                <p className="text-xs text-zinc-500">In your Google Business Profile, choose “Ask for reviews” and copy the link.</p>
               </div>
             </CardContent>
           </Card>

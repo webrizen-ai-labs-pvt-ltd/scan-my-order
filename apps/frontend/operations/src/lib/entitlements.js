@@ -42,6 +42,7 @@ const PAGE_FEATURES = [
   ['/dashboard/table-analytics', 'TABLE_ANALYTICS'],
   ['/dashboard/customers', 'CUSTOMERS'],
   ['/dashboard/campaigns', 'CAMPAIGNS'],
+  ['/dashboard/reviews', 'REVIEWS'],
 ];
 
 /** The plan feature a dashboard page needs, or null when it is part of every plan */

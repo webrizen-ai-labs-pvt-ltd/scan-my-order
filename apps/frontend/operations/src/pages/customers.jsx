@@ -34,6 +34,7 @@ const SORTS = [
   { id: 'recent', label: 'Most recent visit' },
   { id: 'visits', label: 'Most visits' },
   { id: 'spend', label: 'Highest spend' },
+  { id: 'rating', label: 'Lowest rating first' },
 ];
 
 /**
@@ -139,6 +140,7 @@ export const Customers = () => {
                 <th className="px-3 py-2.5 font-medium">Mobile</th>
                 <th className="px-3 py-2.5 font-medium">Ordered from</th>
                 <th className="px-3 py-2.5 font-medium">Notifications</th>
+                <th className="px-3 py-2.5 font-medium">Their rating</th>
                 <th className="px-3 py-2.5 font-medium text-right">Visits</th>
                 <th className="px-3 py-2.5 font-medium text-right">Total spent</th>
                 <th className="px-3 py-2.5 font-medium">Last visit</th>
@@ -169,6 +171,17 @@ export const Customers = () => {
                     {c.notifications === 'NONE'
                       ? <span className="text-xs text-zinc-400" title={NOTIFY.NONE.hint}>{NOTIFY.NONE.label}</span>
                       : <span title={NOTIFY[c.notifications].hint} className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${NOTIFY[c.notifications].tone}`}>{NOTIFY[c.notifications].label}</span>}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {c.averageRating === null || c.averageRating === undefined ? (
+                      <span className="text-xs text-zinc-400" title="This customer hasn't rated a visit yet">Not rated</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 tabular-nums" title={`Average of the stars they gave across ${c.ratingCount} ${c.ratingCount === 1 ? 'review' : 'reviews'}`}>
+                        <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.9 5.9 6.5.9-4.7 4.6 1.1 6.5L12 17.4l-5.8 3.1 1.1-6.5L2.6 9.4l6.5-.9L12 2.6z" className="fill-amber-400 stroke-amber-500" strokeWidth="1.5" strokeLinejoin="round" /></svg>
+                        <span className={`font-semibold ${c.averageRating <= 2 ? 'text-rose-600 dark:text-rose-400' : 'text-zinc-900 dark:text-zinc-100'}`}>{c.averageRating.toFixed(1)}</span>
+                        <span className="text-xs text-zinc-400">({c.ratingCount})</span>
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-2.5 text-right tabular-nums">{c.visits}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-zinc-900 dark:text-zinc-100">{money(c.totalSpent)}</td>
