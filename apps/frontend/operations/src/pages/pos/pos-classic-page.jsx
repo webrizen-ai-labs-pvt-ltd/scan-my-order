@@ -25,20 +25,18 @@ import { printKitchenTicket, markPrinted, readPrintSettings } from '../../lib/ki
  */
 
 const DIET_LABEL = { VEG: 'Veg', VEGAN: 'Vegan', EGG: 'Contains egg', NON_VEG: 'Non-veg' };
-// The familiar food mark: a dot in a square. Green veg, amber egg, red non-veg; same in light and dark.
+// A dish card's left edge shows what it is: green veg, yellow egg, red non-veg; same in light and dark.
 const DIET_TONE = {
-  VEG: ['border-emerald-600 dark:border-emerald-400', 'bg-emerald-600 dark:bg-emerald-400'],
-  VEGAN: ['border-emerald-600 dark:border-emerald-400', 'bg-emerald-600 dark:bg-emerald-400'],
-  EGG: ['border-amber-500 dark:border-amber-400', 'bg-amber-500 dark:bg-amber-400'],
-  NON_VEG: ['border-red-600 dark:border-red-400', 'bg-red-600 dark:bg-red-400'],
+  VEG: ['border-l-emerald-600 dark:border-l-emerald-400', 'bg-emerald-600 dark:bg-emerald-400'],
+  VEGAN: ['border-l-emerald-600 dark:border-l-emerald-400', 'bg-emerald-600 dark:bg-emerald-400'],
+  EGG: ['border-l-yellow-400 dark:border-l-yellow-300', 'bg-yellow-400 dark:bg-yellow-300'],
+  NON_VEG: ['border-l-red-600 dark:border-l-red-400', 'bg-red-600 dark:bg-red-400'],
 };
-const DietMark = ({ dietary, className = '' }) => {
-  const [box, dot] = DIET_TONE[dietary] || DIET_TONE.VEG;
-  return (
-    <span title={DIET_LABEL[dietary] || 'Veg'} className={`inline-flex size-3 shrink-0 items-center justify-center rounded-[3px] border-[1.5px] ${box} ${className}`}>
-      <span className={`size-1.5 rounded-full ${dot}`} />
-    </span>
-  );
+const dietEdge = (dietary) => (DIET_TONE[dietary] || DIET_TONE.VEG)[0];
+// The same colour as a short bar, for the legend above the dishes
+const DietSwatch = ({ dietary }) => {
+  const swatch = (DIET_TONE[dietary] || DIET_TONE.VEG)[1];
+  return <span aria-hidden="true" className={`h-3 w-1 shrink-0 rounded-full ${swatch}`} />;
 };
 
 // Keyboard shortcut hint shown on a button or field
@@ -52,7 +50,7 @@ const Key = ({ children, tone = 'plain' }) => (
 );
 const PAY_METHODS = [
   { id: 'CASH', label: 'Cash' },
-  { id: 'OTHER', label: 'Card / UPI' },
+  { id: 'OTHER', label: 'Other payment methods' },
   { id: 'DUE', label: 'Due' },
 ];
 const rupees = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
@@ -437,9 +435,9 @@ export const PosClassicPage = () => {
         <div className="flex items-center justify-between gap-3 text-xs text-zinc-500">
           <span className="font-semibold text-zinc-700 dark:text-zinc-300">{q ? `Results for “${query.trim()}”` : activeCategory?.name}</span>
           <span className="flex items-center gap-3">
-            <span className="flex items-center gap-1.5"><DietMark dietary="VEG" /> Veg</span>
-            <span className="flex items-center gap-1.5"><DietMark dietary="EGG" /> Egg</span>
-            <span className="flex items-center gap-1.5"><DietMark dietary="NON_VEG" /> Non-veg</span>
+            <span className="flex items-center gap-1.5"><DietSwatch dietary="VEG" /> Veg</span>
+            <span className="flex items-center gap-1.5"><DietSwatch dietary="EGG" /> Egg</span>
+            <span className="flex items-center gap-1.5"><DietSwatch dietary="NON_VEG" /> Non-veg</span>
           </span>
         </div>
 
@@ -458,12 +456,9 @@ export const PosClassicPage = () => {
                     onClick={() => addItem(item)}
                     disabled={soldOut}
                     aria-label={`${item.name}, ${DIET_LABEL[item.dietary] || 'Veg'}, ${rupees(item.price)}${qty ? `, ${qty} in bill` : ''}${soldOut ? ', sold out' : ''}`}
-                    className={`relative flex h-[76px] flex-col justify-between rounded-lg border bg-white dark:bg-zinc-900 px-2.5 py-2 text-left transition-colors hover:bg-amber-50 dark:hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:pointer-events-none disabled:opacity-50 ${qty > 0 ? 'border-amber-400' : 'border-zinc-200 dark:border-zinc-800'}`}
+                    className={`relative flex h-[76px] flex-col justify-between rounded-lg border border-l-4 bg-white dark:bg-zinc-900 px-2.5 py-2 text-left transition-colors hover:bg-amber-50 dark:hover:bg-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 disabled:pointer-events-none disabled:opacity-50 ${qty > 0 ? 'border-amber-400' : 'border-zinc-200 dark:border-zinc-800'} ${dietEdge(item.dietary)}`}
                   >
-                    <span className="flex items-start gap-1.5">
-                      <DietMark dietary={item.dietary} className="mt-[3px]" />
-                      <span className={`line-clamp-2 break-words text-[13px] font-semibold leading-tight text-zinc-900 dark:text-zinc-100 ${qty > 0 ? 'pr-5' : ''}`}>{item.name}</span>
-                    </span>
+                    <span className={`line-clamp-2 break-words text-[13px] font-semibold leading-tight text-zinc-900 dark:text-zinc-100 ${qty > 0 ? 'pr-5' : ''}`}>{item.name}</span>
                     <span className="flex items-baseline justify-between gap-2">
                       <span className={`text-xs tabular-nums font-medium ${soldOut ? 'text-red-600 dark:text-red-400' : 'text-zinc-600 dark:text-zinc-400'}`}>
                         {soldOut ? 'Sold out' : rupees(item.price)}
@@ -630,15 +625,23 @@ export const PosClassicPage = () => {
 
           <div className="px-3 pb-2">
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-500">Paid by</p>
-            <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${payMethods.length}, minmax(0, 1fr))` }} role="radiogroup" aria-label="Payment method">
-              {payMethods.map(m => (
-                <label key={m.id} className={`h-9 rounded-md border flex items-center justify-center text-[13px] font-semibold cursor-pointer ${payMethod === m.id
-                  ? 'border-zinc-900 bg-zinc-900 text-white dark:border-zinc-100 dark:bg-zinc-100 dark:text-zinc-900'
-                  : 'border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800'}`}>
-                  <input type="radio" name="pay-method" value={m.id} checked={payMethod === m.id} onChange={() => setPayMethod(m.id)} className="sr-only" />
-                  {m.label}
-                </label>
-              ))}
+            <div className="overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 flex divide-x divide-zinc-200 dark:divide-zinc-800" role="radiogroup" aria-label="Payment method">
+              {payMethods.map(m => {
+                const selected = payMethod === m.id;
+                return (
+                  <label key={m.id} className={`flex flex-auto h-9 cursor-pointer items-center justify-center gap-2 px-2.5 text-[13px] focus-within:outline focus-within:outline-2 focus-within:-outline-offset-2 focus-within:outline-amber-500 ${selected
+                    ? 'bg-zinc-100 dark:bg-zinc-800'
+                    : 'hover:bg-zinc-50 dark:hover:bg-zinc-800/50'}`}>
+                    <input type="radio" name="pay-method" value={m.id} checked={selected} onChange={() => setPayMethod(m.id)} className="sr-only" />
+                    <span aria-hidden="true" className={`grid size-4 shrink-0 place-items-center rounded-full border ${selected
+                      ? 'border-zinc-900 dark:border-zinc-100'
+                      : 'border-zinc-400 dark:border-zinc-600'}`}>
+                      {selected && <span className="size-2 rounded-full bg-zinc-900 dark:bg-zinc-100" />}
+                    </span>
+                    <span className={`whitespace-nowrap ${selected ? 'font-semibold text-zinc-900 dark:text-zinc-50' : 'font-medium text-zinc-700 dark:text-zinc-300'}`}>{m.label}</span>
+                  </label>
+                );
+              })}
             </div>
           </div>
 
@@ -655,7 +658,7 @@ export const PosClassicPage = () => {
               </button>
             ) : (
               <button type="button" onClick={hold} disabled={Boolean(busy)} className={quietBtn}>
-                <PauseIcon size={14} /> {lines.length > 0 ? 'Hold' : `Held (${held.length})`} <Key>F9</Key>
+                <PauseIcon size={14} /> {lines.length > 0 ? 'Hold' : `Hold (${held.length})`} <Key>F9</Key>
               </button>
             )}
             <button type="button" onClick={() => sendKot(false)} disabled={Boolean(busy)} className={kitchenBtn} title="Send the new items to the kitchen. The bill stays open; the guest pays later">
