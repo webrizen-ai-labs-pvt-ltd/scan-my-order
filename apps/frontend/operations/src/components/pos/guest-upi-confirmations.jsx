@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@smo/ui';
 import { ArrowDown01Icon, ArrowUp01Icon, Loading03Icon } from 'hugeicons-react';
 import { playNotificationChime } from '@smo/shared/audio';
@@ -11,6 +11,9 @@ const placeOf = (order) => {
   return 'Takeaway';
 };
 
+// Live updates can be missed (a dropped connection, a busy network): the list also re-checks itself
+const RECHECK_MS = 20000;
+
 const minutesAgo = (date) => Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 60000));
 
 /**
@@ -22,16 +25,30 @@ export const GuestUpiConfirmations = ({ storeId, subscribe, toast }) => {
   const [open, setOpen] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [, setTick] = useState(0);
+  // Payments already shown, so a re-check only rings for ones nobody has seen yet
+  const seen = useRef(null);
 
   const load = useCallback(async () => {
     if (!storeId) return;
     try {
       const res = await api.get(`/stores/${storeId}/payments/guest-upi`);
-      setPayments(res.data.data || []);
+      const list = res.data.data || [];
+      const fresh = seen.current !== null && list.some(p => !seen.current.has(p.id));
+      seen.current = new Set(list.map(p => p.id));
+      setPayments(list);
+      if (fresh) {
+        playNotificationChime({ haptic: true });
+        setOpen(true);
+      }
     } catch { /* keeps the last list */ }
   }, [storeId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    seen.current = null;
+    load();
+    const timer = setInterval(load, RECHECK_MS);
+    return () => clearInterval(timer);
+  }, [load]);
 
   // New guest payments, a guest saying "I've paid", or another till confirming one
   useEffect(() => subscribe((msg) => {

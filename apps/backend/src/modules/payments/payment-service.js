@@ -872,8 +872,24 @@ async function createGuestUpiPayment(order) {
     data: { channel: "UPI_OFFLINE", label: "UPI (guest, store's own ID)", paymentId: payment.id, code }
   });
   broadcastToStore(order.storeId, "GUEST_UPI_UPDATED", { orderId: order.id, paymentId: payment.id, outcome: "STARTED" });
+  // Staff hear about it as soon as the order is placed: not every guest taps "I've paid" afterwards
+  const { sendNotification } = require("../notifications/notification-service");
+  sendNotification({
+    storeId: order.storeId,
+    type: "GUEST_UPI_STARTED",
+    title: `${guestUpiPlace(order)}: paying ₹${payment.amount} by UPI`,
+    body: `A guest is paying your UPI ID (${code}). Check your UPI app and confirm it on the POS.`,
+    data: { orderId: order.id, paymentId: payment.id, sound: "notification.mp3", url: "/dashboard/pos" },
+    target: { roles: GUEST_UPI_NOTIFY_ROLES, storeId: order.storeId }
+  }).catch(() => {});
   return guestUpiView(payment, upi);
 }
+
+// Owners often run the till themselves, so they are told too
+const GUEST_UPI_NOTIFY_ROLES = ["CASHIER", "STORE_MANAGER", "TENANT_ADMIN"];
+const guestUpiPlace = (order) => (order.table?.tableNumber != null ? `Table ${order.table.tableNumber}`
+  : order.pickupNumber != null ? `Pickup #${order.pickupNumber}`
+  : `Order #${shortRef(order.id)}`);
 
 /** What the guest's phone needs to pay, and where the payment stands */
 function guestUpiView(payment, upi = null) {
@@ -927,7 +943,7 @@ async function claimGuestUpiPayment(storeId, orderId, guest, input = {}) {
     data: { guestClaimedAt: payment.guestClaimedAt || new Date(), ...(reference ? { guestReference: reference } : {}) }
   });
 
-  const place = order.table ? `Table ${order.table.tableNumber}` : order.pickupNumber != null ? `Pickup #${order.pickupNumber}` : `Order #${shortRef(orderId)}`;
+  const place = guestUpiPlace(order);
   broadcastToStore(storeId, "GUEST_UPI_UPDATED", { orderId, paymentId: payment.id, outcome: "CLAIMED" });
   const { sendNotification } = require("../notifications/notification-service");
   sendNotification({
@@ -936,7 +952,7 @@ async function claimGuestUpiPayment(storeId, orderId, guest, input = {}) {
     title: `${place}: UPI payment to confirm`,
     body: `Guest says they paid ₹${payment.amount} (SMO-${shortRef(orderId)}${reference ? `, ref …${reference.slice(-4)}` : ''}). Check your UPI app and confirm on the POS.`,
     data: { orderId, paymentId: payment.id, sound: "notification.mp3", url: "/dashboard/pos" },
-    target: { roles: ["CASHIER", "STORE_MANAGER"], storeId }
+    target: { roles: GUEST_UPI_NOTIFY_ROLES, storeId }
   }).catch(() => {});
 
   return guestUpiView(updated);

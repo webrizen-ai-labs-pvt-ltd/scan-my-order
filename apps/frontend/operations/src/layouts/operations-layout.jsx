@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useEntitlements, featureForPath } from '../lib/entitlements';
 import { useStoreSound } from '../hooks/use-store-sound';
+import { usePendingGuestUpi } from '../hooks/use-pending-guest-upi';
 import { UpgradeRequired, SubscriptionBanner } from '../components/plan/plan-gates';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -86,6 +87,7 @@ export const OperationsLayout = () => {
   };
   const location = useLocation();
   const navigate = useNavigate();
+  const pendingUpi = usePendingGuestUpi();
 
   const handleLogout = () => {
     logout();
@@ -322,6 +324,9 @@ export const OperationsLayout = () => {
                                     <Link to={item.path} title={item.name} className={`${rowClass(isActive)} h-8 gap-2 px-2`}>
                                       <item.icon size={16} variant={isActive ? 'solid' : 'stroke'} className="shrink-0" />
                                       <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                                      {item.path === '/dashboard/pos' && pendingUpi > 0 && (
+                                        <span className="shrink-0 min-w-5 px-1 rounded-full bg-amber-400 text-zinc-950 text-[11px] font-bold text-center tabular-nums" title="UPI payments to confirm" aria-label={`${pendingUpi} UPI ${pendingUpi === 1 ? 'payment' : 'payments'} to confirm`}>{pendingUpi}</span>
+                                      )}
                                       {isLocked(item.path) && <SquareLock02Icon size={13} className="shrink-0 text-zinc-400" aria-label="Not in your plan" />}
                                     </Link>
                                   </SidebarMenuSubButton>

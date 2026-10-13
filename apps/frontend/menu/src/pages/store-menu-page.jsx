@@ -1640,7 +1640,7 @@ export const StoreMenuPage = () => {
                         : payModel === 'PREPAID'
                           ? payWith === 'COUNTER'
                             ? `Place order · pay ₹${finalTotal} at counter`
-                            : payWith === 'UPI' ? `Pay ₹${finalTotal} by UPI` : `Proceed to Pay`
+                            : payWith === 'UPI' ? `Proceed to Pay` : `Proceed to Pay`
                           : 'Place Order'}
                 </button>
               </div>
