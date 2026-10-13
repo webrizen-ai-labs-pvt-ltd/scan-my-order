@@ -275,6 +275,16 @@ async function updateStore(actor, storeId, input) {
   for (const key of ["startBeforeUpiConfirmed", "payAtCounter"]) {
     if (input[key] !== undefined) contactExtras[key] = Boolean(input[key]);
   }
+  // Which inventory system the store runs: BASIC (stock and recipes) or ADVANCED (also lots, suppliers, wastage)
+  if (input.inventoryMode !== undefined && input.inventoryMode !== existingStore.inventoryMode) {
+    if (!["BASIC", "ADVANCED"].includes(input.inventoryMode)) throw createHttpError(400, "inventoryMode must be BASIC or ADVANCED");
+    if (input.inventoryMode === "ADVANCED") {
+      await require("../billing/entitlements-service").assertStoreFeature(storeId, "ADVANCED_INVENTORY");
+    }
+    contactExtras.inventoryMode = input.inventoryMode;
+    // Stock already on the shelves is wrapped in opening lots; switching back loses nothing
+    await require("../inventory/advanced-inventory-service").onModeChanged(storeId, input.inventoryMode);
+  }
   // Reviews: this store's own Google review link, and whether guests see dish ratings
   if (input.googleReviewUrl !== undefined) {
     contactExtras.googleReviewUrl = require("../reviews/review-service").cleanGoogleReviewUrl(input.googleReviewUrl);

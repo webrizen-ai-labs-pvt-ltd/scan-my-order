@@ -1632,7 +1632,7 @@ export const StoreMenuPage = () => {
                   disabled={isPlacingOrder || items.length === 0 || (!isCounter && !tableNumber) || (isCounter && !payWith)}
                 >
                   {isPlacingOrder
-                    ? 'Placing your order...'
+                    ? 'Hold on...'
                     : isCounter && !payWith
                       ? 'Please order at the counter'
                       : !isCounter && !tableNumber
@@ -1640,7 +1640,7 @@ export const StoreMenuPage = () => {
                         : payModel === 'PREPAID'
                           ? payWith === 'COUNTER'
                             ? `Place order · pay ₹${finalTotal} at counter`
-                            : payWith === 'UPI' ? `Pay ₹${finalTotal} by UPI` : `Pay ₹${finalTotal} Now`
+                            : payWith === 'UPI' ? `Pay ₹${finalTotal} by UPI` : `Proceed to Pay`
                           : 'Place Order'}
                 </button>
               </div>

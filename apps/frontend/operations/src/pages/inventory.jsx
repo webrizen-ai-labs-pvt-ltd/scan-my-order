@@ -4,10 +4,18 @@ import { useAuthStore } from '../store/authStore';
 import { Card, CardContent, Button, Input, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Skeleton } from '@smo/ui';
 import { PlusSignIcon, RefreshIcon, AlertCircleIcon, Tick02Icon, Cancel01Icon, Store01Icon } from 'hugeicons-react';
 
-export const Inventory = () => {
+/**
+ * Basic inventory: raw materials and their stock. On its own it picks the store itself;
+ * the inventory page passes the store in so Basic and Advanced share one store choice.
+ */
+export const Inventory = ({ storeId: givenStoreId, stores: givenStores, onStoreChange }) => {
   const { user } = useAuthStore();
-  const [stores, setStores] = useState([]);
-  const [selectedStoreId, setSelectedStoreId] = useState(user?.store?.id || null);
+  const controlled = givenStoreId !== undefined;
+  const [ownStores, setStores] = useState([]);
+  const [ownStoreId, setOwnStoreId] = useState(user?.store?.id || null);
+  const stores = controlled ? (givenStores || []) : ownStores;
+  const selectedStoreId = controlled ? givenStoreId : ownStoreId;
+  const setSelectedStoreId = controlled ? onStoreChange : setOwnStoreId;
 
   const [materials, setMaterials] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +44,7 @@ export const Inventory = () => {
   };
 
   useEffect(() => {
-    if (!user?.store) {
+    if (!controlled && !user?.store) {
       api.get('/stores').then(res => {
         if (res.data.success && res.data.data.length > 0) {
           setStores(res.data.data);
@@ -92,7 +100,7 @@ export const Inventory = () => {
           <p className="text-sm text-zinc-500">Manage raw materials and track stock levels</p>
         </div>
         <div className="flex flex-wrap gap-2 items-center">
-          {!user?.store && stores.length > 0 && (
+          {!user?.store && stores.length > (controlled ? 1 : 0) && (
             <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
               <SelectTrigger className="w-[200px] h-9 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 rounded-l-full">
                 <Store01Icon size={16} className="mr-1 text-zinc-400" />

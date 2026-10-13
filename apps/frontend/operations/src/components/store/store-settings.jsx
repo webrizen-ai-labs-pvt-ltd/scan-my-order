@@ -3,10 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { Button, Input, Label } from '@smo/ui';
 import {
   Store01Icon, Clock01Icon, PercentIcon, SmartPhone01Icon, UserGroupIcon, ViewIcon, Loading03Icon,
-  Delete02Icon, PlusSignIcon, Copy01Icon, LinkSquare02Icon, CheckmarkCircle02Icon, ShoppingBag01Icon, ComputerIcon, VolumeHighIcon, PlayIcon, StarIcon,
+  Delete02Icon, PlusSignIcon, Copy01Icon, DeliveryTruck01Icon, LinkSquare02Icon, CheckmarkCircle02Icon, ShoppingBag01Icon, ComputerIcon, VolumeHighIcon, PlayIcon, StarIcon,
 } from 'hugeicons-react';
 import api from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
+import { useEntitlements } from '../../lib/entitlements';
 import { Notice, Panel, Row, SectionNav, SectionLayout } from '../settings-layout';
 import { NOTIFICATION_SOUNDS } from '@smo/shared/sounds';
 import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
@@ -52,6 +53,7 @@ function editableFrom(store) {
     notificationSound: store.notificationSound || 'classic',
     googleReviewUrl: store.googleReviewUrl || '',
     showRatings: store.showRatings !== false,
+    inventoryMode: store.inventoryMode === 'ADVANCED' ? 'ADVANCED' : 'BASIC',
   };
 }
 
@@ -309,6 +311,7 @@ export const StoreSettings = ({ store, onSaved }) => {
   const { user } = useAuthStore();
   const [params, setParams] = useSearchParams();
   const isOwner = user?.role === 'SUPER_ADMIN' || user?.role === 'TENANT_ADMIN';
+  const advancedIncluded = useEntitlements(s => !s.loaded || s.features.includes('ADVANCED_INVENTORY'));
   const [saved, setSaved] = useState(() => editableFrom(store));
   const [form, setForm] = useState(() => editableFrom(store));
   const [saving, setSaving] = useState(false);
@@ -353,6 +356,8 @@ export const StoreSettings = ({ store, onSaved }) => {
       notificationSound: form.notificationSound,
       googleReviewUrl: form.googleReviewUrl.trim(),
       showRatings: form.showRatings,
+      // Sent only when it changes: switching it on is checked against the plan
+      ...(form.inventoryMode !== saved.inventoryMode ? { inventoryMode: form.inventoryMode } : {}),
       // Only brand owners decide where UPI money goes; the API refuses it for others
       ...(isOwner ? { offlineUpiId: form.offlineUpiId.trim(), offlineUpiPayeeName: form.offlineUpiPayeeName.trim() } : {}),
     };
@@ -385,6 +390,7 @@ export const StoreSettings = ({ store, onSaved }) => {
     { id: 'pos', label: 'POS', hint: 'Billing screen', icon: ComputerIcon },
     { id: 'sounds', label: 'Sounds', hint: 'Notification tone', icon: VolumeHighIcon },
     { id: 'reviews', label: 'Reviews', hint: 'Ratings & Google link', icon: StarIcon },
+    { id: 'inventory', label: 'Inventory', hint: 'Basic or Advanced', icon: DeliveryTruck01Icon },
     { id: 'ordering', label: 'Guest ordering', hint: 'UPI & pay at counter', icon: ShoppingBag01Icon },
     { id: 'managers', label: 'Managers', hint: 'Who runs it', icon: UserGroupIcon },
     { id: 'visibility', label: 'Visibility', hint: 'Status', icon: ViewIcon },
@@ -406,6 +412,7 @@ export const StoreSettings = ({ store, onSaved }) => {
     visibility: form.status !== saved.status,
     pos: form.posLayout !== saved.posLayout,
     sounds: form.notificationSound !== saved.notificationSound,
+    inventory: form.inventoryMode !== saved.inventoryMode,
     reviews: form.googleReviewUrl.trim() !== saved.googleReviewUrl || form.showRatings !== saved.showRatings,
     ordering: form.startBeforeUpiConfirmed !== saved.startBeforeUpiConfirmed || form.payAtCounter !== saved.payAtCounter,
   };
@@ -547,6 +554,47 @@ export const StoreSettings = ({ store, onSaved }) => {
                 title="Show dish ratings to guests"
                 hint="Off: ratings are still collected and you still see them under Marketing → Reviews; guests just don’t."
               />
+            </Row>
+          </Panel>
+        )}
+
+        {active === 'inventory' && (
+          <Panel title="Inventory" description="Which inventory system this store runs. Both keep the same stock figures, so you can switch either way without losing anything.">
+            <Row label="Inventory system" hint="Basic is quick to keep up. Advanced asks for a little more when stock arrives, and in return tells you what expires, what was wasted and what each dish costs.">
+              <div className="flex flex-col gap-2 max-w-xl" role="radiogroup" aria-label="Inventory system">
+                {[
+                  ['BASIC', 'Basic', 'Ingredients, stock levels and recipes. Stock goes down as dishes are sold, and dishes show as sold out when an ingredient runs out.', false],
+                  ['ADVANCED', 'Advanced', 'Everything in Basic, plus deliveries recorded with their supplier, bill number and use-by date; expiry and low-stock lists every morning; wastage with reasons; a small daily count; standing deliveries that add themselves; and the cost of every dish.', !advancedIncluded],
+                ].map(([id, label, hint, locked]) => {
+                  const picked = form.inventoryMode === id;
+                  return (
+                    <button key={id} type="button" role="radio" aria-checked={picked} disabled={locked && !picked} onClick={() => set('inventoryMode')(id)}
+                      className={`flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left ${picked ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-200 dark:border-zinc-800 enabled:hover:border-zinc-400'} disabled:opacity-60`}>
+                      <span className={`mt-0.5 size-4 shrink-0 rounded-full border-2 flex items-center justify-center ${picked ? 'border-zinc-900 dark:border-zinc-100' : 'border-zinc-300 dark:border-zinc-600'}`}>
+                        {picked && <span className="size-2 rounded-full bg-zinc-900 dark:bg-zinc-100" />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">{label}</span>
+                        <span className="block text-xs text-zinc-500">{hint}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+                {!advancedIncluded && (
+                  <p className="text-xs text-zinc-500">
+                    {form.inventoryMode === 'ADVANCED'
+                      ? 'Your current plan no longer includes Advanced inventory, so this store shows Basic until the plan is upgraded. Its lots and suppliers are kept.'
+                      : 'Advanced inventory isn’t part of your current plan. Upgrade under Subscription to use it.'}
+                  </p>
+                )}
+                {advancedIncluded && form.inventoryMode !== saved.inventoryMode && (
+                  <p className="text-xs text-zinc-500">
+                    {form.inventoryMode === 'ADVANCED'
+                      ? 'When you save, the stock already on your shelves is carried over as it is. Its use-by dates aren’t known, so it is treated as the oldest and used first.'
+                      : 'When you save, the Inventory page goes back to the simple stock list. Deliveries, suppliers and wastage already recorded are kept for when you switch back.'}
+                  </p>
+                )}
+              </div>
             </Row>
           </Panel>
         )}

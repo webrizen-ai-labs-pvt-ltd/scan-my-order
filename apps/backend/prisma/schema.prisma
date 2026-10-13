@@ -127,6 +127,8 @@ enum TransactionType {
   RESTOCK
   CONSUME
   ADJUST
+  WASTE
+  COUNT
 }
 
 enum OrderOrigin {
@@ -298,6 +300,11 @@ model Store {
   payAtCounter            Boolean @default(false)
 
   // POS "New order" screen: CLASSIC (single-screen billing, like other Indian POS) or MODERN (picture menu)
+  // BASIC: stock levels and recipes. ADVANCED: also suppliers, lots with use-by dates, wastage and food cost.
+  inventoryMode   String  @default("BASIC")
+  suppliers          Supplier[]
+  stockReceipts      StockReceipt[]
+  standingDeliveries StandingDelivery[]
   // Which sound staff screens play for this store (see @smo/shared/sounds)
   notificationSound String @default("classic")
   posLayout               String  @default("CLASSIC")
@@ -534,6 +541,18 @@ model RawMaterial {
   unit              UnitOfMeasure
   currentStock      Float              @default(0)
   lowStockThreshold Float              @default(0)
+
+  // Advanced inventory. Typed at receiving to pick this ingredient fast, like a POS short code
+  shortCode         String?
+  // How long it keeps after delivery: fills in the use-by date so nobody types it
+  shelfLifeDays     Int?
+  // How it arrives, e.g. "crate" of 30 pieces: staff enter packs, stock is kept in the unit
+  packName          String?
+  packSize          Float?
+  // What one unit cost at the last delivery (rupees); drives stock value and food cost
+  costPerUnit       Float?
+  lastCountedAt     DateTime?
+  batches           StockBatch[]
   
   recipes           RecipeIngredient[]
   transactions      StockTransaction[]
@@ -551,7 +570,98 @@ model StockTransaction {
   type          TransactionType
   quantity      Float           
   reference     String?         
+  // Advanced inventory: why (wastage reason), which batch, and who
+  reason        String?
+  batchId       String?
+  actorName     String?
   createdAt     DateTime        @default(now())
+
+  @@index([materialId, createdAt])
+}
+
+// Who a store buys from. The FSSAI number is what an inspector asks for when tracing an ingredient.
+model Supplier {
+  id          String   @id @default(cuid())
+  storeId     String
+  store       Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name        String
+  phone       String?
+  fssaiNumber String?
+  gstin       String?
+  notes       String?
+  isActive    Boolean  @default(true)
+  receipts    StockReceipt[]
+  batches     StockBatch[]
+  standing    StandingDelivery[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([storeId])
+}
+
+// One delivery: what arrived, from whom, on which bill
+model StockReceipt {
+  id                 String    @id @default(cuid())
+  storeId            String
+  store              Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  supplierId         String?
+  supplier           Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  billNumber         String?
+  note               String?
+  totalCost          Float     @default(0)
+  source             String    @default("MANUAL") // MANUAL | STANDING (posted from a standing delivery)
+  standingDeliveryId String?
+  receivedById       String?
+  receivedByName     String?
+  receivedAt         DateTime  @default(now())
+  batches            StockBatch[]
+
+  @@index([storeId, receivedAt])
+}
+
+// One lot of an ingredient with its own use-by date. How much of it is left is not stored:
+// it is worked out from the ingredient's stock, assuming the oldest lots are used first, so
+// lots can never disagree with the stock figure the POS and recipes use.
+model StockBatch {
+  id               String        @id @default(cuid())
+  storeId          String
+  materialId       String
+  material         RawMaterial   @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  receiptId        String?
+  receipt          StockReceipt? @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+  supplierId       String?
+  supplier         Supplier?     @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  kind             String        @default("RECEIVED") // RECEIVED | OPENING (stock from before) | FOUND (count or returned stock)
+  quantity         Float         // received, less anything thrown away from this lot
+  originalQuantity Float
+  unitCost         Float?
+  receivedAt       DateTime      @default(now())
+  expiresAt        DateTime?
+  // Set once the lot is used up or written off; closed lots no longer take part
+  closedAt         DateTime?
+  closedReason     String?       // USED | WASTED | CHECKED (expired lot confirmed already used)
+
+  @@index([materialId, closedAt])
+  @@index([storeId, expiresAt])
+}
+
+// A delivery that repeats (milk every morning): posted by itself on its days, corrected only when different
+model StandingDelivery {
+  id            String    @id @default(cuid())
+  storeId       String
+  store         Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  supplierId    String?
+  supplier      Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  name          String
+  daysOfWeek    Int[]     // 0 = Sunday ... 6 = Saturday
+  arrivesByHour Int       @default(7) // India time; posted once this hour has passed
+  lines         Json      // [{ materialId, quantity, unitCost? }]
+  isActive      Boolean   @default(true)
+  lastPostedOn  String?   // "YYYY-MM-DD" (India), so a day is never posted twice
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([storeId])
 }
 
 model RecipeIngredient {

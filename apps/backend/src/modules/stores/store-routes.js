@@ -67,6 +67,8 @@ router.delete("/:id", asyncHandler(async (req, res) => {
 router.use("/:storeId", billingGuard);
 
 router.use("/:storeId/menu", menuRoutes);
+// Advanced inventory (suppliers, lots, wastage, counts, food cost) is its own plan feature
+router.use("/:storeId/inventory/advanced", requireFeature("ADVANCED_INVENTORY"), require("../inventory/advanced-inventory-routes"));
 router.use("/:storeId/inventory", requireFeature("INVENTORY", { writesOnly: true }), inventoryRoutes);
 router.use("/:storeId/tables", tableRoutes);
 router.use("/:storeId/orders", orderRoutes);

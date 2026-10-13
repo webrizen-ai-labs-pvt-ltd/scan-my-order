@@ -158,6 +158,7 @@ router.all("/stores/:storeId/*", billingGuard);
 // GET /api/public/stores/:storeId/menu
 router.get("/stores/:storeId/menu", asyncHandler(async (req, res) => {
   const { storeId } = req.params;
+  await require("../inventory/advanced-inventory-service").postDueStandingDeliveries(storeId).catch(() => {});
 
   const cachedMenu = publicMenuCache.get(storeId);
   if (cachedMenu) {

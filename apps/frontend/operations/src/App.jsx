@@ -23,7 +23,7 @@ import { WaiterPOS } from './pages/waiter-pos';
 import { Orders } from './pages/orders';
 import { OrderDetailPage } from './pages/orders/order-detail-page';
 import { OrderInvoicePage, OrderRefundPage, OrderCancelPage } from './pages/orders/order-action-pages';
-import { Inventory } from './pages/inventory';
+import { InventoryPage } from './pages/inventory-page';
 import { Settings } from './pages/settings';
 import { Stores } from './pages/stores';
 import { StoreCreate } from './pages/store-create';
@@ -101,7 +101,7 @@ function App() {
 
           {/* Inventory (Manager/Admin) */}
           <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER']} />}>
-            <Route path="/dashboard/inventory" element={<Inventory />} />
+            <Route path="/dashboard/inventory" element={<InventoryPage />} />
             <Route path="/dashboard/stores" element={<Stores />} />
             <Route path="/dashboard/stores/:id/edit" element={<StoreEdit />} />
             <Route path="/dashboard/audit" element={<AuditLog />} />

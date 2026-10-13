@@ -16,6 +16,7 @@ export const PLAN_FEATURES = [
   { key: 'CORPORATE_INVOICES', group: 'Payments', label: 'Corporate invoices', description: 'GST invoices in a company’s name' },
 
   { key: 'INVENTORY', group: 'Control', label: 'Inventory & recipes', description: 'Stock that goes down as dishes are sold' },
+  { key: 'ADVANCED_INVENTORY', group: 'Control', label: 'Advanced inventory', description: 'Suppliers, lots with use-by dates, wastage, stock counts and food cost' },
   { key: 'LEAKAGES', group: 'Control', label: 'Leakages & audit log', description: 'Every cancellation, edit and refund, by person' },
   { key: 'TABLE_ANALYTICS', group: 'Control', label: 'Table analytics', description: 'Which tables earn, and how long guests stay' },
 
