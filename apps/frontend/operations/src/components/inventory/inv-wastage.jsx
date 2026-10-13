@@ -41,6 +41,7 @@ const PickIngredient = ({ materials, onClose, onPick }) => {
  *        version changes whenever stock changed, so the list reloads
  */
 export const InvWastage = ({ storeId, overview, version, onWaste }) => {
+  const canManage = Boolean(overview.canManage);
   const [days, setDays] = useState(30);
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -72,7 +73,7 @@ export const InvWastage = ({ storeId, overview, version, onWaste }) => {
       </div>
       {error && <p role="alert" className={`${card} px-4 py-2.5 text-sm text-red-600 dark:text-red-400`}>{error}</p>}
 
-      <dl className="grid grid-cols-2 gap-3">
+      {canManage && <dl className="grid grid-cols-2 gap-3">
         {[
           ['Thrown away', data ? rupees(data.wasteValue) : '—', 'Expired, spoiled, spilled, burnt'],
           ['Missing in counts', data ? rupees(data.shortfallValue) : '—', 'Used or lost without being recorded'],
@@ -83,7 +84,7 @@ export const InvWastage = ({ storeId, overview, version, onWaste }) => {
             <dd className="text-[11px] text-zinc-400">{hint}</dd>
           </div>
         ))}
-      </dl>
+      </dl>}
 
       <section className={card}>
         {data === null ? (
@@ -102,7 +103,7 @@ export const InvWastage = ({ storeId, overview, version, onWaste }) => {
                   <p className="text-xs text-zinc-500">{e.reason || '—'} · {dayAndTime(e.createdAt)}{e.actorName ? ` · ${e.actorName}` : ''}</p>
                 </div>
                 <div className="flex items-center gap-2">
-                  {e.value !== null && e.quantity < 0 && <span className="text-sm tabular-nums text-zinc-900 dark:text-zinc-100">{rupees(Math.abs(e.value))}</span>}
+                  {canManage && e.value !== null && e.quantity < 0 && <span className="text-sm tabular-nums text-zinc-900 dark:text-zinc-100">{rupees(Math.abs(e.value))}</span>}
                   <Tag tone={e.type === 'WASTE' ? 'EXPIRED' : e.quantity < 0 ? 'LOW' : 'OK'}>{e.type === 'WASTE' ? 'Thrown away' : e.quantity < 0 ? 'Count: short' : 'Count: extra'}</Tag>
                 </div>
               </li>

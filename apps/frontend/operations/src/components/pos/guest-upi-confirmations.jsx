@@ -4,6 +4,7 @@ import { ArrowDown01Icon, ArrowUp01Icon, Loading03Icon } from 'hugeicons-react';
 import { playNotificationChime } from '@smo/shared/audio';
 import api from '../../lib/api';
 import { apiErrorMessage } from './pos-toasts';
+import { CallCustomer } from '../call-customer';
 
 const placeOf = (order) => {
   if (order?.table?.tableNumber != null) return `Table ${order.table.tableNumber}`;
@@ -117,11 +118,12 @@ export const GuestUpiConfirmations = ({ storeId, subscribe, toast }) => {
                   {p.guestClaimedAt
                     ? <span className="font-semibold text-amber-800 dark:text-amber-300">Guest says paid {minutesAgo(p.guestClaimedAt) ? `${minutesAgo(p.guestClaimedAt)} min ago` : 'just now'}</span>
                     : `Waiting for the guest to pay · ${minutesAgo(p.createdAt)} min`}
-                  {(p.order?.customerName || p.order?.customerPhone) && ` · ${[p.order.customerName, p.order.customerPhone].filter(Boolean).join(' ')}`}
+                  {p.order?.customerName && !p.order?.customerPhone && ` · ${p.order.customerName}`}
                   {p.order?.status === 'PROCESSING' && ' · already cooking'}
                 </div>
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 items-center gap-2">
+                <CallCustomer phone={p.order?.customerPhone} name={p.order?.customerName} />
                 <Button size="sm" variant="outline" disabled={busyId === p.id} onClick={() => act(p, 'cancel')}>Not received</Button>
                 <Button size="sm" disabled={busyId === p.id} onClick={() => act(p, 'confirm')} className="bg-emerald-600 text-white hover:bg-emerald-700">
                   {busyId === p.id ? <Loading03Icon size={14} className="animate-spin" /> : `Confirm ₹${p.amount}`}

@@ -1,4 +1,6 @@
+const crypto = require("crypto");
 const { getPrismaClient } = require("../../lib/prisma");
+const { Prisma } = require("../../generated/prisma_v2");
 const { createHttpError } = require("../../middleware/error-handler");
 const { verifyStoreAccess } = require("../menu/menu-service");
 const { invalidateMaterialsCache, invalidateMenuCache } = require("../../lib/cache");
@@ -130,6 +132,11 @@ function describeLot(batch, remaining, now) {
  */
 async function getOverview(actor, storeId) {
   await assertAdvanced(actor, storeId);
+  return computeOverview(storeId, MANAGE_ROLES.includes(actor.role));
+}
+
+/** The overview itself, without the access check (also used by the morning brief) */
+async function computeOverview(storeId, canManage) {
   await postDueStandingDeliveries(storeId).catch(err => console.error("[Inventory] standing deliveries:", err.message));
   const prisma = getPrismaClient();
   const [materials, batches, suppliers] = await Promise.all([
@@ -188,6 +195,7 @@ async function getOverview(actor, storeId) {
     .map(m => ({ materialId: m.id, name: m.name, unit: m.unit, stock: m.stock, lastCountedAt: m.lastCountedAt }));
   attention.expired.sort((a, b) => a.daysLeft - b.daysLeft);
   attention.soon.sort((a, b) => a.daysLeft - b.daysLeft);
+  const compliance = await require("./compliance-service").getSummary(storeId);
 
   return {
     materials: list,
@@ -199,6 +207,9 @@ async function getOverview(actor, storeId) {
       withoutCost: list.filter(m => m.stock > EPS && !m.costPerUnit).length,
       suppliers
     },
+    compliance,
+    // Setup (ingredients, suppliers, standing deliveries, licences) is for managers and owners
+    canManage,
     wasteReasons: WASTE_REASONS,
     units: UNITS
   };
@@ -276,7 +287,6 @@ async function updateMaterial(actor, storeId, materialId, input = {}) {
  * @param {object} [system] Used when a standing delivery posts itself: { source, standingDeliveryId, receivedAt }
  */
 async function receiveDelivery(actor, storeId, input = {}, system = null) {
-  if (!system) await assertAdvanced(actor, storeId);
   const prisma = getPrismaClient();
   const lines = Array.isArray(input.lines) ? input.lines : [];
   if (lines.length === 0) throw createHttpError(400, "Add at least one item to the delivery");
@@ -285,13 +295,14 @@ async function receiveDelivery(actor, storeId, input = {}, system = null) {
   const receivedAt = system?.receivedAt || (input.receivedAt ? new Date(input.receivedAt) : new Date());
   if (Number.isNaN(receivedAt.getTime()) || receivedAt.getTime() > Date.now() + DAY_MS) throw createHttpError(400, "The delivery date isn't valid");
 
-  const materials = await prisma.rawMaterial.findMany({ where: { storeId, id: { in: lines.map(l => String(l.materialId)) } } });
+  // Looked up side by side: every trip to the database is time someone stands waiting at the door
+  const [, materials, supplier] = await Promise.all([
+    system ? null : assertAdvanced(actor, storeId),
+    prisma.rawMaterial.findMany({ where: { storeId, id: { in: lines.map(l => String(l.materialId)) } } }),
+    input.supplierId ? prisma.supplier.findUnique({ where: { id: String(input.supplierId) } }) : null
+  ]);
   const byId = new Map(materials.map(m => [m.id, m]));
-  let supplier = null;
-  if (input.supplierId) {
-    supplier = await prisma.supplier.findUnique({ where: { id: String(input.supplierId) } });
-    if (!supplier || supplier.storeId !== storeId) throw createHttpError(404, "Supplier not found");
-  }
+  if (input.supplierId && (!supplier || supplier.storeId !== storeId)) throw createHttpError(404, "Supplier not found");
 
   const clean = lines.map(line => {
     const material = byId.get(String(line.materialId));
@@ -307,40 +318,69 @@ async function receiveDelivery(actor, storeId, input = {}, system = null) {
   });
   const totalCost = money(clean.reduce((sum, l) => sum + (l.unitCost ? l.unitCost * l.quantity : 0), 0));
 
-  const receipt = await prisma.$transaction(async (tx) => {
-    const created = await tx.stockReceipt.create({
+  const billNumber = optionalText(input.billNumber, 40) || null;
+  const receivedByName = actor ? (actor.name || actor.email || null) : "Standing delivery";
+  const reference = `Delivery${supplier ? ` from ${supplier.name}` : ""}${billNumber ? `, bill ${billNumber}` : ""}`;
+
+  // What each ingredient goes up by (it may be on the delivery twice), and the latest price paid
+  const increases = new Map();
+  for (const line of clean) {
+    const entry = increases.get(line.material.id) || { quantity: 0, unitCost: null };
+    entry.quantity = round(entry.quantity + line.quantity);
+    if (line.unitCost !== null) entry.unitCost = line.unitCost;
+    increases.set(line.material.id, entry);
+  }
+  const receiptId = `c${Date.now().toString(36)}${crypto.randomBytes(8).toString("hex")}`;
+
+  // The whole delivery is written in one go, in four statements however long it is (the receipt,
+  // its lots, the stock figures, the history): it all lands or none of it does
+  const [receipt] = await prisma.$transaction([
+    prisma.stockReceipt.create({
       data: {
+        id: receiptId,
         storeId,
         supplierId: supplier?.id || null,
-        billNumber: optionalText(input.billNumber, 40) || null,
+        billNumber,
         note: optionalText(input.note, 200) || null,
         totalCost,
         source: system?.source || "MANUAL",
         standingDeliveryId: system?.standingDeliveryId || null,
         receivedById: actor?.id || null,
-        receivedByName: actor ? (actor.name || actor.email || null) : "Standing delivery",
+        receivedByName,
         receivedAt
       }
-    });
-    for (const line of clean) {
-      await tx.stockBatch.create({
-        data: { storeId, materialId: line.material.id, receiptId: created.id, supplierId: supplier?.id || null, kind: "RECEIVED", quantity: line.quantity, originalQuantity: line.quantity, unitCost: line.unitCost, receivedAt, expiresAt: line.expiresAt }
-      });
-      await tx.rawMaterial.update({
-        where: { id: line.material.id },
-        data: { currentStock: { increment: line.quantity }, ...(line.unitCost !== null ? { costPerUnit: line.unitCost } : {}) }
-      });
-      await tx.stockTransaction.create({
-        data: { materialId: line.material.id, type: "RESTOCK", quantity: line.quantity, reference: `Delivery${supplier ? ` from ${supplier.name}` : ""}${created.billNumber ? `, bill ${created.billNumber}` : ""}`, actorName: created.receivedByName }
-      });
-      await tidyLots(tx, line.material.id);
-      await evaluateMenuItemAvailability(tx, line.material.id);
-    }
-    return created;
-  }, { timeout: 30000 });
+    }),
+    prisma.stockBatch.createMany({
+      data: clean.map(line => ({ storeId, materialId: line.material.id, receiptId, supplierId: supplier?.id || null, kind: "RECEIVED", quantity: line.quantity, originalQuantity: line.quantity, unitCost: line.unitCost, receivedAt, expiresAt: line.expiresAt }))
+    }),
+    prisma.$executeRaw`
+      UPDATE "RawMaterial" AS m
+      SET "currentStock" = m."currentStock" + v.quantity,
+          "costPerUnit" = COALESCE(v.cost, m."costPerUnit"),
+          "updatedAt" = NOW()
+      FROM (VALUES ${Prisma.join([...increases].map(([id, e]) => Prisma.sql`(${id}, ${e.quantity}::double precision, ${e.unitCost}::double precision)`))}) AS v(id, quantity, cost)
+      WHERE m.id = v.id AND m."storeId" = ${storeId}`,
+    prisma.stockTransaction.createMany({
+      data: clean.map(line => ({ materialId: line.material.id, type: "RESTOCK", quantity: line.quantity, reference, actorName: receivedByName }))
+    })
+  ]);
 
   invalidateMaterialsCache(storeId);
   invalidateMenuCache(storeId);
+
+  // The stock is saved; the rest follows without keeping anyone waiting. Per ingredient, a few
+  // at a time: lots tidied, and dishes that were sold out for want of it come back on the menu.
+  (async () => {
+    const materialIds = [...increases.keys()];
+    for (let i = 0; i < materialIds.length; i += 4) {
+      await Promise.all(materialIds.slice(i, i + 4).map(async (materialId) => {
+        await prisma.$transaction((tx) => tidyLots(tx, materialId), { timeout: 20000 });
+        await evaluateMenuItemAvailability(prisma, materialId);
+      }));
+    }
+    invalidateMenuCache(storeId);
+  })().catch(error => console.error(`[Inventory] Follow-up of delivery ${receipt.id} failed:`, error.message));
+
   return { id: receipt.id, totalCost, lines: clean.length };
 }
 
@@ -712,6 +752,9 @@ async function onModeChanged(storeId, mode) {
 }
 
 module.exports = {
+  MANAGE_ROLES,
+  assertAdvanced,
+  computeOverview,
   allocate,
   getOverview,
   createMaterial,

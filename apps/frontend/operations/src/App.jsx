@@ -99,9 +99,13 @@ function App() {
             </Route>
           </Route>
 
-          {/* Inventory (Manager/Admin) */}
-          <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER']} />}>
+          {/* Inventory: managers set it up; kitchen staff and cashiers receive, throw away, count and do the hygiene checks */}
+          <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER', 'KITCHEN_STAFF', 'CASHIER']} />}>
             <Route path="/dashboard/inventory" element={<InventoryPage />} />
+          </Route>
+
+          {/* Store setup (Manager/Admin) */}
+          <Route element={<ProtectedRoute allowedRoles={['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER']} />}>
             <Route path="/dashboard/stores" element={<Stores />} />
             <Route path="/dashboard/stores/:id/edit" element={<StoreEdit />} />
             <Route path="/dashboard/audit" element={<AuditLog />} />

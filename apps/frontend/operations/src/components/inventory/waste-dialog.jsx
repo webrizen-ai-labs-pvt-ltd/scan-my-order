@@ -12,7 +12,7 @@ import { Field, Modal } from './inv-shared';
  * @param {{ storeId: string, material: object, lot?: object, reasons: string[], defaultReason?: string,
  *           onClose: Function, onDone: (result: object) => void }} props
  */
-export const WasteDialog = ({ storeId, material, lot, reasons, defaultReason, onClose, onDone }) => {
+export const WasteDialog = ({ storeId, material, lot, reasons, defaultReason, canManage = true, onClose, onDone }) => {
   const [lotId, setLotId] = useState(lot?.id || '');
   const [quantity, setQuantity] = useState(lot ? String(lot.remaining) : '');
   const [reason, setReason] = useState(defaultReason || '');
@@ -65,7 +65,7 @@ export const WasteDialog = ({ storeId, material, lot, reasons, defaultReason, on
         </Field>
       )}
 
-      <Field label={`How much (${unit(material.unit)})`} hint={`Up to ${amount(most, material.unit)}.${value ? ` Worth about ${rupees(value)}.` : ''}`}>
+      <Field label={`How much (${unit(material.unit)})`} hint={`Up to ${amount(most, material.unit)}.${canManage && value ? ` Worth about ${rupees(value)}.` : ''}`}>
         <div className="flex gap-2">
           <input className={`${field} tabular-nums`} type="number" inputMode="decimal" min="0" step="any" autoFocus={!lot} value={quantity} onChange={e => setQuantity(e.target.value)} />
           <Button type="button" variant="outline" onClick={() => setQuantity(String(most))}>All of it</Button>

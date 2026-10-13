@@ -5,6 +5,7 @@ import { Store01Icon } from 'hugeicons-react';
 import api from '../lib/api';
 import { useStoreSelection } from '../hooks/use-store-selection';
 import { useEntitlements } from '../lib/entitlements';
+import { useAuthStore } from '../store/authStore';
 import { Inventory } from './inventory';
 import { AdvancedInventory } from '../components/inventory/advanced-inventory';
 
@@ -15,6 +16,8 @@ import { AdvancedInventory } from '../components/inventory/advanced-inventory';
  */
 export const InventoryPage = () => {
   const { storeId, setStoreId, stores, canSwitch } = useStoreSelection();
+  const role = useAuthStore(s => s.user?.role);
+  const isManager = ['SUPER_ADMIN', 'TENANT_ADMIN', 'STORE_MANAGER'].includes(role);
   const included = useEntitlements(s => s.loaded && s.features.includes('ADVANCED_INVENTORY'));
   const [modes, setModes] = useState({}); // storeId → 'BASIC' | 'ADVANCED'
   const mode = storeId ? modes[storeId] : null;
@@ -39,6 +42,16 @@ export const InventoryPage = () => {
       </Select>
     ) : null;
     return <AdvancedInventory key={storeId} storeId={storeId} storeSelect={storeSelect} />;
+  }
+
+  // Basic inventory is a manager's screen; staff work in Advanced (receiving, wastage, counts, checks)
+  if (!isManager) {
+    return (
+      <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-6 py-10 text-center">
+        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Inventory is looked after by your manager</p>
+        <p className="mt-1 text-sm text-zinc-500 max-w-md mx-auto">When this store switches to Advanced inventory, you’ll receive deliveries, record wastage and do the daily checks here.</p>
+      </div>
+    );
   }
 
   return (

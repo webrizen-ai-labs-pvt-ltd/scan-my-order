@@ -16,6 +16,7 @@ import { usePosStoreData } from '../../hooks/use-pos-store-data';
 import { useStoreStream } from '../../hooks/use-store-stream';
 import { PosToasts, usePosToasts } from '../../components/pos/pos-toasts';
 import { GuestUpiConfirmations } from '../../components/pos/guest-upi-confirmations';
+import { OrderApprovals } from '../../components/pos/order-approvals';
 import { playNotificationChime } from '@smo/shared/audio';
 import { useStoreSound } from '../../hooks/use-store-sound';
 
@@ -243,6 +244,9 @@ export const PosLayout = () => {
 
       {selectedStoreId && GUEST_UPI_CONFIRM_ROLES.includes(user?.role) && (
         <GuestUpiConfirmations storeId={selectedStoreId} subscribe={subscribe} toast={toast} />
+      )}
+      {selectedStoreId && GUEST_UPI_CONFIRM_ROLES.includes(user?.role) && (
+        <OrderApprovals storeId={selectedStoreId} subscribe={subscribe} toast={toast} />
       )}
 
       <main className="flex-1 min-h-0 overflow-hidden relative">{renderContent()}</main>

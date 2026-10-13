@@ -4,6 +4,8 @@ import { CheckmarkCircle02Icon, Loading03Icon } from 'hugeicons-react';
 import api from '../../lib/api';
 import { amount, card, day, errorText, eyebrow, field, lotDeadline, primary, rupees, unit } from './inv-format';
 import { Tag } from './inv-shared';
+import { licenceDeadline } from './inv-licences';
+import { AlertRow, useAlertList } from './inv-alerts';
 
 const Section = ({ title, hint, count, children }) => (
   <section className={card}>
@@ -22,8 +24,12 @@ const Section = ({ title, hint, count, children }) => (
  * @param {{ storeId: string, overview: object, onChanged: (message?: string) => void, onWaste: (material: object, lot: object) => void,
  *           onReceive: () => void }} props
  */
-export const InvToday = ({ storeId, overview, onChanged, onWaste, onReceive }) => {
-  const { attention, totals, materials } = overview;
+export const InvToday = ({ storeId, overview, onChanged, onWaste, onReceive, onGoTo, insights }) => {
+  const alerts = useAlertList(storeId, insights?.alerts || []);
+  const topAlerts = alerts.shown.filter(a => a.severity !== 'INFO').slice(0, 3);
+  const { attention, totals, materials, compliance, canManage } = overview;
+  const checks = compliance?.checks || { total: 0, done: 0, problems: 0 };
+  const licences = canManage ? (compliance?.licences || []) : [];
   const [counts, setCounts] = useState({});
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState('');
@@ -65,8 +71,10 @@ export const InvToday = ({ storeId, overview, onChanged, onWaste, onReceive }) =
     <div className="flex flex-col gap-4">
       <dl className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          ['Stock value', rupees(totals.stockValue), totals.withoutCost > 0 ? `${totals.withoutCost} ${totals.withoutCost === 1 ? 'item has' : 'items have'} no price yet` : `${totals.materials} ingredients`],
-          ['Expired, still on the shelf', attention.expired.length, attention.expired.length > 0 ? `${rupees(totals.expiredValue)} to deal with` : 'Nothing expired'],
+          canManage
+            ? ['Stock value', rupees(totals.stockValue), totals.withoutCost > 0 ? `${totals.withoutCost} ${totals.withoutCost === 1 ? 'item has' : 'items have'} no price yet` : `${totals.materials} ingredients`]
+            : ['Ingredients', totals.materials, 'In this store’s stock room'],
+          ['Expired, still on the shelf', attention.expired.length, attention.expired.length === 0 ? 'Nothing expired' : canManage ? `${rupees(totals.expiredValue)} to deal with` : 'Throw away or mark as used'],
           ['Use first', attention.soon.length, 'Use-by date within 3 days'],
           ['Running low', attention.low.length, attention.low.length > 0 ? 'Order or receive more' : 'All above their level'],
         ].map(([label, value, hint]) => (
@@ -98,7 +106,7 @@ export const InvToday = ({ storeId, overview, onChanged, onWaste, onReceive }) =
                   <p className="text-xs text-zinc-500">
                     <Tag tone="EXPIRED">{lotDeadline(e)}</Tag>
                     {e.supplierName && <span className="ml-2">from {e.supplierName}</span>}
-                    {e.value ? <span className="ml-2 tabular-nums">{rupees(e.value)}</span> : null}
+                    {canManage && e.value ? <span className="ml-2 tabular-nums">{rupees(e.value)}</span> : null}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -144,6 +152,47 @@ export const InvToday = ({ storeId, overview, onChanged, onWaste, onReceive }) =
           <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800">
             <Button size="sm" variant="outline" onClick={onReceive}>Receive a delivery</Button>
           </div>
+        </Section>
+      )}
+
+      {topAlerts.length > 0 && (
+        <Section title="Worth a look" hint="What your records are saying. Each one shows the figures behind it.">
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {topAlerts.map(a => <AlertRow key={a.id} alert={a} onGoTo={onGoTo} />)}
+          </ul>
+          {alerts.shown.length > topAlerts.length && (
+            <div className="px-5 py-3 border-t border-zinc-100 dark:border-zinc-800">
+              <Button size="sm" variant="outline" onClick={() => onGoTo('alerts')}>See all {alerts.shown.length} alerts</Button>
+            </div>
+          )}
+        </Section>
+      )}
+
+      {(checks.total > 0 || licences.length > 0) && (
+        <Section title="Food safety" hint="The daily checks and the papers that must stay valid.">
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {checks.total > 0 && (
+              <li className="px-5 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <p className="text-sm text-zinc-900 dark:text-zinc-100">
+                  <span className="font-semibold">Hygiene checks</span>{' '}
+                  <span className="text-zinc-500">· {checks.done} of {checks.total} done today{checks.problems > 0 ? `, ${checks.problems} with a problem` : ''}</span>
+                </p>
+                <div className="flex items-center gap-2">
+                  {checks.problems > 0 ? <Tag tone="EXPIRED">Problem found</Tag> : checks.done >= checks.total ? <Tag>All done</Tag> : <Tag tone="LOW">{checks.total - checks.done} to do</Tag>}
+                  <Button size="sm" variant="outline" onClick={() => onGoTo('checks')}>{checks.done >= checks.total ? 'See checks' : 'Do the checks'}</Button>
+                </div>
+              </li>
+            )}
+            {licences.map(l => (
+              <li key={l.id} className="px-5 py-2.5 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{l.name}</p>
+                <div className="flex items-center gap-2">
+                  <Tag tone={l.state}>{licenceDeadline(l)}</Tag>
+                  <Button size="sm" variant="outline" onClick={() => onGoTo('licences')}>Update</Button>
+                </div>
+              </li>
+            ))}
+          </ul>
         </Section>
       )}
 
@@ -193,7 +242,7 @@ export const InvToday = ({ storeId, overview, onChanged, onWaste, onReceive }) =
                   <span className="text-zinc-900 dark:text-zinc-100">{r.name}: {amount(r.counted, r.unit)}</span>
                   <span className={`text-xs tabular-nums ${r.difference < 0 ? 'text-red-600 dark:text-red-400' : 'text-zinc-500'}`}>
                     {r.difference === 0 ? 'Matches the system' : r.difference < 0
-                      ? `${amount(Math.abs(r.difference), r.unit)} short${r.value ? ` (${rupees(Math.abs(r.value))})` : ''}`
+                      ? `${amount(Math.abs(r.difference), r.unit)} short${canManage && r.value ? ` (${rupees(Math.abs(r.value))})` : ''}`
                       : `${amount(r.difference, r.unit)} more than expected`}
                   </span>
                 </li>

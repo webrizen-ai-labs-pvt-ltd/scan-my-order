@@ -305,6 +305,9 @@ model Store {
   suppliers          Supplier[]
   stockReceipts      StockReceipt[]
   standingDeliveries StandingDelivery[]
+  hygieneChecks      HygieneCheck[]
+  hygieneLogs        HygieneLog[]
+  licences           StoreLicence[]
   // Which sound staff screens play for this store (see @smo/shared/sounds)
   notificationSound String @default("classic")
   posLayout               String  @default("CLASSIC")
@@ -662,6 +665,63 @@ model StandingDelivery {
   updatedAt     DateTime  @updatedAt
 
   @@index([storeId])
+}
+
+// A hygiene check a kitchen does every day. CHECK is a yes/no ("Surfaces sanitised");
+// TEMPERATURE is a reading that must fall inside minValue..maxValue (either end may be open).
+model HygieneCheck {
+  id        String       @id @default(cuid())
+  storeId   String
+  store     Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  name      String
+  kind      String       @default("CHECK") // CHECK | TEMPERATURE
+  minValue  Float?
+  maxValue  Float?
+  sortOrder Int          @default(0)
+  isActive  Boolean      @default(true)
+  logs      HygieneLog[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@index([storeId])
+}
+
+// What was found for one check on one day (India calendar day). Redoing a check the same day
+// replaces the entry; past days are never changed.
+model HygieneLog {
+  id        String       @id @default(cuid())
+  storeId   String
+  store     Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  checkId   String
+  check     HygieneCheck @relation(fields: [checkId], references: [id], onDelete: Cascade)
+  day       String       // "YYYY-MM-DD" (India)
+  ok        Boolean
+  value     Float?       // the reading, for temperature checks
+  note      String?      // what was wrong and what was done about it
+  actorId   String?
+  actorName String?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  @@unique([checkId, day])
+  @@index([storeId, day])
+}
+
+// A licence or certificate the store must keep valid (FSSAI, fire, pest control, water test...)
+model StoreLicence {
+  id        String    @id @default(cuid())
+  storeId   String
+  store     Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  kind      String    // FSSAI | FIRE | PEST_CONTROL | WATER_TEST | HEALTH_TRADE | MEDICAL | OTHER
+  name      String
+  number    String?
+  issuedBy  String?
+  expiresOn DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([storeId, expiresOn])
 }
 
 model RecipeIngredient {

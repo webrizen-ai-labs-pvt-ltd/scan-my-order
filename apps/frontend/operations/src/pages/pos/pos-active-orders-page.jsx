@@ -12,6 +12,7 @@ import { canGiveComplimentary } from '../../lib/complimentary';
 import { RefundDialog } from '../../components/pos/refund-dialog';
 import { apiErrorMessage } from '../../components/pos/pos-toasts';
 import { orderPlaceLabel, orderGuestLabel } from '../../lib/order-place';
+import { CallCustomer } from '../../components/call-customer';
 
 const STATUS_DISPLAY = {
   PENDING_VERIFICATION: { label: 'Awaiting approval', tone: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800' },
@@ -211,9 +212,11 @@ export const PosActiveOrdersPage = () => {
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-bold text-xl">{group.table ? `Table ${group.table.tableNumber}` : orderPlaceLabel(group.orders[0])}</span>
-                      {!group.table && orderGuestLabel(group.orders[0]) && (
+                      {!group.table && orderGuestLabel(group.orders[0]) && !group.orders[0].customerPhone && (
                         <span className="text-xs text-zinc-500">{orderGuestLabel(group.orders[0])}</span>
                       )}
+                      {/* Tap to call whoever left a number on this table or order */}
+                      <CallCustomer phone={group.orders.find(o => o.customerPhone)?.customerPhone} name={group.orders.find(o => o.customerPhone)?.customerName} />
                       {group.tableSession?.pin && (
                         <span className="inline-flex items-center gap-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs px-2 py-0.5 rounded-md font-bold dark:bg-indigo-950/50 dark:border-indigo-800 dark:text-indigo-300">
                           <LockKeyIcon size={11} /> PIN {group.tableSession.pin}

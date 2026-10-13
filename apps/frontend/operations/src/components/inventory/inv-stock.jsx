@@ -108,7 +108,7 @@ const MaterialDialog = ({ storeId, material, units, onClose, onDone }) => {
  * @param {{ storeId: string, overview: object, onChanged: (message?: string) => void, onWaste: (material: object, lot?: object) => void }} props
  */
 export const InvStock = ({ storeId, overview, onChanged, onWaste }) => {
-  const { materials, units } = overview;
+  const { materials, units, canManage } = overview;
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('ALL');
   const [open, setOpen] = useState(null);
@@ -137,18 +137,18 @@ export const InvStock = ({ storeId, overview, onChanged, onWaste }) => {
             </button>
           ))}
         </div>
-        <Button onClick={() => setDialog({ material: null })} className={`${primary} ml-auto`}><PlusSignIcon size={15} className="mr-1.5" /> Add ingredient</Button>
+        {canManage && <Button onClick={() => setDialog({ material: null })} className={`${primary} ml-auto`}><PlusSignIcon size={15} className="mr-1.5" /> Add ingredient</Button>}
       </div>
 
       <section className={card}>
         {materials.length === 0 ? (
-          <Empty title="No ingredients yet">Add what your kitchen buys: paneer, oil, flour, milk. Then receive deliveries against them.</Empty>
+          <Empty title="No ingredients yet">{canManage ? 'Add what your kitchen buys: paneer, oil, flour, milk. Then receive deliveries against them.' : 'Your manager adds the ingredients; they appear here once that is done.'}</Empty>
         ) : shown.length === 0 ? (
           <Empty title="Nothing matches">Try a different search, or show all ingredients.</Empty>
         ) : (
           <>
             <div className="hidden md:grid grid-cols-[minmax(0,1fr)_8rem_7rem_13rem_1.5rem] gap-3 px-5 py-2 border-b border-zinc-200 dark:border-zinc-800">
-              {['Ingredient', 'In stock', 'Value', 'Use by', ''].map((h, i) => <span key={i} className={`${eyebrow} ${i === 1 || i === 2 ? 'text-right' : ''}`}>{h}</span>)}
+              {['Ingredient', 'In stock', canManage ? 'Value' : '', 'Use by', ''].map((h, i) => <span key={i} className={`${eyebrow} ${i === 1 || i === 2 ? 'text-right' : ''}`}>{h}</span>)}
             </div>
             <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
               {shown.map(m => {
@@ -163,13 +163,13 @@ export const InvStock = ({ storeId, overview, onChanged, onWaste }) => {
                           {m.name}
                           {m.shortCode && <span className="ml-2 font-mono font-normal text-xs text-zinc-500">{m.shortCode}</span>}
                         </span>
-                        <span className="block text-xs text-zinc-500 md:hidden">{m.stockValue ? rupees(m.stockValue) : 'No price yet'}</span>
+                        {canManage && <span className="block text-xs text-zinc-500 md:hidden">{m.stockValue ? rupees(m.stockValue) : 'No price yet'}</span>}
                       </span>
                       <span className="text-sm text-right tabular-nums text-zinc-900 dark:text-zinc-100">
                         {amount(m.stock, m.unit)}
                         {m.low && <span className="block md:inline md:ml-2"><Tag tone={m.stock <= 0 ? 'EXPIRED' : 'LOW'}>{m.stock <= 0 ? 'Out' : 'Low'}</Tag></span>}
                       </span>
-                      <span className="hidden md:block text-sm text-right tabular-nums text-zinc-600 dark:text-zinc-400">{m.stockValue ? rupees(m.stockValue) : '—'}</span>
+                      <span className="hidden md:block text-sm text-right tabular-nums text-zinc-600 dark:text-zinc-400">{!canManage ? '' : m.stockValue ? rupees(m.stockValue) : '—'}</span>
                       <span className="col-span-2 md:col-span-1 md:order-none order-last">
                         {first ? <Tag tone={first.state}>{lotDeadline(first)}</Tag> : <span className="text-xs text-zinc-400">{m.stock > 0 ? 'No use-by date' : ''}</span>}
                       </span>
@@ -194,7 +194,7 @@ export const InvStock = ({ storeId, overview, onChanged, onWaste }) => {
                                     </p>
                                     <p className="text-xs text-zinc-500">
                                       {lot.kind === 'RECEIVED'
-                                        ? `Received ${day(lot.receivedAt)}${lot.supplierName ? ` from ${lot.supplierName}` : ''}${lot.billNumber ? ` · Bill ${lot.billNumber}` : ''}${lot.unitCost ? ` · ${rupees(lot.unitCost)} per ${unit(m.unit)}` : ''}`
+                                        ? `Received ${day(lot.receivedAt)}${lot.supplierName ? ` from ${lot.supplierName}` : ''}${lot.billNumber ? ` · Bill ${lot.billNumber}` : ''}${canManage && lot.unitCost ? ` · ${rupees(lot.unitCost)} per ${unit(m.unit)}` : ''}`
                                         : LOT_KIND[lot.kind]}
                                     </p>
                                   </div>
@@ -210,11 +210,11 @@ export const InvStock = ({ storeId, overview, onChanged, onWaste }) => {
                               m.shelfLifeDays ? `Keeps ${m.shelfLifeDays} ${m.shelfLifeDays === 1 ? 'day' : 'days'}` : 'No shelf life set',
                               m.packName ? `1 ${m.packName} = ${amount(m.packSize, m.unit)}` : null,
                               m.lowStockThreshold > 0 ? `Low below ${amount(m.lowStockThreshold, m.unit)}` : null,
-                              m.costPerUnit ? `Last paid ${rupees(m.costPerUnit)} per ${unit(m.unit)}` : null,
+                              canManage && m.costPerUnit ? `Last paid ${rupees(m.costPerUnit)} per ${unit(m.unit)}` : null,
                               m.lastCountedAt ? `Counted ${day(m.lastCountedAt)}` : 'Never counted',
                             ].filter(Boolean).join(' · ')}
                           </p>
-                          <Button size="sm" variant="outline" onClick={() => setDialog({ material: m })}>Set up</Button>
+                          {canManage && <Button size="sm" variant="outline" onClick={() => setDialog({ material: m })}>Set up</Button>}
                         </div>
                       </div>
                     )}

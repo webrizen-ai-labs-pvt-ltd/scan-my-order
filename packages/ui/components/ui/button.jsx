@@ -35,11 +35,33 @@ const buttonVariants = cva(
   }
 )
 
+// A caller that gives the button its own background colour ("bg-amber-400", "!bg-red-600") wants
+// a flat button in that colour. Every variant paints a gradient, which sits on top of a background
+// colour and hides it, so the gradient (and the bevel that goes with it) is dropped for those.
+const OWN_BACKGROUND = /(?:^|\s)!?bg-(?:[a-z]+-\d{2,3}|white|black)(?=$|[\s/])/
+const OWN_TEXT = /(?:^|\s)!?text-(?:[a-z]+-\d{2,3}|white|black)(?=$|\s)/
+const VARIANT_TEXT = /^(?:dark:)?(?:hover:)?text-(?:[a-z]+-\d{2,3}|white|black)$/
+
+function buttonClasses({ className, variant, size }) {
+  const base = buttonVariants({ variant, size })
+  if (typeof className !== "string" || !OWN_BACKGROUND.test(className)) return cn(base, className)
+  // The variants change text colour in dark mode and on hover; a caller's text colour goes with
+  // its background, so it holds in every state
+  const variantClasses = OWN_TEXT.test(className) ? base.split(" ").filter(c => !VARIANT_TEXT.test(c)).join(" ") : base
+  return cn(
+    variantClasses,
+    "bg-none hover:bg-none shadow-none dark:shadow-none hover:shadow-none dark:hover:shadow-none",
+    // The outline variant's border is part of its look; the others' borders are tuned to their gradient
+    variant !== "outline" && "border-transparent dark:border-transparent",
+    className
+  )
+}
+
 const Button = React.forwardRef(({ className, variant, size, asChild = false, ...props }, ref) => {
   const Comp = asChild ? Slot : "button"
   return (
     <Comp
-      className={cn(buttonVariants({ variant, size, className }))}
+      className={cn(buttonClasses({ className, variant, size }))}
       ref={ref}
       {...props}
     />

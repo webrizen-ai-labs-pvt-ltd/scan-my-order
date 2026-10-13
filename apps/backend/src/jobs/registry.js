@@ -4,6 +4,7 @@ const { runLowStockAlertJob } = require('./tasks/low-stock-alert');
 const { runDailySalesDigestJob } = require('./tasks/daily-sales-digest');
 const { runPromoArchivalJob } = require('./tasks/promo-archival');
 const { runRetentionCleanupJob } = require('./tasks/retention-cleanup');
+const { runInventoryMorningBriefJob } = require('./tasks/inventory-morning-brief');
 
 const JOB_REGISTRY = {
   STALE_ORDERS_EXPIRATION: {
@@ -109,6 +110,26 @@ const JOB_REGISTRY = {
     ],
     isDestructive: false,
     runner: runLowStockAlertJob
+  },
+
+  INVENTORY_MORNING_BRIEF: {
+    key: 'INVENTORY_MORNING_BRIEF',
+    title: 'Store Room Morning Brief',
+    category: 'Inventory',
+    icon: 'package',
+    description: 'For stores on Advanced inventory: notifies managers and owners of expired stock, items running low, licences to renew and what the records are warning about. Stores with nothing to look at get no notification.',
+    defaultSchedule: '0 8 * * *',
+    defaultScheduleLabel: 'Once daily at 8:00 AM',
+    scheduleOptions: [
+      { label: 'Once daily at 7:00 AM', value: '0 7 * * *' },
+      { label: 'Once daily at 8:00 AM', value: '0 8 * * *' },
+      { label: 'Once daily at 10:00 AM', value: '0 10 * * *' },
+      { label: 'Twice daily (8:00 AM & 4:00 PM)', value: '0 8,16 * * *' }
+    ],
+    defaultParams: {},
+    paramSchema: [],
+    isDestructive: false,
+    runner: runInventoryMorningBriefJob
   },
 
   DAILY_SALES_DIGEST: {

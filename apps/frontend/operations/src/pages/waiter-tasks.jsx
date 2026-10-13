@@ -17,6 +17,7 @@ import { Receipt } from '../components/receipt';
 import { PaymentCollectorSheet } from '../components/payments/payment-collector-sheet';
 import { sessionBillToReceipt } from '../lib/session-receipt';
 import { CancelOrderDialog } from '../components/pos/cancel-order-dialog';
+import { CallCustomer } from '../components/call-customer';
 import { initAudioUnlock, playNotificationChime } from '@smo/shared/audio';
 import { useStoreSound } from '../hooks/use-store-sound';
 
@@ -660,6 +661,7 @@ export const WaiterTasks = () => {
                       <div className="flex items-center gap-2">
                         <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">Table {order.table?.tableNumber || 'N/A'}</span>
                         <span className="text-xs text-zinc-400">{Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000)}m ago</span>
+                        <CallCustomer phone={order.customerPhone} name={order.customerName} compact />
                       </div>
                       <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">₹{order.totalAmount}</span>
                     </div>
@@ -703,6 +705,7 @@ export const WaiterTasks = () => {
                     <div className="mb-3 flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">Table {order.table?.tableNumber || 'N/A'}</span>
+                        <CallCustomer phone={order.customerPhone} name={order.customerName} compact />
                         {order.paymentModel === 'PREPAID' ? (
                           <span className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
                             <CheckmarkBadge01Icon size={11} /> Paid
@@ -766,6 +769,7 @@ export const WaiterTasks = () => {
                       <div className="mb-3 flex items-center justify-between">
                         <div className="flex min-w-0 items-center gap-2">
                           <span className="text-lg font-extrabold text-zinc-900 dark:text-zinc-50">Table {group.table?.tableNumber || 'N/A'}</span>
+                          <CallCustomer phone={group.orders?.find(o => o.customerPhone)?.customerPhone} name={group.orders?.find(o => o.customerPhone)?.customerName} compact />
                           {group.tableSession?.pin && (
                             <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${BRAND_SOFT} ${BRAND_TEXT}`}>PIN {group.tableSession.pin}</span>
                           )}

@@ -14,6 +14,7 @@ export const qty = (n) => Number(Number(n || 0).toFixed(3)).toLocaleString('en-I
 export const amount = (n, u) => `${qty(n)} ${unit(u)}`;
 export const rupees = (n) => `₹${Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
 export const day = (iso) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '—');
+export const fullDay = (iso) => (iso ? new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
 export const dayAndTime = (iso) => new Date(iso).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
 export const errorText = (err, fallback) => err?.response?.data?.error?.message || err?.message || fallback;
 

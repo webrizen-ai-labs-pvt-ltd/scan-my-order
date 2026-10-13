@@ -133,7 +133,7 @@ export const OperationsLayout = () => {
         items: [
           { name: 'KDS & KOT', path: '/dashboard/kds', icon: Pot02Icon, show: isKitchen },
           { name: 'Waiter Panel', path: '/dashboard/waiter', icon: Dish01Icon, show: isWaiter },
-          { name: 'Inventory', path: '/dashboard/inventory', icon: DeliveryTruck01Icon, show: isManager },
+          { name: 'Inventory', path: '/dashboard/inventory', icon: DeliveryTruck01Icon, show: isKitchen || isCashier },
         ],
       },
       {
@@ -325,7 +325,7 @@ export const OperationsLayout = () => {
                                       <item.icon size={16} variant={isActive ? 'solid' : 'stroke'} className="shrink-0" />
                                       <span className="min-w-0 flex-1 truncate">{item.name}</span>
                                       {item.path === '/dashboard/pos' && pendingUpi > 0 && (
-                                        <span className="shrink-0 min-w-5 px-1 rounded-full bg-amber-400 text-zinc-950 text-[11px] font-bold text-center tabular-nums" title="UPI payments to confirm" aria-label={`${pendingUpi} UPI ${pendingUpi === 1 ? 'payment' : 'payments'} to confirm`}>{pendingUpi}</span>
+                                        <span className="shrink-0 min-w-5 px-1 rounded-full bg-amber-400 text-zinc-950 text-[11px] font-bold text-center tabular-nums" title="Orders to accept and UPI payments to confirm" aria-label={`${pendingUpi} waiting on the POS`}>{pendingUpi}</span>
                                       )}
                                       {isLocked(item.path) && <SquareLock02Icon size={13} className="shrink-0 text-zinc-400" aria-label="Not in your plan" />}
                                     </Link>

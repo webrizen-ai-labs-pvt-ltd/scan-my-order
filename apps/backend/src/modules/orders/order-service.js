@@ -778,9 +778,10 @@ async function createOrder(storeId, actor, origin, input) {
       storeId,
       type: 'ORDER_PENDING_VERIFICATION',
       title: 'Order Pending Verification',
-      body: `Table ${order.table?.tableNumber || 'N/A'}: Order #${order.id.slice(-6).toUpperCase()} requires waiter verification.`,
+      body: `${orderPlace(order)}: Order #${order.id.slice(-6).toUpperCase()} is waiting to be accepted, on the waiter panel or the POS.`,
       data: { orderId: order.id, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/waiter' },
-      target: { roles: ['WAITER', 'STORE_MANAGER'], storeId }
+      // The counter can accept these too, so cashiers and owners are told as well
+      target: { roles: ['WAITER', 'CASHIER', 'STORE_MANAGER', 'TENANT_ADMIN'], storeId }
     }).catch(() => {});
   } else if (status === 'PROCESSING') {
     await prisma.$transaction((tx) => deductInventory(tx, order), { timeout: 20000 });
