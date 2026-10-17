@@ -28,6 +28,7 @@ const getExpectedOrigins = () => {
     env.server.origin,
     env.apps.adminUrl,
     env.apps.operationsUrl,
+    ...env.auth.passkeyExtraOrigins,
     "http://localhost:5173",
     "http://localhost:5176"
   ].filter(Boolean);

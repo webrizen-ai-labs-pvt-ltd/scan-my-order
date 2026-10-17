@@ -65,7 +65,13 @@ const env = {
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
     googleClientId: readEnv("GOOGLE_CLIENT_ID"),
     rpId: process.env.RP_ID || "localhost",
-    rpName: process.env.RP_NAME || "Scan My Order"
+    rpName: process.env.RP_NAME || "Scan My Order",
+    // Extra origins allowed for passkeys, comma separated. The mobile app signs passkeys with
+    // "https://<RP_ID>" on iOS and "android:apk-key-hash:<hash>" on Android.
+    passkeyExtraOrigins: (process.env.PASSKEY_EXTRA_ORIGINS || "")
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
   },
   email: {
     host: readEnv("SMTP_HOST"),
