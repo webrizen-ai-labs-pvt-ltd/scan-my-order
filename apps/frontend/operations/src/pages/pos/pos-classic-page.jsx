@@ -17,6 +17,7 @@ import { Receipt } from '../../components/receipt';
 import { printReceipt } from '../../lib/print-receipt';
 import { sessionBillToReceipt } from '../../lib/session-receipt';
 import { printKitchenTicket, markPrinted, readPrintSettings } from '../../lib/kitchen-ticket';
+import { handOverPackagedOrder } from '../../lib/packaged';
 
 /*
  * Classic billing: everything on one screen, the way counter staff are used to working.
@@ -277,35 +278,44 @@ export const PosClassicPage = () => {
     if (needsTable) { setTablePicker(true); toast('Pick a table', 'error'); return; }
     if (lines.length === 0 && !running) { toast('Add items first', 'error'); return; }
     setBusy(print ? 'SAVE_PRINT' : 'SAVE');
+    // Only packaged items (water, cans, dips): handed over at the counter, so once the bill is
+    // paid the order is served (and settles) instead of waiting on the active orders screen
+    const packagedOnly = lines.length > 0 && lines.every(l => l.menuItem?.isPackaged);
     try {
       // 1. New items become an order: on the table's bill (sent to the kitchen) or a takeaway order
       let ref;
+      let newOrderId = null;
       if (orderType === 'DINE_IN') {
         let sessionId = running?.id || selectedTable?.activeSessionId || null;
         if (lines.length > 0) {
           const result = await placeOrder('POSTPAID');
           sessionId = result.tableSessionId || sessionId;
+          newOrderId = result.order.id;
         }
         if (!sessionId) throw new Error('This table has no open bill');
         ref = { tableSessionId: sessionId };
       } else {
         const result = await placeOrder('PREPAID');
         ref = { orderId: result.order.id };
+        newOrderId = result.order.id;
       }
       finishOrder();
+      const handOverId = packagedOnly ? newOrderId : null;
 
       // 2. Card, UPI and dues need more details (which one, a QR, whose account): the checkout
-      //    page for this bill takes it from here
+      //    page for this bill takes it from here, and hands the packaged order over once paid
       const kind = ref.tableSessionId ? 'table' : 'order';
       const id = ref.tableSessionId || ref.orderId;
-      if (payMethod === 'DUE') { navigate(`/dashboard/pos/checkout/${kind}/${id}/dues`); return; }
-      if (payMethod === 'OTHER') { navigate(`/dashboard/pos/checkout/${kind}/${id}`); return; }
+      const handOverQuery = handOverId ? `?handover=${handOverId}` : '';
+      if (payMethod === 'DUE') { navigate(`/dashboard/pos/checkout/${kind}/${id}/dues${handOverQuery}`); return; }
+      if (payMethod === 'OTHER') { navigate(`/dashboard/pos/checkout/${kind}/${id}${handOverQuery}`); return; }
 
       // 3. Cash: take the whole amount still due and close the bill right here
       const summary = (await api.get(`/stores/${storeId}/payments/summary`, { params: ref })).data.data;
       if (summary.blockers?.length > 0) throw new Error(summary.blockers[0].reason);
       const due = Math.max(0, summary.dueAmount - (summary.pendingAmount || 0));
       if (due > 0) await api.post(`/stores/${storeId}/payments`, { ...ref, channel: 'CASH', amount: due });
+      if (handOverId) await handOverPackagedOrder(storeId, handOverId, toast);
       toast(`Bill settled · ${rupees(summary.dueAmount)} cash`, 'success');
       if (print) await printBillFor(ref);
       data.refreshTables();

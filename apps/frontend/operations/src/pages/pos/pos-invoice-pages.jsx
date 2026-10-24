@@ -44,7 +44,12 @@ export function useCheckoutBill() {
   }, [isDraft, cart.lines, cart.promo, cart.invoiceRequest, storeData?.taxRules]);
 
   const store = new URLSearchParams(location.search).get('store');
-  const checkoutPath = `/dashboard/pos/checkout/${kind}/${id}${store ? `?store=${store}` : ''}`;
+  // Keep a pending packaged-order hand-over (see the checkout page) when coming back to checkout
+  const backParams = new URLSearchParams();
+  if (store) backParams.set('store', store);
+  const handover = new URLSearchParams(location.search).get('handover');
+  if (handover) backParams.set('handover', handover);
+  const checkoutPath = `/dashboard/pos/checkout/${kind}/${id}${backParams.size ? `?${backParams}` : ''}`;
   const back = () => (location.key !== 'default' ? navigate(-1) : navigate(checkoutPath));
   return { kind, id, isTable, isDraft, storeId, bill: isDraft ? draftBill : bill, error, back, navigate, checkoutPath, cart };
 }

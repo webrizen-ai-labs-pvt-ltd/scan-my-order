@@ -12,6 +12,7 @@ import { Receipt } from '../../components/receipt';
 import { printReceipt } from '../../lib/print-receipt';
 import { apiErrorMessage } from '../../components/pos/pos-toasts';
 import { sessionBillToReceipt } from '../../lib/session-receipt';
+import { handOverPackagedOrder } from '../../lib/packaged';
 import { CancelOrderDialog } from '../../components/pos/cancel-order-dialog';
 import { useAuthStore } from '../../store/authStore';
 import { PromoChoice } from '../../components/payments/promo-choice';
@@ -265,17 +266,30 @@ export const PosCheckoutPage = () => {
     }
   };
 
+  // Packaged-only order saved on the classic POS with "Other" or "Due": hand it over once paid
+  const handOverId = new URLSearchParams(location.search).get('handover');
+  const handedOver = useRef(false);
+
   const handleSettled = useCallback(async (summary) => {
     latestSummary.current = summary;
-    const fresh = await loadBill();
+    let fresh = await loadBill();
     if (!fresh) return;
+    if (handOverId && !handedOver.current) {
+      handedOver.current = true;
+      const order = isTable ? (fresh.orders || []).find(o => o.id === handOverId) : fresh;
+      // Only while it's waiting at READY: a bill reopened later (e.g. back from the invoice) is left alone
+      if (order?.id === handOverId && order.status === 'READY') {
+        await handOverPackagedOrder(storeId, handOverId, toast);
+        fresh = (await loadBill()) || fresh;
+      }
+    }
     setReceipt(isTable ? sessionBillToReceipt(fresh, summary.payments) : fresh);
     data.refreshTables();
     if (!paidOnOpen.current) {
       const inv = fresh.invoice;
       toast(`${isTable ? `Table ${fresh.session.tableNumber} bill paid` : 'Payment complete'}${inv ? ` · ${inv.kind === 'CORPORATE' ? 'Corporate invoice' : 'Invoice'} ${inv.number}` : ''}`, 'success');
     }
-  }, [loadBill, isTable, toast, data]);
+  }, [loadBill, isTable, toast, data, handOverId, storeId]);
 
   const draftTable = isDraft ? data.tables.find(t => t.id === cart.tableId) : null;
   const title = isDraft
