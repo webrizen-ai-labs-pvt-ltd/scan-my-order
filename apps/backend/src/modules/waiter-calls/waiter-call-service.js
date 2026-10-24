@@ -52,11 +52,13 @@ async function createWaiterCall(storeId, input) {
   const dbType = mapToDbCallType(type);
   note = typeof note === 'string' ? note.trim().slice(0, 100) : '';
 
-  // Anti-Spam Filter: Check if a call is already active for this table within last 60 seconds
+  // Anti-Spam Filter: a call of the same type still open for this table is returned instead of a new one
+  // (a different request, like Bill while Water is open, is a new call)
   const existingCall = await prisma.waiterCall.findFirst({
     where: {
       storeId,
       tableId,
+      type: dbType,
       status: { in: ['PENDING', 'ACKNOWLEDGED'] }
     },
     include: {
@@ -120,6 +122,7 @@ async function createWaiterCall(storeId, input) {
       sound: 'notification.mp3',
       url: '/waiter'
     },
+    // Only the paged waiter; with nobody free every waiter hears it (the manager is alerted by dispatchCall)
     target: dispatchState.assignedWaiterId
       ? { userId: dispatchState.assignedWaiterId, role: 'WAITER', storeId }
       : { role: 'WAITER', storeId }

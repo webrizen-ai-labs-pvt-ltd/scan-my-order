@@ -7,6 +7,8 @@ const {
   saveSubscription,
   setMarketingOptIn,
   removeSubscription,
+  saveExpoDevice,
+  removeExpoDevice,
   sendNotification,
   getStaffNotifications,
   markNotificationAsRead,
@@ -14,6 +16,7 @@ const {
   getCustomerNotifications
 } = require("./notification-service");
 const { verifyJwt } = require("../../lib/jwt");
+const { verifyStoreAccess } = require("../menu/menu-service");
 
 // Staff Router (requires authentication)
 const staffRouter = express.Router();
@@ -28,6 +31,7 @@ staffRouter.get("/vapid-public-key", (req, res) => {
 staffRouter.post("/subscribe", asyncHandler(async (req, res) => {
   const { endpoint, keys, storeId } = req.body;
   const targetStoreId = storeId || req.user.storeId;
+  if (targetStoreId) await verifyStoreAccess(req.user, targetStoreId);
 
   const subscription = await saveSubscription({
     endpoint,
@@ -50,12 +54,26 @@ staffRouter.delete("/subscribe", asyncHandler(async (req, res) => {
   res.json(createApiResponse({ success: true }));
 }));
 
+// POST /api/notifications/devices  { token, storeId }  (the staff app registers this phone for push)
+staffRouter.post("/devices", asyncHandler(async (req, res) => {
+  const { token, storeId } = req.body || {};
+  const device = await saveExpoDevice(req.user, storeId || req.user.storeId, token);
+  res.json(createApiResponse(device, "Device registered for notifications"));
+}));
+
+// POST /api/notifications/devices/remove  { token }  (on sign-out; only the phone's own user can remove it)
+staffRouter.post("/devices/remove", asyncHandler(async (req, res) => {
+  const removed = await removeExpoDevice(req.user, (req.body || {}).token);
+  res.json(createApiResponse({ removed }));
+}));
+
 // GET /api/notifications
 staffRouter.get("/", asyncHandler(async (req, res) => {
   const storeId = req.query.storeId || req.user.storeId;
   if (!storeId) {
     return res.status(400).json(createApiResponse(null, "storeId is required"));
   }
+  await verifyStoreAccess(req.user, storeId);
 
   const isRead = req.query.isRead !== undefined ? req.query.isRead === "true" : undefined;
   const notifications = await getStaffNotifications(req.user, storeId, {
@@ -69,7 +87,7 @@ staffRouter.get("/", asyncHandler(async (req, res) => {
 
 // PATCH /api/notifications/:id/read
 staffRouter.patch("/:id/read", asyncHandler(async (req, res) => {
-  const updated = await markNotificationAsRead(req.params.id);
+  const updated = await markNotificationAsRead(req.user, req.params.id);
   res.json(createApiResponse(updated));
 }));
 
@@ -79,6 +97,7 @@ staffRouter.post("/mark-all-read", asyncHandler(async (req, res) => {
   if (!storeId) {
     return res.status(400).json(createApiResponse(null, "storeId is required"));
   }
+  await verifyStoreAccess(req.user, storeId);
 
   await markAllNotificationsAsRead(req.user, storeId);
   res.json(createApiResponse({ success: true }, "All notifications marked as read"));
@@ -87,6 +106,10 @@ staffRouter.post("/mark-all-read", asyncHandler(async (req, res) => {
 // POST /api/notifications/test
 staffRouter.post("/test", asyncHandler(async (req, res) => {
   const storeId = req.body.storeId || req.user.storeId;
+  if (!storeId) {
+    return res.status(400).json(createApiResponse(null, "storeId is required"));
+  }
+  await verifyStoreAccess(req.user, storeId);
   const notification = await sendNotification({
     storeId,
     type: "TEST_NOTIFICATION",

@@ -9,6 +9,7 @@ const {
   createModifierGroup, updateModifierGroup, deleteModifierGroup,
   createModifierOption, updateModifierOption, deleteModifierOption
 } = require("./menu-service");
+const { searchCatalogDishes, listCatalogRegions } = require("./menu-catalog-service");
 
 const router = express.Router({ mergeParams: true });
 
@@ -18,6 +19,18 @@ router.use(authenticate);
 // GET /api/stores/:storeId/menu
 router.get("/", asyncHandler(async (req, res) => {
   const result = await getFullMenu(req.user, req.params.storeId);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/menu/catalog/dishes?q=&region=&course=&diet=&cursor=  (Smart Menu Builder, via Chronon)
+router.get("/catalog/dishes", asyncHandler(async (req, res) => {
+  const result = await searchCatalogDishes(req.user, req.params.storeId, req.query);
+  res.json(createApiResponse(result));
+}));
+
+// GET /api/stores/:storeId/menu/catalog/regions
+router.get("/catalog/regions", asyncHandler(async (req, res) => {
+  const result = await listCatalogRegions(req.user, req.params.storeId);
   res.json(createApiResponse(result));
 }));
 

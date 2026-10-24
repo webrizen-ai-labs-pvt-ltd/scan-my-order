@@ -7,7 +7,7 @@
     "target": {
       "namespace": "android_app",
       "package_name": "com.scanmyorder.operations",
-      "sha256_cert_fingerprints": ["REPLACE_WITH_ANDROID_SIGNING_SHA256"]
+      "sha256_cert_fingerprints": ["EB:CC:46:C4:81:F0:E6:AE:E4:FB:37:B4:DE:4A:01:9F:4B:0B:6F:D0:EB:AF:27:BE:D6:05:C9:32:B7:7B:E1:F5"]
     }
   }
 ]

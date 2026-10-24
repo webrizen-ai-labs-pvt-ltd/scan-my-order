@@ -87,6 +87,12 @@ const env = {
     saltIndex: process.env.PHONEPE_SALT_INDEX,
     redirectUrl: process.env.PHONEPE_REDIRECT_URL
   },
+  // Chronon (Webrizen's API platform) serves the dish catalog behind the Smart Menu Builder.
+  // Optional: without a key the builder's search reports it isn't configured.
+  chronon: {
+    baseUrl: (process.env.CHRONON_API_URL || "https://chronon.webrizen.com").replace(/\/+$/, ""),
+    apiKey: process.env.CHRONON_API_KEY
+  },
   jobs: {
     // Set RUN_SCHEDULED_JOBS=false on every machine except one (e.g. local dev laptops)
     // so jobs don't run twice against a shared database. Manual runs still work.

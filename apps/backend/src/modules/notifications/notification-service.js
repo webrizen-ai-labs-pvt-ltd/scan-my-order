@@ -1,12 +1,22 @@
 const { getPrismaClient } = require("../../lib/prisma");
+const { createHttpError } = require("../../middleware/error-handler");
 const { webPush } = require("./vapid-service");
-const { broadcastToStore, broadcastToCustomer } = require("../orders/sse-service");
+const { broadcastToStoreStaff, broadcastToCustomer } = require("../orders/sse-service");
+const { verifyStoreAccess } = require("../menu/menu-service");
+
+const MANAGEMENT_ROLES = ["SUPER_ADMIN", "TENANT_ADMIN", "STORE_MANAGER"];
+
+// Phones (the staff app) are kept in PushSubscription too: endpoint "expo:<token>", no web-push keys
+const EXPO_PREFIX = "expo:";
+const EXPO_TOKEN_PATTERN = /^Expo(nent)?PushToken\[.+\]$/;
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+const EXPO_BATCH_SIZE = 100; // Expo takes at most 100 messages per request
 
 /**
  * Save or update a Web Push subscription
  */
 async function saveSubscription({ endpoint, keys, userType, storeId, userId, sessionId, role, marketingOptIn }) {
-  if (!endpoint || !keys?.p256dh || !keys?.auth) {
+  if (!endpoint || !keys?.p256dh || !keys?.auth || String(endpoint).startsWith(EXPO_PREFIX)) {
     throw new Error("Invalid push subscription payload");
   }
 
@@ -67,11 +77,94 @@ async function removeSubscription(endpoint) {
 }
 
 /**
+ * Register a staff member's phone (an Expo push token) for one store
+ */
+async function saveExpoDevice(actor, storeId, token) {
+  if (typeof token !== "string" || !EXPO_TOKEN_PATTERN.test(token)) {
+    throw createHttpError(400, "A valid Expo push token is required");
+  }
+  if (!storeId) throw createHttpError(400, "storeId is required");
+  await verifyStoreAccess(actor, storeId);
+
+  const endpoint = `${EXPO_PREFIX}${token}`;
+  // A phone that changed hands (or stores) now belongs to whoever registered it last
+  const device = { p256dh: "", auth: "", userType: "STAFF", storeId, userId: actor.id, sessionId: null, role: actor.role, marketingOptIn: false };
+  const row = await getPrismaClient().pushSubscription.upsert({
+    where: { endpoint },
+    create: { endpoint, ...device },
+    update: device
+  });
+  return { id: row.id, storeId: row.storeId, role: row.role };
+}
+
+/**
+ * Forget a phone; only the staff member it is registered to can remove it
+ * @returns {Promise<boolean>} false when it isn't theirs (or isn't known)
+ */
+async function removeExpoDevice(actor, token) {
+  if (typeof token !== "string" || !EXPO_TOKEN_PATTERN.test(token)) {
+    throw createHttpError(400, "A valid Expo push token is required");
+  }
+  const result = await getPrismaClient().pushSubscription.deleteMany({
+    where: { endpoint: `${EXPO_PREFIX}${token}`, userId: actor.id }
+  });
+  return result.count > 0;
+}
+
+/** Sends to phones through Expo's push service; devices Expo no longer knows are deleted */
+async function sendExpoPushes(subscriptions, { title, body, data }) {
+  const headers = { Accept: "application/json", "Content-Type": "application/json" };
+  // Only needed when "enhanced push security" is turned on for the Expo project
+  if (process.env.EXPO_ACCESS_TOKEN) headers.Authorization = `Bearer ${process.env.EXPO_ACCESS_TOKEN}`;
+
+  for (let i = 0; i < subscriptions.length; i += EXPO_BATCH_SIZE) {
+    const batch = subscriptions.slice(i, i + EXPO_BATCH_SIZE);
+    const messages = batch.map(sub => ({
+      to: sub.endpoint.slice(EXPO_PREFIX.length),
+      title,
+      body,
+      data,
+      sound: "default",
+      priority: "high",
+      channelId: "alerts"
+    }));
+
+    try {
+      const res = await fetch(EXPO_PUSH_URL, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(messages),
+        signal: AbortSignal.timeout(10000)
+      });
+      const result = await res.json().catch(() => null);
+      if (!res.ok) {
+        console.warn(`[NotificationService] Expo push rejected (${res.status}):`, JSON.stringify(result?.errors || result).slice(0, 300));
+        continue;
+      }
+      // One ticket per message, in the same order
+      const tickets = Array.isArray(result?.data) ? result.data : [];
+      await Promise.all(tickets.map(async (ticket, index) => {
+        if (ticket?.status !== "error") return;
+        if (ticket.details?.error === "DeviceNotRegistered") {
+          await removeSubscription(batch[index].endpoint);
+        } else {
+          console.warn(`[NotificationService] Expo push error (${batch[index].endpoint.slice(-8)}):`, ticket.message);
+        }
+      }));
+    } catch (err) {
+      console.warn("[NotificationService] Expo push delivery error:", err.message);
+    }
+  }
+}
+
+/**
  * Centralized Quantum Notification Dispatcher
  * Dispatches:
- * 1. Database record persistence
- * 2. In-app SSE event stream (store staff / customer session)
- * 3. Background W3C Web Push with automatic cleanup of expired endpoints
+ * 1. Database record persistence (first, so live events carry the row's id)
+ * 2. In-app SSE event stream (only the staff it targets / customer session)
+ * 3. Background push: W3C Web Push and Expo (staff phones), with automatic cleanup of expired endpoints
+ *
+ * Targets with customerId or sessionId are guest-facing: they never go to the staff stream or staff lists.
  *
  * @param {Object} params
  * @param {string} [params.storeId]
@@ -89,43 +182,10 @@ async function sendNotification({ storeId, type, title, body, data = {}, target 
     sound: soundName,
     timestamp: Date.now()
   };
+  const isGuestTarget = Boolean(target.customerId || target.sessionId);
+  const roles = target.roles || (target.role ? [target.role] : null);
 
-  // 1. In-App SSE Broadcasts
-  try {
-    if (storeId) {
-      broadcastToStore(storeId, "NOTIFICATION", {
-        type,
-        title,
-        body,
-        data: enrichedData,
-        target
-      });
-    }
-
-    if (target.customerId) {
-      broadcastToCustomer(target.customerId, "NOTIFICATION", {
-        type,
-        title,
-        body,
-        data: enrichedData,
-        target
-      });
-    }
-
-    if (target.sessionId) {
-      broadcastToCustomer(target.sessionId, "NOTIFICATION", {
-        type,
-        title,
-        body,
-        data: enrichedData,
-        target
-      });
-    }
-  } catch (sseErr) {
-    console.warn("[NotificationService] SSE broadcast warning:", sseErr.message);
-  }
-
-  // 2. Persist to Database
+  // 1. Persist to Database
   let savedNotification = null;
   try {
     savedNotification = await prisma.notification.create({
@@ -145,25 +205,55 @@ async function sendNotification({ storeId, type, title, body, data = {}, target 
     console.error("[NotificationService] Failed to persist notification to DB:", dbErr.message);
   }
 
-  // 3. Web Push Subscriptions Match & Background Dispatch
+  // 2. In-App SSE Broadcasts
+  const livePayload = {
+    id: savedNotification?.id || null,
+    createdAt: savedNotification?.createdAt || new Date(),
+    isRead: false,
+    type,
+    title,
+    body,
+    data: enrichedData,
+    target
+  };
+  try {
+    // Staff stream: one user, or the target roles; no target means all staff
+    if (storeId && !isGuestTarget) {
+      broadcastToStoreStaff(storeId, "NOTIFICATION", livePayload, { userId: target.userId, roles });
+    }
+
+    if (target.customerId) {
+      broadcastToCustomer(target.customerId, "NOTIFICATION", livePayload);
+    }
+
+    if (target.sessionId) {
+      broadcastToCustomer(target.sessionId, "NOTIFICATION", livePayload);
+    }
+  } catch (sseErr) {
+    console.warn("[NotificationService] SSE broadcast warning:", sseErr.message);
+  }
+
+  // 3. Push Subscriptions Match & Background Dispatch
   try {
     const whereConditions = [];
 
-    if (target.customerId || target.userId) {
-      whereConditions.push({ userId: target.customerId || target.userId });
+    if (target.customerId) {
+      whereConditions.push({ userId: target.customerId });
     }
 
     if (target.sessionId) {
       whereConditions.push({ sessionId: target.sessionId });
     }
 
-    if (storeId && (target.role || target.roles)) {
-      const roles = target.roles || [target.role];
+    if (target.userId) {
+      // Aimed at one staff member: only their devices, not everyone with the role
+      whereConditions.push({ userId: target.userId });
+    } else if (storeId && roles) {
       whereConditions.push({
         storeId,
         role: { in: roles }
       });
-    } else if (storeId && !target.customerId && !target.sessionId) {
+    } else if (storeId && !isGuestTarget) {
       // General store staff notification
       whereConditions.push({
         storeId,
@@ -178,20 +268,25 @@ async function sendNotification({ storeId, type, title, body, data = {}, target 
         }
       });
 
-      if (subscriptions && subscriptions.length > 0) {
+      const pushData = {
+        ...enrichedData,
+        type,
+        notificationId: savedNotification?.id || null,
+        url: data.url || (target.sessionId ? `/m/${storeId}` : `/orders`)
+      };
+      const phones = subscriptions.filter(sub => sub.endpoint.startsWith(EXPO_PREFIX));
+      const browsers = subscriptions.filter(sub => !sub.endpoint.startsWith(EXPO_PREFIX));
+
+      if (browsers.length > 0) {
         const payloadString = JSON.stringify({
           title,
           body,
           icon: "/pwa-192x192.png",
           badge: "/favicon.ico",
-          data: {
-            ...enrichedData,
-            type,
-            url: data.url || (target.sessionId ? `/m/${storeId}` : `/orders`)
-          }
+          data: pushData
         });
 
-        const pushPromises = subscriptions.map(async (sub) => {
+        const pushPromises = browsers.map(async (sub) => {
           const pushSubscription = {
             endpoint: sub.endpoint,
             keys: {
@@ -217,6 +312,12 @@ async function sendNotification({ storeId, type, title, body, data = {}, target 
           console.error("[NotificationService] WebPush batch error:", err.message);
         });
       }
+
+      if (phones.length > 0) {
+        sendExpoPushes(phones, { title, body, data: pushData }).catch(err => {
+          console.error("[NotificationService] Expo push batch error:", err.message);
+        });
+      }
     }
   } catch (pushLookupErr) {
     console.error("[NotificationService] Error querying push subscriptions:", pushLookupErr.message);
@@ -226,27 +327,48 @@ async function sendNotification({ storeId, type, title, body, data = {}, target 
 }
 
 /**
+ * The store's notifications a staff member may see. Guest-facing rows (a table session, or a
+ * customer account) are never shown to staff. Managers see the rest; others see store-wide ones,
+ * their role's, and those addressed to them (not ones addressed to a colleague with the same role).
+ */
+function staffNotificationWhere(actor, storeId) {
+  const conditions = [
+    { storeId },
+    { sessionId: null },
+    { OR: [{ userId: null }, { user: { is: { role: { not: "CUSTOMER" } } } }] }
+  ];
+
+  if (!MANAGEMENT_ROLES.includes(actor?.role)) {
+    const userRole = actor?.role;
+    conditions.push({
+      OR: [
+        { userId: actor?.id },
+        {
+          userId: null,
+          OR: [
+            { role: null },
+            { role: userRole },
+            { role: { contains: userRole } }
+          ]
+        }
+      ]
+    });
+  }
+
+  return { AND: conditions };
+}
+
+/**
  * Get Staff notifications for Store
  */
 async function getStaffNotifications(actor, storeId, { limit = 30, isRead, type } = {}) {
   const prisma = getPrismaClient();
 
   const where = {
-    storeId,
+    ...staffNotificationWhere(actor, storeId),
     ...(isRead !== undefined ? { isRead } : {}),
     ...(type ? { type } : {})
   };
-
-  const isManagement = ["SUPER_ADMIN", "TENANT_ADMIN", "STORE_MANAGER"].includes(actor?.role);
-  if (!isManagement) {
-    const userRole = actor?.role;
-    where.OR = [
-      { role: null },
-      { role: userRole },
-      { role: { contains: userRole } },
-      { userId: actor?.id }
-    ];
-  }
 
   return prisma.notification.findMany({
     where,
@@ -256,14 +378,20 @@ async function getStaffNotifications(actor, storeId, { limit = 30, isRead, type 
 }
 
 /**
- * Mark a single notification as read
+ * Mark a single notification as read (only one in a store the actor works at, and that they can see)
  */
-async function markNotificationAsRead(id) {
+async function markNotificationAsRead(actor, id) {
   const prisma = getPrismaClient();
-  return prisma.notification.update({
-    where: { id },
+  const found = await prisma.notification.findUnique({ where: { id }, select: { storeId: true } });
+  if (!found?.storeId) throw createHttpError(404, "Notification not found");
+  await verifyStoreAccess(actor, found.storeId);
+
+  const result = await prisma.notification.updateMany({
+    where: { id, ...staffNotificationWhere(actor, found.storeId) },
     data: { isRead: true }
   });
+  if (result.count === 0) throw createHttpError(404, "Notification not found");
+  return prisma.notification.findUnique({ where: { id } });
 }
 
 /**
@@ -271,25 +399,8 @@ async function markNotificationAsRead(id) {
  */
 async function markAllNotificationsAsRead(actor, storeId) {
   const prisma = getPrismaClient();
-  const isManagement = ["SUPER_ADMIN", "TENANT_ADMIN", "STORE_MANAGER"].includes(actor?.role);
-
-  const where = {
-    storeId,
-    isRead: false
-  };
-
-  if (!isManagement) {
-    const userRole = actor?.role;
-    where.OR = [
-      { role: null },
-      { role: userRole },
-      { role: { contains: userRole } },
-      { userId: actor?.id }
-    ];
-  }
-
   return prisma.notification.updateMany({
-    where,
+    where: { ...staffNotificationWhere(actor, storeId), isRead: false },
     data: { isRead: true }
   });
 }
@@ -324,6 +435,8 @@ module.exports = {
   saveSubscription,
   removeSubscription,
   setMarketingOptIn,
+  saveExpoDevice,
+  removeExpoDevice,
   sendNotification,
   getStaffNotifications,
   markNotificationAsRead,

@@ -14,6 +14,9 @@ const { callTypeLabel } = require("./call-types");
 
 const ANSWER_WITHIN_MS = 60 * 1000;
 const SWEEP_EVERY_MS = 5 * 1000;
+// escalationLevel: 0 = first waiter, 1 = passed on to another waiter (however many times), 2 = manager.
+// Re-pages stop at 1, so 2 always means the manager has it (no waiter assigned, nobody left to try).
+const REPAGED_LEVEL = 1;
 const MANAGER_LEVEL = 2;
 
 /* ---------- waiter availability ---------- */
@@ -24,13 +27,26 @@ function presenceView(row) {
 
 /** Set a waiter's availability (Busy waiters aren't paged) */
 async function setWaiterAvailability(storeId, waiterId, status) {
+  const prisma = getPrismaClient();
   const value = status === 'BUSY' ? 'BUSY' : 'AVAILABLE';
-  const row = await getPrismaClient().waiterPresence.upsert({
+  const row = await prisma.waiterPresence.upsert({
     where: { storeId_userId: { storeId, userId: waiterId } },
     create: { storeId, userId: waiterId, status: value },
     update: { status: value }
   });
   broadcastToStore(storeId, "WAITER_AVAILABILITY_CHANGED", { waiterId, status: row.status });
+
+  // Going on a break: calls paged to them that they haven't taken move on to the next waiter now
+  if (value === 'BUSY') {
+    const paged = await prisma.waiterCall.findMany({
+      where: { storeId, assignedWaiterId: waiterId, status: 'PENDING', escalateAt: { not: null } },
+      include: { table: { select: { tableNumber: true } } }
+    });
+    for (const call of paged) {
+      await escalateCall(call).catch(err => console.error(`[Waiter calls] re-dispatch failed for ${call.id}:`, err.message));
+    }
+  }
+
   return presenceView(row);
 }
 
@@ -125,7 +141,7 @@ async function dispatchCall(call, tableNumber, note = '') {
   const data = best
     ? { assignedWaiterId: best.id, assignedAt: now, escalationLevel: 0, attemptedWaiterIds: [best.id], escalateAt: new Date(now.getTime() + ANSWER_WITHIN_MS) }
     : { assignedWaiterId: null, assignedAt: now, escalationLevel: MANAGER_LEVEL, attemptedWaiterIds: [], escalateAt: null };
-  await prisma.waiterCall.updateMany({ where: { id: call.id, status: 'PENDING' }, data });
+  const claim = await prisma.waiterCall.updateMany({ where: { id: call.id, status: 'PENDING' }, data });
 
   const state = {
     assignedWaiterId: data.assignedWaiterId,
@@ -148,6 +164,10 @@ async function dispatchCall(call, tableNumber, note = '') {
     isManagerEscalation: !best,
     assignedAt: now
   });
+  // Nobody free: the manager is alerted straight away, the same as a call nobody answered
+  if (!best && claim.count > 0) {
+    notifyManager({ callId: call.id, storeId: call.storeId, tableId: call.tableId, tableNumber, type: call.type, note });
+  }
 
   return state;
 }
@@ -163,7 +183,7 @@ async function escalateCall(call) {
   const next = await findBestWaiter(storeId, tableId, attempted);
   const now = new Date();
   const data = next
-    ? { assignedWaiterId: next.id, assignedAt: now, escalationLevel: call.escalationLevel + 1, attemptedWaiterIds: [...attempted, next.id], escalateAt: new Date(now.getTime() + ANSWER_WITHIN_MS) }
+    ? { assignedWaiterId: next.id, assignedAt: now, escalationLevel: REPAGED_LEVEL, attemptedWaiterIds: [...attempted, next.id], escalateAt: new Date(now.getTime() + ANSWER_WITHIN_MS) }
     : { assignedWaiterId: null, escalationLevel: MANAGER_LEVEL, escalateAt: null };
 
   // Only if nobody acknowledged it, and no other server escalated it, since we read it
@@ -197,6 +217,11 @@ async function escalateCall(call) {
     return;
   }
 
+  notifyManager({ callId, storeId, tableId, tableNumber, type, note });
+}
+
+/** The call is now the manager's: tell the store screens and push the managers */
+function notifyManager({ callId, storeId, tableId, tableNumber, type, note }) {
   broadcastToStore(storeId, "WAITER_CALL_ESCALATED_MANAGER", {
     callId,
     tableId,

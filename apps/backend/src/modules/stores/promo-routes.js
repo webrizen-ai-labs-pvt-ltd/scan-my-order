@@ -8,8 +8,15 @@ const {
   updatePromoCode,
   deletePromoCode
 } = require("./promo-service");
+const { verifyStoreAccess } = require("../menu/menu-service");
 
 const router = express.Router({ mergeParams: true });
+
+// Staff of this store only (customers and other restaurants' staff get 403)
+router.use(asyncHandler(async (req, _res, next) => {
+  await verifyStoreAccess(req.user, req.params.storeId);
+  next();
+}));
 
 // Read promos (Allowed for any authenticated store staff in POS)
 router.get("/", asyncHandler(async (req, res) => {

@@ -632,13 +632,19 @@ async function createOrder(storeId, actor, origin, input) {
   }
 
   // Store Loyalty Credit Wallet Redemption
+  // Only the signed-in customer ordering from the QR menu spends their own credits. At the POS the
+  // actor is staff and the customer isn't verified (a typed phone number proves nothing), so no wallet is used.
+  const walletOwnerId = origin === 'QR_MENU' && actor ? actor.id : null;
   let walletCredits = 0;
   if (input.applyWalletCredits && !comp) {
-    if (!actor) {
+    if (origin === 'POS') {
+      throw createHttpError(400, "Store credits can only be redeemed by the customer from their own phone, on the QR menu.");
+    }
+    if (!walletOwnerId) {
       throw createHttpError(401, "Please log in to redeem store credits.");
     }
     const { previewWalletRedemption } = require("../loyalty/loyalty-service");
-    const preview = await previewWalletRedemption(actor.id, storeId, subTotal, Number(input.walletCredits || 0));
+    const preview = await previewWalletRedemption(walletOwnerId, storeId, subTotal, Number(input.walletCredits || 0));
     if (!preview.eligible) {
       throw createHttpError(400, preview.reason || "Unable to redeem store credits.");
     }
@@ -761,10 +767,10 @@ async function createOrder(storeId, actor, origin, input) {
   }
 
   // Deduct applied wallet credits from customer balance
-  if (totals.walletDiscount > 0 && actor) {
+  if (totals.walletDiscount > 0 && walletOwnerId) {
     try {
       const { applyWalletCreditsOnOrder } = require("../loyalty/loyalty-service");
-      await applyWalletCreditsOnOrder(prisma, actor.id, storeId, order.id, totals.walletDiscount);
+      await applyWalletCreditsOnOrder(prisma, walletOwnerId, storeId, order.id, totals.walletDiscount);
     } catch (err) {
       console.error("[Loyalty Debit Error]", err.message);
     }
@@ -795,7 +801,7 @@ async function createOrder(storeId, actor, origin, input) {
       title: 'New Kitchen Order',
       body: `${orderPlace(order)}: Order #${order.id.slice(-6).toUpperCase()} received in kitchen.`,
       data: { orderId: order.id, tableNumber: order.table?.tableNumber, sound: 'notification.mp3', url: '/kds' },
-      target: { roles: ['KITCHEN', 'STORE_MANAGER'], storeId }
+      target: { roles: ['KITCHEN_STAFF', 'STORE_MANAGER'], storeId }
     }).catch(() => {});
     if (order.customerId || order.sessionId) {
       sendNotification({
@@ -1487,7 +1493,7 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
         title: 'Order Cooking',
         body: `Table ${tableNum}: Order #${shortId} is being prepared in the kitchen.`,
         data: { orderId: updatedOrder.id, tableNumber: tableNum, sound: 'notification.mp3', url: '/kds' },
-        target: { roles: ['KITCHEN', 'STORE_MANAGER'], storeId }
+        target: { roles: ['KITCHEN_STAFF', 'STORE_MANAGER'], storeId }
       }).catch(() => {});
       if (updatedOrder.customerId || updatedOrder.sessionId) {
         sendNotification({
@@ -1576,8 +1582,9 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
 
   // Invalidate table status cache on relevant status transitions
   invalidateTablesCache(storeId);
-  
-  return updatedOrder;
+
+  // Same shape as every other order response (custom dish details decoded from kitchenNotes)
+  return serializeOrder(updatedOrder);
 }
 
 // 3b. KITCHEN REJECTIONS

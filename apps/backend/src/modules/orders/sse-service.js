@@ -13,7 +13,7 @@ const { getPrismaClient } = require("../../lib/prisma");
 const HEARTBEAT_MS = 25 * 1000;
 const RECHECK_MS = 60 * 1000;
 
-const clients = new Map();          // storeId -> Map(clientId -> { res, userId, tokenVersion })
+const clients = new Map();          // storeId -> Map(clientId -> { res, userId, role, tokenVersion })
 const customerClients = new Map();  // customerId | sessionId -> Map(clientId -> { res })
 
 function openStream(req, res) {
@@ -53,11 +53,11 @@ function register(map, key, entry, req) {
 }
 
 /**
- * @param {{ userId?: string, tokenVersion?: number }} [who] the staff member, re-checked every minute
+ * @param {{ userId?: string, role?: string, tokenVersion?: number }} [who] the staff member, re-checked every minute
  */
 function subscribeToStore(storeId, req, res, who = {}) {
   openStream(req, res);
-  const clientId = register(clients, storeId, { res, userId: who.userId || null, tokenVersion: who.tokenVersion || 0 }, req);
+  const clientId = register(clients, storeId, { res, userId: who.userId || null, role: who.role || null, tokenVersion: who.tokenVersion || 0 }, req);
   send(res, { type: "CONNECTED", clientId });
 }
 
@@ -77,6 +77,25 @@ function broadcast(group, eventType, payload) {
 
 function broadcastToStore(storeId, eventType, payload) {
   broadcast(clients.get(storeId), eventType, payload);
+}
+
+/**
+ * Store stream, but only to the staff an event is meant for.
+ * @param {{ userId?: string, roles?: string[] }} [to] one user, or these roles; neither means all staff
+ */
+// Management sees every role-targeted event (same rule as the saved notification list)
+const MANAGEMENT_ROLES = ["SUPER_ADMIN", "TENANT_ADMIN", "STORE_MANAGER"];
+
+function broadcastToStoreStaff(storeId, eventType, payload, to = {}) {
+  const group = clients.get(storeId);
+  if (!group) return;
+  const roles = to.roles?.length ? to.roles : null;
+  const message = `data: ${JSON.stringify({ type: eventType, data: payload })}\n\n`;
+  for (const entry of group.values()) {
+    const roleMatch = !roles || roles.includes(entry.role) || MANAGEMENT_ROLES.includes(entry.role);
+    if (to.userId ? entry.userId !== to.userId : !roleMatch) continue;
+    try { entry.res.write(message); } catch { /* closed; removed on its close event */ }
+  }
 }
 
 function broadcastToCustomer(customerId, eventType, payload) {
@@ -149,6 +168,7 @@ module.exports = {
   subscribeToStore,
   subscribeToCustomer,
   broadcastToStore,
+  broadcastToStoreStaff,
   broadcastToCustomer,
   closeAllStreams,
   streamStats

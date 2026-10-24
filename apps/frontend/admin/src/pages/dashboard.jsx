@@ -84,9 +84,11 @@ export const Dashboard = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{metric.value}</div>
-                <p className="text-xs text-green-500 mt-1">
-                  {metric.trend} from last month
-                </p>
+                {metric.trend && (
+                  <p className="text-xs text-green-500 mt-1">
+                    {metric.trend} from last month
+                  </p>
+                )}
               </CardContent>
             </Card>
           );

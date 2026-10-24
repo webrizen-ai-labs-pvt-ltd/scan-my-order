@@ -29,6 +29,8 @@ const { getOrderAudit } = require("../audit/audit-service");
 const { getInvoiceForOrder } = require("../invoices/invoice-service");
 const { subscribeToStore } = require("./sse-service");
 const { applyBillPromo, removeBillPromo } = require("./bill-promo-service");
+const { createHttpError } = require("../../middleware/error-handler");
+const { userRoles } = require("../../constants/roles");
 
 const router = express.Router({ mergeParams: true });
 
@@ -39,7 +41,7 @@ router.use(authenticate);
 router.get("/stream", asyncHandler(async (req, res) => {
   // Customers fall through to 403 inside verifyStoreAccess
   await verifyStoreAccess(req.user, req.params.storeId);
-  subscribeToStore(req.params.storeId, req, res, { userId: req.user.id, tokenVersion: req.user.tokenVersion || 0 });
+  subscribeToStore(req.params.storeId, req, res, { userId: req.user.id, role: req.user.role, tokenVersion: req.user.tokenVersion || 0 });
 }));
 
 // === STAFF ROUTES ===
@@ -184,9 +186,15 @@ router.put("/:id/items", asyncHandler(async (req, res) => {
   res.json(createApiResponse(result));
 }));
 
+// Full bills (payments, invoices, the table PIN) are for front-of-house; the kitchen works from /kds
+function assertNotKitchen(actor) {
+  if (actor.role === userRoles.kitchenStaff) throw createHttpError(403, "Kitchen staff can't open bills");
+}
+
 // GET /api/stores/:storeId/orders/:id
 router.get("/:id", asyncHandler(async (req, res) => {
   await verifyStoreAccess(req.user, req.params.storeId);
+  assertNotKitchen(req.user);
   const result = await getOrderById(req.params.storeId, req.params.id);
   res.json(createApiResponse(result));
 }));
@@ -203,6 +211,7 @@ router.get("/sessions/by-table/:tableId", asyncHandler(async (req, res) => {
 // GET /api/stores/:storeId/orders/sessions/:sessionId
 router.get("/sessions/:sessionId", asyncHandler(async (req, res) => {
   await verifyStoreAccess(req.user, req.params.storeId);
+  assertNotKitchen(req.user);
   const result = await getTableSessionBill(req.params.storeId, req.params.sessionId, { includePin: true });
   res.json(createApiResponse(result));
 }));
