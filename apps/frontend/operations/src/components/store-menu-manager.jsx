@@ -58,7 +58,7 @@ export const StoreMenuManager = ({ storeId }) => {
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '' });
 
   const [editingItem, setEditingItem] = useState(null); // null = not editing, {} = new, {id...} = edit existing
-  const [itemForm, setItemForm] = useState({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', shortCode: '', isManuallyDisabled: false });
+  const [itemForm, setItemForm] = useState({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', shortCode: '', isManuallyDisabled: false, isPackaged: false });
   const [isSavingItem, setIsSavingItem] = useState(false);
   const [isAddingIngredient, setIsAddingIngredient] = useState(false);
 
@@ -358,7 +358,7 @@ export const StoreMenuManager = ({ storeId }) => {
               </div>
               <Button onClick={() => {
                 setEditingItem({});
-                setItemForm({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', shortCode: '', isManuallyDisabled: false });
+                setItemForm({ name: '', description: '', price: '', dietary: 'VEG', spiceLevel: 'NONE', image: '', videoUrl: '', shortCode: '', isManuallyDisabled: false, isPackaged: false });
               }}>
                 <PlusSignIcon size={16} className="mr-2" /> Add Item
               </Button>
@@ -431,6 +431,18 @@ export const StoreMenuManager = ({ storeId }) => {
                           type="checkbox"
                           checked={!itemForm.isManuallyDisabled}
                           onChange={e => setItemForm(p => ({ ...p, isManuallyDisabled: !e.target.checked }))}
+                          className="size-5 accent-emerald-600"
+                        />
+                      </label>
+                      <label className="col-span-2 flex items-center justify-between gap-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 py-2.5 cursor-pointer">
+                        <span>
+                          <span className="block text-sm font-medium text-zinc-900 dark:text-zinc-100">Packaged item (no kitchen prep)</span>
+                          <span className="block text-xs text-zinc-500">For bottled water, cans, dips and the like. Ready to hand over as soon as it's ordered, and left off kitchen tickets.</span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(itemForm.isPackaged)}
+                          onChange={e => setItemForm(p => ({ ...p, isPackaged: e.target.checked }))}
                           className="size-5 accent-emerald-600"
                         />
                       </label>
@@ -621,6 +633,11 @@ export const StoreMenuManager = ({ storeId }) => {
                             <p className="text-sm text-zinc-500">₹{item.price}</p>
                             <AvailabilityToggle item={item} busy={togglingId === item.id} onToggle={() => handleToggleAvailability(item)} />
                             <TrackingTag item={item} />
+                            {item.isPackaged && (
+                              <span className="text-xs bg-sky-50 text-sky-800 border border-sky-200 dark:bg-sky-500/10 dark:text-sky-300 dark:border-sky-500/30 px-2 py-0.5 rounded-full" title="Sold as-is: ready as soon as it's ordered and left off kitchen tickets.">
+                                Packaged
+                              </span>
+                            )}
                             {item.isSystemDisabled && (
                               <span className="text-xs bg-amber-50 text-amber-800 border border-amber-200 dark:bg-amber-500/10 dark:text-amber-300 dark:border-amber-500/30 px-2 py-0.5 rounded-full" title="An ingredient in its recipe ran out in Inventory. It comes back automatically when restocked.">
                                 Out of stock in Inventory

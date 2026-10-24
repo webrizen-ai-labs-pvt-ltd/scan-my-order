@@ -431,8 +431,9 @@ export const KDS = () => {
               </span>
             </div>
           ) : (
-            <div key={item.id || idx} className={`relative pl-10 pr-12 border-b border-zinc-800/80 pb-4 last:border-0 last:pb-0 ${item.readyAt ? 'opacity-60' : ''}`}>
-              <button
+            <div key={item.id || idx} className={`relative pl-10 pr-12 border-b border-zinc-800/80 pb-4 last:border-0 last:pb-0 ${item.menuItem?.isPackaged ? 'opacity-40' : item.readyAt ? 'opacity-60' : ''}`}>
+              {/* Packaged items (water, cans…) are handed over by the floor staff: nothing to tick here */}
+              {!item.menuItem?.isPackaged && <button
                 type="button"
                 onClick={() => toggleItemReady(order, item)}
                 disabled={isCompleting || !item.id}
@@ -441,7 +442,7 @@ export const KDS = () => {
                 className={`absolute right-0 top-0 size-10 rounded-lg border-2 flex items-center justify-center ${item.readyAt ? 'bg-green-600 border-green-600 text-white' : 'border-zinc-600 text-zinc-500 hover:border-green-500 hover:text-green-400'}`}
               >
                 <Tick02Icon size={22} />
-              </button>
+              </button>}
               {/* Normal Quantity Badge */}
               <div className="absolute left-0 top-0 w-7 h-7 bg-zinc-100 text-zinc-950 font-bold rounded-md flex items-center justify-center text-sm shadow-sm">
                 {item.quantity}
@@ -449,9 +450,11 @@ export const KDS = () => {
               
               <div className="flex-1">
                 <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                  <h3 className={`font-semibold text-lg leading-tight text-white ${item.readyAt ? 'line-through decoration-green-500' : ''}`}>{item.customName || item.menuItem?.name}</h3>
+                  <h3 className={`font-semibold text-lg leading-tight text-white ${item.readyAt && !item.menuItem?.isPackaged ? 'line-through decoration-green-500' : ''}`}>{item.customName || item.menuItem?.name}</h3>
                   {item.servedAt
                     ? <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-zinc-700 text-zinc-200 border border-zinc-600">SERVED</span>
+                    : item.menuItem?.isPackaged
+                    ? <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-500/20 text-sky-300 border border-sky-500/30">PACKAGED · NO PREP</span>
                     : item.readyAt && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-green-600/30 text-green-300 border border-green-600/40">READY</span>}
                   {item.isCustom && (
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">

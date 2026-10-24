@@ -495,7 +495,9 @@ model MenuItem {
   ratings            ItemRating[]
   dietary            DietaryPreference @default(VEG)
   spiceLevel         SpiceLevel        @default(NONE)
-  
+  // Sold as-is (bottled water, cans, dips): ready the moment it's ordered, never cooked or printed on the KOT
+  isPackaged         Boolean           @default(false)
+
   isManuallyDisabled Boolean           @default(false)
   isSystemDisabled   Boolean           @default(false)
   

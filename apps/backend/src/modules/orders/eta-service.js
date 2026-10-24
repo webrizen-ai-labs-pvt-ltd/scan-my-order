@@ -59,7 +59,8 @@ async function typicalPrepMinutes(db, storeId) {
 async function estimatePrepMinutes(db, order) {
   const [typical, items, cookingAhead] = await Promise.all([
     typicalPrepMinutes(db, order.storeId),
-    db.orderItem.findMany({ where: { orderId: order.id, status: 'ACTIVE' }, select: { quantity: true } }),
+    // Packaged items (water, cans…) take no kitchen time
+    db.orderItem.findMany({ where: { orderId: order.id, status: 'ACTIVE', menuItem: { isPackaged: false } }, select: { quantity: true } }),
     db.order.count({ where: { storeId: order.storeId, status: 'PROCESSING', kitchenAt: { not: null }, id: { not: order.id } } })
   ]);
 

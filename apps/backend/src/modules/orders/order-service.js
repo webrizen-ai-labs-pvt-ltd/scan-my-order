@@ -436,6 +436,25 @@ async function enterKitchen(db, order) {
 }
 
 /**
+ * Packaged lines (bottled water, cans, dips) need no cooking: they're ready to hand over the
+ * moment the order reaches the kitchen. Updates `items` (the order's loaded lines) in place.
+ * @returns {Promise<boolean>} true when the order holds only packaged items (nothing to cook)
+ */
+async function readyPackagedLines(db, orderId, items = null) {
+  const lines = await db.orderItem.findMany({
+    where: { orderId, status: 'ACTIVE' },
+    select: { id: true, readyAt: true, menuItem: { select: { isPackaged: true } } }
+  });
+  const toStamp = lines.filter(l => l.menuItem?.isPackaged && !l.readyAt).map(l => l.id);
+  if (toStamp.length > 0) {
+    const now = new Date();
+    await db.orderItem.updateMany({ where: { id: { in: toStamp }, readyAt: null }, data: { readyAt: now } });
+    for (const item of items || []) if (toStamp.includes(item.id)) item.readyAt = now;
+  }
+  return lines.length > 0 && lines.every(l => l.menuItem?.isPackaged);
+}
+
+/**
  * Counter (mall / food court) guests order without an account: a real-looking Indian mobile
  * number is required so the counter can reach them. One row per number (GuestContact).
  */
@@ -776,6 +795,7 @@ async function createOrder(storeId, actor, origin, input) {
     }
   }
 
+  let onlyPackaged = false;
   if (status === 'PENDING_VERIFICATION') {
     broadcastToStore(storeId, 'ORDER_PENDING_VERIFICATION', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PENDING_VERIFICATION', order);
@@ -792,6 +812,12 @@ async function createOrder(storeId, actor, origin, input) {
   } else if (status === 'PROCESSING') {
     await prisma.$transaction((tx) => deductInventory(tx, order), { timeout: 20000 });
     Object.assign(order, await enterKitchen(prisma, order));
+    onlyPackaged = await readyPackagedLines(prisma, order.id, order.items);
+  }
+  if (onlyPackaged) {
+    // Nothing to cook (only water, cans, dips…): skip the kitchen, it's ready to hand over
+    await updateOrderStatus(actor, storeId, order.id, 'READY', true);
+  } else if (status === 'PROCESSING') {
     broadcastToStore(storeId, 'ORDER_PROCESSING', order);
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_PROCESSING', order);
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_PROCESSING', order);
@@ -864,7 +890,7 @@ async function createOrder(storeId, actor, origin, input) {
   // Joining a table whose bill has a promo: re-split the discount to include this order
   if (tableSession?.promoCodeId) await syncTablePromo(tableSession.id);
 
-  const finalOrder = payNowSummary || tableSession?.promoCodeId ? await getOrderById(storeId, order.id) : serializeOrder(order);
+  const finalOrder = payNowSummary || tableSession?.promoCodeId || onlyPackaged ? await getOrderById(storeId, order.id) : serializeOrder(order);
   // Receipts printed straight from this response (the waiter's quick receipt) carry the rating QR too
   if (origin === 'POS' && finalOrder.reviewUrl === undefined) {
     finalOrder.reviewUrl = await require("../reviews/review-service").billReviewUrl(storeId, 'o', order.id);
@@ -1237,6 +1263,15 @@ async function updateOrderItems(actor, storeId, orderId, input) {
     await prisma.$transaction((tx) => deductInventory(tx, { id: order.id }), { timeout: 20000 });
   }
 
+  // Lines were re-created, so packaged ones (water, cans…) are marked ready again; if only those
+  // are left on an order the kitchen is working on, it no longer needs the kitchen
+  if (['PROCESSING', 'READY'].includes(order.status)) {
+    const onlyPackaged = await readyPackagedLines(prisma, order.id);
+    if (onlyPackaged && order.status === 'PROCESSING') {
+      await updateOrderStatus(actor, storeId, order.id, 'READY', true);
+    }
+  }
+
   if (walletRefund > 0 && order.customerId) {
     const { refundWalletCredits } = require("../loyalty/loyalty-service");
     await refundWalletCredits(prisma, {
@@ -1448,6 +1483,12 @@ async function updateOrderStatus(actor, storeId, orderId, newStatus, isSystem = 
   if (newStatus === 'PROCESSING') {
     const entered = await enterKitchen(prisma, order).catch(err => { console.error('[Kitchen] entry details failed:', err.message); return null; });
     if (entered) Object.assign(updatedOrder, entered);
+    // A recall from READY keeps its packaged lines ready (see recallOrder)
+    if (order.status !== 'READY') {
+      const onlyPackaged = await readyPackagedLines(prisma, orderId, updatedOrder.items);
+      // Nothing to cook (only water, cans, dips…): skip the kitchen, it's ready to hand over
+      if (onlyPackaged) return updateOrderStatus(actor, storeId, orderId, 'READY', true, { silent: options.silent });
+    }
   }
 
   // Award cashback if transitioning to SETTLED, or refund wallet credits if cancelled
@@ -1713,6 +1754,11 @@ async function rejectOrderItems(actor, storeId, orderId, input = {}) {
     for (const id of soldOutIds) broadcastToStore(storeId, 'MENU_ITEM_AVAILABILITY', { id, isManuallyDisabled: true });
   }
 
+  // Only packaged items (water, cans…) left to give: the kitchen has nothing more to cook
+  if (!wholeOrder && order.status === 'PROCESSING' && remaining.every(i => i.menuItem?.isPackaged)) {
+    await updateOrderStatus(actor, storeId, orderId, 'READY', true);
+  }
+
   invalidateTablesCache(storeId);
   const updatedOrder = await getOrderById(storeId, orderId);
   const tableNumber = order.table?.tableNumber;
@@ -1827,6 +1873,7 @@ async function setOrderItemReady(actor, storeId, orderId, itemId, ready = true) 
 
   const item = order.items.find(i => i.id === itemId);
   if (!item || item.status !== 'ACTIVE') throw createHttpError(404, "Item not found on this order");
+  if (item.menuItem?.isPackaged && !ready) throw createHttpError(409, "Packaged items are always ready; there's nothing to cook");
 
   await prisma.orderItem.update({ where: { id: itemId }, data: { readyAt: ready ? new Date() : null } });
   await logOrderEvent({
@@ -1911,8 +1958,13 @@ async function recallOrder(actor, storeId, orderId) {
   if (!order.readyAt || Date.now() - order.readyAt.getTime() > RECALL_WINDOW_MS) {
     throw createHttpError(409, "Too late to recall — it was marked ready more than 5 minutes ago");
   }
+  const activeLines = order.items.filter(i => i.status === 'ACTIVE');
+  if (activeLines.length > 0 && activeLines.every(i => i.menuItem?.isPackaged)) {
+    throw createHttpError(409, "This order has only packaged items, so there's nothing for the kitchen to redo");
+  }
 
-  await prisma.orderItem.updateMany({ where: { orderId, status: 'ACTIVE' }, data: { readyAt: null } });
+  // Packaged lines (water, cans…) stay ready: there's nothing to cook again
+  await prisma.orderItem.updateMany({ where: { orderId, status: 'ACTIVE', menuItem: { isPackaged: false } }, data: { readyAt: null } });
   const updated = await updateOrderStatus(actor, storeId, orderId, 'PROCESSING', true, { silent: true, auditType: 'ORDER_RECALLED' });
 
   broadcastToStore(storeId, 'ORDER_RECALLED', { orderId, tableNumber: order.table?.tableNumber ?? null });
@@ -2026,7 +2078,7 @@ async function getKdsOrders(actor, storeId) {
           servedAt: true,
           quantity: true,
           kitchenNotes: true,
-          menuItem: { select: { name: true, dietary: true } },
+          menuItem: { select: { name: true, dietary: true, isPackaged: true } },
           modifiers: {
             select: { modifierOption: { select: { name: true } } }
           }

@@ -185,7 +185,8 @@ async function createMenuItem(actor, storeId, input) {
       videoUrl,
       shortCode,
       dietary,
-      spiceLevel
+      spiceLevel,
+      isPackaged: input.isPackaged === true
     }
   });
   invalidateMenuCache(storeId);
@@ -210,7 +211,10 @@ async function updateMenuItem(actor, storeId, id, input) {
   
   const updated = await prisma.menuItem.update({
     where: { id },
-    data: { categoryId, name, description, price, image, videoUrl, shortCode, dietary, spiceLevel, isManuallyDisabled }
+    data: {
+      categoryId, name, description, price, image, videoUrl, shortCode, dietary, spiceLevel, isManuallyDisabled,
+      isPackaged: typeof input.isPackaged === 'boolean' ? input.isPackaged : undefined
+    }
   });
   invalidateMenuCache(storeId);
   return updated;

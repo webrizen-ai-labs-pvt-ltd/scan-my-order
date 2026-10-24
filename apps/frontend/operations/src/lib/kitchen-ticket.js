@@ -30,7 +30,8 @@ export function kitchenTicketHtml(order, { storeName = '', paper = 80, reprint =
   const where = order.table
     ? `TABLE ${order.table.tableNumber}`
     : order.pickupNumber != null ? `PICKUP #${order.pickupNumber}` : (TYPE_LABEL[order.type] || 'Order').toUpperCase();
-  const items = (order.items || []).filter(i => i.status !== 'REJECTED');
+  // Packaged items (water, cans, dips) need no cooking, so they stay off the kitchen ticket
+  const items = (order.items || []).filter(i => i.status !== 'REJECTED' && !i.menuItem?.isPackaged);
   const count = items.reduce((s, i) => s + i.quantity, 0);
 
   const rows = items.map(i => {
