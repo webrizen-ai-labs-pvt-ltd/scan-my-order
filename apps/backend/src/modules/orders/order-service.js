@@ -2023,7 +2023,8 @@ async function announceOrderDelay(actor, storeId, orderId, minutes) {
   }).catch(() => {});
 
   if (order.customerId || order.sessionId) {
-    const message = `Your order needs about ${mins} more minutes. Sorry for the wait — it's being freshly prepared!`;
+    // Guests aren't promised a time: just that it's coming
+    const message = "Your order needs a little more time. Sorry for the wait — it's being freshly prepared!";
     if (order.customerId) broadcastToCustomer(order.customerId, 'ORDER_DELAYED', { ...event, message, order: updated });
     if (order.sessionId) broadcastToCustomer(order.sessionId, 'ORDER_DELAYED', { ...event, message, order: updated });
     sendNotification({

@@ -31,25 +31,21 @@ const STATUS_MAPPING = {
   CANCELLED: { label: 'Cancelled', icon: Cancel01Icon, color: 'text-rose-600', bg: 'bg-rose-100' },
 };
 
-const clockTime = (date) => new Date(date).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-
 /**
- * When the guest can expect their food, from the time promised when it reached the kitchen
- * (the kitchen's "running late" pushes it back).
+ * Where the guest's order stands, in words. Guests aren't shown a waiting time.
  * @returns {{ headline: string, detail?: string } | null}
  */
-function readyEstimate(order, now) {
+function orderProgress(order) {
   if (order.status === 'READY') {
     return order.pickupNumber != null
       ? { headline: `Ready! Collect it at the counter`, detail: `Show pickup number #${order.pickupNumber}` }
       : { headline: 'Ready, coming to your table' };
   }
   if (order.status === 'PENDING_VERIFICATION') return { headline: 'Waiting for the staff to confirm' };
-  if (order.status !== 'PROCESSING' || !order.estimatedReadyAt) return null;
-  const minutes = Math.ceil((new Date(order.estimatedReadyAt).getTime() - now) / 60000);
-  if (minutes > 1) return { headline: `Ready in about ${minutes} min`, detail: `by ${clockTime(order.estimatedReadyAt)}` };
-  if (minutes >= -3) return { headline: 'Almost ready' };
-  return { headline: 'Taking a little longer than usual', detail: "It's nearly there" };
+  if (order.status !== 'PROCESSING') return null;
+  // The kitchen pressed "Running late"
+  if (order.delayMinutes > 0) return { headline: 'Taking a little longer than usual', detail: "It's being freshly prepared" };
+  return { headline: 'Being prepared' };
 }
 
 /**
@@ -92,12 +88,6 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
     if (refreshKey > 0) loadOrders();
   }, [refreshKey, loadOrders]);
 
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 30000);
-    return () => clearInterval(timer);
-  }, []);
-  
   useEffect(() => {
     const sessionId = getSessionId();
     if (!token && !sessionId) return;
@@ -250,9 +240,9 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
               </div>
               <div className="text-left">
                 {(() => {
-                  // Counter orders: the pickup number and how long, right on the pill
+                  // Counter orders: the pickup number and where it stands, right on the pill
                   const pickup = activeOrders.find(o => o.pickupNumber != null);
-                  const eta = pickup && readyEstimate(pickup, now);
+                  const eta = pickup && orderProgress(pickup);
                   return pickup ? (
                     <>
                       <p className="text-[11px] font-medium uppercase tracking-wider text-white/80">Pickup #{pickup.pickupNumber}</p>
@@ -345,7 +335,7 @@ export const LiveOrders = ({ storeId, tableNumber, activeSessionId, placement = 
               {activeOrders.map(order => {
                 const conf = STATUS_MAPPING[order.status] || STATUS_MAPPING.PROCESSING;
                 const Icon = conf.icon;
-                const eta = readyEstimate(order, now);
+                const eta = orderProgress(order);
                 return (
                   <div key={order.id} className={`rounded-2xl border p-4 ${order.status === 'READY' ? 'border-emerald-300 bg-emerald-50 dark:border-emerald-800 dark:bg-emerald-950/30' : 'border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900/50'}`}>
                     <div className="flex items-center justify-between gap-3">
