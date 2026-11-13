@@ -6,7 +6,6 @@ import {
 } from '@smo/ui';
 import { Search01Icon, PlusSignIcon, Loading03Icon, Image01Icon } from 'hugeicons-react';
 
-// Filters offered by the Chronon dish catalog. "all" means no filter (Select items can't be empty strings).
 const COURSES = [
   ['breakfast', 'Breakfast'], ['starter', 'Starter'], ['main', 'Main'], ['side', 'Side'], ['bread', 'Bread'],
   ['rice', 'Rice'], ['snack', 'Snack'], ['dessert', 'Dessert'], ['beverage', 'Beverage']

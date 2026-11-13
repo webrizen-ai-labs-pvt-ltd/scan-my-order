@@ -62,13 +62,14 @@ function toCatalogDish(dish) {
     localName: dish.local_name || null,
     description: dish.description || "",
     course: dish.course,
+    subCourse: dish.sub_course || null,
     diet: dish.diet,
     spice: dish.spice_level,
     ingredients: dish.ingredients || [],
     tags: dish.tags || [],
     region: dish.region ? { slug: dish.region.slug, name: dish.region.name } : null,
-    // The catalog has no photos yet; picked up automatically if Chronon adds an image field.
-    image: dish.image || dish.image_url || null,
+    // Chronon's photo field is image_link
+    image: dish.image_link || dish.image || dish.image_url || null,
     suggested: {
       dietary: DIET_TO_DIETARY[dish.diet] || "VEG",
       spiceLevel: SPICE_TO_LEVEL[dish.spice_level] || "NONE"
